@@ -7,5 +7,6 @@ const app = new App();
 
 new GarnetStack(app, 'Garnet', {
     stackName: 'Garnet',
+    description: 'Garnet Framework is an open-source framework for building scalable, reliable and interoperable platforms - (uksb-1tupboc26)',
     env: { region: Parameters.aws_region }
 })
