@@ -1,5 +1,7 @@
 ## Garnet Framework 
 
+__Explore the [documentation website of Garnet Framework](https://garnet-framework.dev/docs) to get started.__ 
+
 Garnet is an open-source framework for building scalable, reliable and interoperable platforms leveraging open standards, FIWARE open source technology and AWS Cloud services.
 
 It supports the development and integration of smart and efficient solutions across multiple domains such as Smart Cities, Regions and Campuses, Energy and Utilities, Agriculture, Smart Building, Automotive and Manufacturing.
