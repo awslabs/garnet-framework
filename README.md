@@ -12,6 +12,8 @@ There are only three types of components in a platform and solutions built using
 
 Garnet is the core component of your platform. It all starts with it.
 
+__Note that Garnet Framework replaces the Smart Territory Framework__.
+
 ## Getting Started 
 
 Explore the [documentation website of Garnet Framework](https://garnet-framework.dev/docs) to get started. 
