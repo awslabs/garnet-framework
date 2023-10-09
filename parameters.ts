@@ -19,7 +19,7 @@ export const Parameters = {
     },
     // SCORPIO BROKER PARAMETERS
     garnet_scorpio: {
-        image_context_broker: 'public.ecr.aws/scorpiobroker/all-in-one-runner:java-sqs-finaltest', // Link to ECR Public gallery of Scorpio Broker image.
+        image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.6', // Link to ECR Public gallery of Scorpio Broker image.
         rds_instance_type: InstanceType.of( InstanceClass.BURSTABLE4_GRAVITON, InstanceSize.MEDIUM), // see https://aws.amazon.com/rds/instance-types/
         rds_storage_type: StorageType.GP3, // see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html
         dbname: 'scorpio'
