@@ -129,7 +129,7 @@ export class GarnetLake extends Construct {
         topicRulePayload: {
         awsIotSqlVersion: "2016-03-23",
         ruleDisabled: false,
-        sql: `SELECT * FROM 'garnet/subscriptions/+'`,
+        sql: `SELECT * FROM 'garnetsubdatalake'`,
         actions: [
             {
             firehose: {
