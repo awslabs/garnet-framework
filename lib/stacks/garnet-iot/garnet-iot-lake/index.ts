@@ -42,18 +42,6 @@ export class GarnetLake extends Construct {
     });
     bucket.grantReadWrite(role_firehose)
 
-
-    // LAMBDA THAT EXTRACT ENTITIES FROM SUBSCRIPTION IN FIREHOSE STREAM
-    const lambda_transform_path = `${__dirname}/lambda/transform`
-    const lambda_transform = new Function(this, 'LakeTransformLambda', {
-    functionName: `garnet-lake-transform-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`, 
-        description: 'Garnet Lake - Function that transforms the Kinesis Firehose records to extract entities from notifications',
-        runtime: Runtime.NODEJS_18_X,
-        code: Code.fromAsset(lambda_transform_path),
-        handler: 'index.handler',
-        timeout: Duration.seconds(50),
-        architecture: Architecture.ARM_64
-    })
     
       
     // KINESIS FIREHOSE DELIVERY STREAM
@@ -70,13 +58,15 @@ export class GarnetLake extends Construct {
           processingConfiguration: {
             enabled: true,
             processors: [
-                {
-                    type: 'Lambda',
-                    parameters: [{
-                        parameterName: 'LambdaArn',
-                        parameterValue: lambda_transform.functionArn
-                    }]
-                },
+              {
+                type: "RecordDeAggregation",
+                parameters: [
+                  {
+                    parameterName: "SubRecordType",
+                    parameterValue: "JSON",
+                  },
+                ],
+              },
               {
                 type: "MetadataExtraction",
                 parameters: [
@@ -94,6 +84,7 @@ export class GarnetLake extends Construct {
           },
           dynamicPartitioningConfiguration: {
             enabled: true,
+
           },
           prefix: `type=!{partitionKeyFromQuery:type}/dt=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}-!{timestamp:HH}/`,
           errorOutputPrefix: `type=!{firehose:error-output-type}/dt=!{timestamp:yyy}-!{timestamp:MM}-!{timestamp:dd}-!{timestamp:HH}/`,
@@ -101,7 +92,7 @@ export class GarnetLake extends Construct {
       }
     )
 
-    lambda_transform.grantInvoke(role_firehose)
+
 
     // IOT RULE THAT LISTENS TO SUBSCRIPTIONS AND PUSH TO FIREHOSE
     const iot_rule_lake_name = `garnet_lake_rule_${Names.uniqueId(this).slice(-4).toLowerCase()}`
@@ -129,13 +120,14 @@ export class GarnetLake extends Construct {
         topicRulePayload: {
         awsIotSqlVersion: "2016-03-23",
         ruleDisabled: false,
-        sql: `SELECT * FROM 'garnetsubdatalake'`,
+        sql: `SELECT VALUE data FROM 'garnetsubdatalake'`,
         actions: [
             {
             firehose: {
                 deliveryStreamName: kinesis_firehose.ref,
                 roleArn: iot_rule_lake_role.roleArn,
                 separator: "\n",
+                batchMode: true
             },
             },
         ],
