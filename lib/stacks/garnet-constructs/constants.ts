@@ -31,7 +31,7 @@ export const scorpiobroker_sqs_object = {
 }
 
 export const garnet_constant = {
-    garnet_version: "1.0.0", // DO NOT CHANGE
+    garnet_version: "1.0.1", // DO NOT CHANGE
     shadow_prefix: "Garnet",
     subAllName: 'GarnetDataLakeSub-DoNotDelete',
     iotDomainName: 'garnet-iot-domain', 

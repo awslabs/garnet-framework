@@ -85,26 +85,26 @@ export class GarnetLake extends Construct {
                         parameterName: 'LambdaArn',
                         parameterValue: lambda_transform.functionArn
                     }]
-                },
-              {
-                type: "MetadataExtraction",
-                parameters: [
-                  {
-                    parameterName: "MetadataExtractionQuery",
-                    parameterValue: "{type:.type}",
-                  },
-                  {
-                    parameterName: "JsonParsingEngine",
-                    parameterValue: "JQ-1.6",
-                  },
-                ],
-              }
+                }
+              // ,{
+              //   type: "MetadataExtraction",
+              //   parameters: [
+              //     {
+              //       parameterName: "MetadataExtractionQuery",
+              //       parameterValue: "{type:.type}",
+              //     },
+              //     {
+              //       parameterName: "JsonParsingEngine",
+              //       parameterValue: "JQ-1.6",
+              //     },
+              //   ],
+              // }
             ],
           },
           dynamicPartitioningConfiguration: {
             enabled: true,
           },
-          prefix: `type=!{partitionKeyFromQuery:type}/dt=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}-!{timestamp:HH}/`,
+          prefix: `type=!{partitionKeyFromLambda:type}/dt=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}-!{timestamp:HH}/`,
           errorOutputPrefix: `type=!{firehose:error-output-type}/dt=!{timestamp:yyy}-!{timestamp:MM}-!{timestamp:dd}-!{timestamp:HH}/`,
         },
       }

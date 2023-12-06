@@ -11,15 +11,15 @@ export const Parameters = {
     smart_data_model_url : 'https://raw.githubusercontent.com/awslabs/garnet-framework/main/context.jsonld',  
     // FARGATE PARAMETERS
     garnet_fargate: {
-        fargate_cpu: 1024,
-        fargate_memory_limit: 4096,
-        autoscale_requests_number: 200, 
+        fargate_cpu: 1024,// https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html#fargate-tasks-size
+        fargate_memory_limit: 4096, // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/fargate-tasks-services.html#fargate-tasks-size
+        autoscale_requests_number: 100, 
         autoscale_min_capacity: 2, 
         autoscale_max_capacity: 10
     },
     // SCORPIO BROKER PARAMETERS
     garnet_scorpio: {
-        image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.10', // Link to ECR Public gallery of Scorpio Broker image.
+        image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.11', // Link to ECR Public gallery of Scorpio Broker image.
         rds_instance_type: InstanceType.of( InstanceClass.BURSTABLE4_GRAVITON, InstanceSize.MEDIUM), // see https://aws.amazon.com/rds/instance-types/
         rds_storage_type: StorageType.GP3, // see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html
         dbname: 'scorpio'
