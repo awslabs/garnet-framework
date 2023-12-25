@@ -101,16 +101,6 @@ export class Utils extends Construct {
       })
 
       this.rds_parameter_group = parameter_rds_resource.getAtt('name').toString()
-
-      const rds_pm_group = new ParameterGroup(this, 'RdsParametergroup', {
-         engine: DatabaseInstanceEngine.postgres({ 
-          version: Parameters.garnet_scorpio.engine_version
-         }),
-         parameters: {
-          "rds.force_ssl": "0"
-         }
-      })
-
       
       // CLEAN SQS QUEUES CREATED BY SCORPIO BROKER 
       if(Parameters.garnet_broker == 'Scorpio'){
