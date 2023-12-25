@@ -14,7 +14,7 @@ export class GarnetSecret extends Construct {
         super(scope, id)
     
         this.secret = new Secret(this, 'Secret', {
-            secretName:`garnet/secret/${Parameters.garnet_broker.toLowerCase()}/${this.node.addr.slice(-4)}`,
+            secretName:`garnet/secret/${Parameters.garnet_broker.toLowerCase()}`,
             generateSecretString: {
                 secretStringTemplate: JSON.stringify({
                   username: 'garnetadmin',

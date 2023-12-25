@@ -11,7 +11,7 @@ import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 
 export interface GarnetScorpioFargateProps {
     vpc: Vpc
-    sg_database: SecurityGroup,
+    sg_proxy: SecurityGroup,
     db_endpoint: string,
     db_port: string,
     secret_arn: string,
@@ -28,8 +28,8 @@ export class GarnetScorpioFargate extends Construct {
         if (!props.vpc){
             throw new Error('The property vpc is required to create an instance of ScorpioServerlessFargate Construct')
         }
-        if (!props.sg_database){
-            throw new Error('The property sg_database is required to create an instance of ScorpioServerlessFargate Construct')
+        if (!props.sg_proxy){
+            throw new Error('The property sg_proxy is required to create an instance of ScorpioServerlessFargate Construct')
         }
         if (!props.db_endpoint){
             throw new Error('The property db_endpoint is required to create an instance of ScorpioServerlessFargate Construct')
@@ -48,16 +48,17 @@ export class GarnetScorpioFargate extends Construct {
 
         const sg_fargate = new SecurityGroup(this, 'SecurityGroupScorpio', {
             vpc: props.vpc,
-            securityGroupName: `garnet-${Parameters.garnet_broker.toLowerCase()}-fargate-sg-${Names.uniqueId(this).slice(-4).toLowerCase()}`
+            securityGroupName: `garnet-${Parameters.garnet_broker.toLowerCase()}-fargate-sg`
         })
 
-        const sg_database = SecurityGroup.fromSecurityGroupId(this, 'sgDb', props.sg_database.securityGroupId)
+        const sg_proxy = SecurityGroup.fromSecurityGroupId(this, 'sgDb', props.sg_proxy.securityGroupId)
 
-        sg_database.addIngressRule(sg_fargate, Port.tcp(5432))
+
+        sg_proxy.addIngressRule(sg_fargate, Port.tcp(5432))
 
         const fargate_cluster = new Cluster(this, 'FargateScorpioCluster', {
             vpc: props.vpc,
-            clusterName: `garnet-fargate-cluster-${Parameters.garnet_broker.toLowerCase()}-${Names.uniqueId(this).slice(-4).toLowerCase()}`
+            clusterName: `garnet-fargate-cluster-${Parameters.garnet_broker.toLowerCase()}`
         })
 
         const db_pass = SecretValue.secretsManager(secret.secretArn).toJSON()
@@ -92,7 +93,7 @@ export class GarnetScorpioFargate extends Construct {
    
         const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
             cluster: fargate_cluster,
-            serviceName: `garnet-fargate-service-${Parameters.garnet_broker.toLowerCase()}-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            serviceName: `garnet-fargate-service-${Parameters.garnet_broker.toLowerCase()}`,
             circuitBreaker: {
                 rollback: true
             },
@@ -100,7 +101,7 @@ export class GarnetScorpioFargate extends Construct {
             minHealthyPercent: 50, 
             maxHealthyPercent: 400,  
             publicLoadBalancer: false, 
-            loadBalancerName: `garnet-loadbalancer-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            loadBalancerName: `garnet-loadbalancer`,
             taskImageOptions: {
                 image: ContainerImage.fromRegistry(props.image_context_broker),
                 taskRole: fargate_task_role,
@@ -114,7 +115,6 @@ export class GarnetScorpioFargate extends Construct {
                     DBNAME: Parameters.garnet_scorpio.dbname,
                     SCORPIO_STARTUPDELAY: '10s',
                     AWS_REGION: Aws.REGION,
-                    QUARKUS_DATASOURCE_REACTIVE_MAX_SIZE: '30',
                     MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=250&greedy=true",
                     ...scorpiobroker_sqs_object
                 },
@@ -128,13 +128,18 @@ export class GarnetScorpioFargate extends Construct {
             securityGroups: [sg_fargate]
         })
 
+        /** ENV 
+         *  // QUARKUS_DATASOURCE_REACTIVE_MAX_SIZE: '30',
+         */
+
+
         fargate_alb.service.autoScaleTaskCount({  
             minCapacity: Parameters.garnet_fargate.autoscale_min_capacity, 
             maxCapacity: Parameters.garnet_fargate.autoscale_max_capacity
             }).scaleOnRequestCount('RequestScaling', {
             requestsPerTarget: Parameters.garnet_fargate.autoscale_requests_number,
             targetGroup: fargate_alb.targetGroup,
-            scaleInCooldown: Duration.seconds(20), 
+            scaleInCooldown: Duration.seconds(5), 
             scaleOutCooldown: Duration.seconds(60)
         })
 

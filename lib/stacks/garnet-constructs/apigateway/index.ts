@@ -23,14 +23,14 @@ export class GarnetApiGateway extends Construct{
         }
 
         const sg_vpc_link = new SecurityGroup(this, 'SgVpcLink', {
-            securityGroupName: `garnet-vpclink-sg-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            securityGroupName: `garnet-vpclink-sg`,
             vpc: props.vpc
         })
 
 
     
         const vpc_link = new CfnVpcLink(this, 'VpcLink', {
-            name: `garnet-vpc-link-${Names.uniqueId(this).slice(-4).toLowerCase()}`, 
+            name: `garnet-vpc-link`, 
             subnetIds: props.vpc.privateSubnets.map( (m) => m.subnetId),
             securityGroupIds: [sg_vpc_link.securityGroupId]
         })

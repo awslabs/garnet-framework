@@ -1,4 +1,4 @@
-import { Aws, Duration, Names } from "aws-cdk-lib";
+import { Aws, Duration, Names, RemovalPolicy } from "aws-cdk-lib";
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2";
 import { ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
@@ -40,7 +40,7 @@ export class GarnetIot extends Construct {
     const layer_lambda_path = `./lib/layers`;
     const layer_lambda = new LayerVersion(this, "LayerLambda", {
       code: Code.fromAsset(layer_lambda_path),
-      compatibleRuntimes: [Runtime.NODEJS_18_X],
+      compatibleRuntimes: [Runtime.NODEJS_20_X],
     })
 
     // SQS ENTRY POINT
@@ -53,13 +53,12 @@ export class GarnetIot extends Construct {
     // LAMBDA TO UPDATE DEVICE SHADOW
     const lambda_update_shadow_path = `${__dirname}/lambda/updateShadow`;
     const lambda_update_shadow = new Function(this, "LambdaUpdateShadow", {
-      functionName: `garnet-iot-update-shadow-lambda-${Names.uniqueId(this)
-        .slice(-4)
-        .toLowerCase()}`,
+      functionName: `garnet-iot-update-shadow-lambda`,
       description: 'Garnet IoT - Function that updates shadows',
-      runtime: Runtime.NODEJS_18_X,
+      runtime: Runtime.NODEJS_20_X,
       code: Code.fromAsset(lambda_update_shadow_path),
       handler: "index.handler",
+      layers: [layer_lambda],
       timeout: Duration.seconds(50),
       logRetention: RetentionDays.THREE_MONTHS,
       architecture: Architecture.ARM_64,
@@ -67,7 +66,7 @@ export class GarnetIot extends Construct {
         AWSIOTREGION: Aws.REGION,
         SHADOW_PREFIX: garnet_constant.shadow_prefix
       },
-    });
+    })
 
     // ADD PERMISSION FOR LAMBDA THAT UPDATES SHADOW TO ACCESS SQS ENTRY POINT
     lambda_update_shadow.addToRolePolicy(
@@ -79,7 +78,7 @@ export class GarnetIot extends Construct {
         ],
         resources: [`${sqs_garnet_endpoint.queueArn}`],
       })
-    );
+    )
 
     // ADD PERMISSION TO ACCESS AWS IoT DEVICE SHADOW
     lambda_update_shadow.addToRolePolicy(
@@ -89,7 +88,7 @@ export class GarnetIot extends Construct {
           `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:thing/*/${garnet_constant.shadow_prefix}-*`,
         ],
       })
-    );
+    )
 
     // ADD THE SQS ENTRY POINT AS EVENT SOURCE FOR LAMBDA
     lambda_update_shadow.addEventSource(
@@ -120,7 +119,7 @@ export class GarnetIot extends Construct {
 
     // IOT RULE THAT LISTENS TO CHANGES IN GARNET SHADOWS AND PUSH TO SQS
     const iot_rule = new CfnTopicRule(this, "IoTRuleShadows", {
-      ruleName: `garnet_iot_rule_${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+      ruleName: `garnet_iot_rule`,
       topicRulePayload: {
         awsIotSqlVersion: "2016-03-23",
         ruleDisabled: false,
@@ -142,19 +141,14 @@ export class GarnetIot extends Construct {
 
     // LAMBDA THAT GETS MESSAGES FROM THE QUEUE AND UPDATES CONTEXT BROKER
     const lambda_to_context_broker_path = `${__dirname}/lambda/updateContextBroker`;
-    const lambda_to_context_broker = new Function(
-      this,
-      "LambdaUpdateContextBroker",
-      {
-        functionName: `garnet-iot-update-broker-lambda-${Names.uniqueId(this)
-          .slice(-4)
-          .toLowerCase()}`,
+    const lambda_to_context_broker = new Function(this,"LambdaUpdateContextBroker", {
+        functionName: `garnet-iot-update-broker-lambda`,
         description: 'Garnet IoT - Function that updates the context broker',
         vpc: props.vpc,
         vpcSubnets: {
           subnetType: SubnetType.PRIVATE_WITH_EGRESS,
         },
-        runtime: Runtime.NODEJS_18_X,
+        runtime: Runtime.NODEJS_20_X,
         code: Code.fromAsset(lambda_to_context_broker_path),
         handler: "index.handler",
         timeout: Duration.seconds(50),
@@ -168,7 +162,7 @@ export class GarnetIot extends Construct {
           SHADOW_PREFIX: garnet_constant.shadow_prefix
         },
       }
-    );
+    )
 
     lambda_to_context_broker.addToRolePolicy(
       new PolicyStatement({

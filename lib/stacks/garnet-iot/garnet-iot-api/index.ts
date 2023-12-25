@@ -21,13 +21,12 @@ export class GarnetIotApi extends Construct {
    
     constructor(scope: Construct, id: string, props: GarnetIotApiProps){
         super(scope, id)
-
-
+        
         // LAMBDA LAYER (SHARED LIBRARIES)
         const layer_lambda_path = `./lib/layers`
         const layer_lambda = new LayerVersion(this, 'LayerLambda', {
             code: Code.fromAsset(layer_lambda_path),
-            compatibleRuntimes: [Runtime.NODEJS_18_X]
+            compatibleRuntimes: [Runtime.NODEJS_20_X]
         })
 
 
@@ -40,9 +39,9 @@ export class GarnetIotApi extends Construct {
         // LAMBDA GARNET API VERSION
         const lambda_garnet_version_path = `${__dirname}/lambda/garnetVersion`
         const lambda_garnet_version = new Function(this, 'LambdaGarnetVersion', {
-            functionName: `garnet-api-version-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            functionName: `garnet-api-version-lambda`,
             description: 'Garnet API - Function that returns the Garnet Version',
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_garnet_version_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
@@ -97,9 +96,9 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT POSTS THING
         const lambda_post_thing_path = `${__dirname}/lambda/postThing`
         const lambda_post_thing = new Function(this, 'LambdaPostThing', {
-            functionName: `garnet-iot-api-post-thing-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            functionName: `garnet-iot-api-post-thing-lambda`,
             description: 'Garnet API - Function to POST THING',
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_post_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
@@ -164,13 +163,13 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT DELETE THING
         const lambda_delete_thing_path = `${__dirname}/lambda/deleteThing`
         const lambda_delete_thing = new Function(this, 'LambdaDeleteThing', {
-            functionName: `garnet-iot-api-delete-thing-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            functionName: `garnet-iot-api-delete-thing-lambda`,
             description: 'Garnet API - Function to DELETE THING',
             vpc: props.vpc, 
             vpcSubnets: {
                 subnetType: SubnetType.PRIVATE_WITH_EGRESS
             },
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_delete_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
@@ -233,9 +232,9 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT GETS THING
         const lambda_get_thing_path = `${__dirname}/lambda/getThing`
         const lambda_get_thing = new Function(this, 'LambdaGetThing', {
-            functionName: `garnet-iot-api-get-thing-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            functionName: `garnet-iot-api-get-thing-lambda`,
             description: 'Garnet API - Function to GET THING',
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_get_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
@@ -251,7 +250,7 @@ export class GarnetIotApi extends Construct {
         lambda_get_thing.addToRolePolicy(new PolicyStatement({
             actions: [
                 "iot:GetThing",
-                "iot:listNamedShadowsForThing",
+                "iot:ListNamedShadowsForThing",
                 "iot:getThingShadow"
             ],
             resources: [
@@ -296,9 +295,9 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT GETS THING
         const lambda_get_things_path = `${__dirname}/lambda/getThings`
         const lambda_get_things = new Function(this, 'LambdaGetThings', {
-            functionName: `garnet-iot-api-get-things-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            functionName: `garnet-iot-api-get-things-lambda`,
             description: 'Garnet API - Function to GET THINGS',
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_get_things_path),
             handler: 'index.handler',
             timeout: Duration.minutes(3),
@@ -313,7 +312,7 @@ export class GarnetIotApi extends Construct {
 
         lambda_get_things.addToRolePolicy(new PolicyStatement({
             actions: [
-                "iot:searchIndex"
+                "iot:ListThings"
             ],
             resources: [
                 `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:index/*`
@@ -359,9 +358,9 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT POST SHADOWS
         const lambda_post_shadows_path = `${__dirname}/lambda/postShadows`
         const lambda_post_shadows = new Function(this, 'LambdaPostShadows', {
-            functionName: `garnet-iot-api-post-shadows-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            functionName: `garnet-iot-api-post-shadows-lambda`,
             description: 'Garnet API - Function to POST SHADOW',
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_post_shadows_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),

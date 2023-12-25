@@ -30,6 +30,15 @@ export class GarnetLake extends Construct {
         super(scope, id)
 
 
+    // LAMBDA LAYER (SHARED LIBRARIES)
+    const layer_lambda_path = `./lib/layers`;
+    const layer_lambda = new LayerVersion(this, "LayerLambda", {
+      code: Code.fromAsset(layer_lambda_path),
+      compatibleRuntimes: [Runtime.NODEJS_20_X],
+    })
+
+
+
     // KINESIS FIREHOSE TO DATALAKE BUCKET 
 
     // DATALAKE BUCKET
@@ -46,9 +55,10 @@ export class GarnetLake extends Construct {
     // LAMBDA THAT EXTRACT ENTITIES FROM SUBSCRIPTION IN FIREHOSE STREAM
     const lambda_transform_path = `${__dirname}/lambda/transform`
     const lambda_transform = new Function(this, 'LakeTransformLambda', {
-    functionName: `garnet-lake-transform-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`, 
+    functionName: `garnet-lake-transform-lambda`, 
         description: 'Garnet Lake - Function that transforms the Kinesis Firehose records to extract entities from notifications',
-        runtime: Runtime.NODEJS_18_X,
+        runtime: Runtime.NODEJS_20_X,
+        layers: [layer_lambda],
         code: Code.fromAsset(lambda_transform_path),
         handler: 'index.handler',
         timeout: Duration.minutes(1),
@@ -58,7 +68,7 @@ export class GarnetLake extends Construct {
       
     // KINESIS FIREHOSE DELIVERY STREAM
     const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
-        deliveryStreamName: `garnet-lake-firehose-stream-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+        deliveryStreamName: `garnet-lake-firehose-stream`,
         deliveryStreamType: "DirectPut",
         extendedS3DestinationConfiguration: {
           bucketArn: bucket.bucketArn,
@@ -113,7 +123,7 @@ export class GarnetLake extends Construct {
     lambda_transform.grantInvoke(role_firehose)
 
     // IOT RULE THAT LISTENS TO SUBSCRIPTIONS AND PUSH TO FIREHOSE
-    const iot_rule_lake_name = `garnet_lake_rule_${Names.uniqueId(this).slice(-4).toLowerCase()}`
+    const iot_rule_lake_name = `garnet_lake_rule`
     this.iot_rule_lake_name = iot_rule_lake_name
 
     const iot_rule_lake_role = new Role(this, "RoleGarnetLakeIotRuleIngestion", {
@@ -160,7 +170,7 @@ export class GarnetLake extends Construct {
 
     // SECURITY GROUP
     const sg_garnet_vpc_endpoint = new SecurityGroup(this, 'LakeSecurityGroup', {
-        securityGroupName: `garnet-lake-endpoint-sg-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+        securityGroupName: `garnet-lake-endpoint-sg`,
         vpc: props.vpc,
         allowAllOutbound: true
     })
@@ -185,9 +195,9 @@ export class GarnetLake extends Construct {
 
     const lambda_garnet_authorizer_path = `${__dirname}/lambda/authorizer`
     const lambda_garnet_authorizer = new Function(this, 'LakeAuthorizerLambda', {
-      functionName: `garnet-iot-authorizer-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`, 
+      functionName: `garnet-iot-authorizer-lambda`, 
       description: 'Garnet Lake - Function for the AWS IoT Authorizer',
-          runtime: Runtime.NODEJS_18_X,
+          runtime: Runtime.NODEJS_20_X,
           code: Code.fromAsset(lambda_garnet_authorizer_path),
           handler: 'index.handler',
           timeout: Duration.seconds(50),
@@ -203,7 +213,7 @@ export class GarnetLake extends Construct {
 
     const iot_authorizer = new CfnAuthorizer(this, 'IotAuthorizer', {
         authorizerFunctionArn: lambda_garnet_authorizer.functionArn, 
-        authorizerName: `garnet-iot-authorizer-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+        authorizerName: `garnet-iot-authorizer`,
         status: "ACTIVE",
         signingDisabled: true,
         enableCachingForHttp: true
@@ -219,9 +229,9 @@ export class GarnetLake extends Construct {
 
     const lambda_custom_iot_domain_path = `${__dirname}/lambda/domain`
     const lambda_custom_iot_domain = new Function(this, 'IoTCustomDomainLambda', {
-        functionName: `garnet-custom-iot-domain-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+        functionName: `garnet-custom-iot-domain-lambda`,
         description: 'Garnet Lake - Function that updates or creates the IoT custom domain for the IoT Rule Data Lake',
-          runtime: Runtime.NODEJS_18_X,
+          runtime: Runtime.NODEJS_20_X,
           code: Code.fromAsset(lambda_custom_iot_domain_path),
           handler: 'index.handler',
           timeout: Duration.seconds(50),
@@ -243,7 +253,7 @@ export class GarnetLake extends Construct {
   
       const custom_iot_domain_provider = new Provider(this, 'CustomIotDomainProvider', {
       onEventHandler: lambda_custom_iot_domain,
-      providerFunctionName: `garnet-provider-iot-domain-${Names.uniqueId(this).slice(-4).toLowerCase()}`
+      providerFunctionName: `garnet-provider-iot-domain`
     }) 
     
     const custom_iot_domain_resource = new CustomResource(this, 'CustomIotDomainResource', {
@@ -273,19 +283,14 @@ export class GarnetLake extends Construct {
 
     lake_record.node.addDependency(lake_hosted_zone)
   
-    // LAMBDA LAYER (SHARED LIBRARIES)
-    const layer_lambda_path = `./lib/layers`;
-    const layer_lambda = new LayerVersion(this, "LayerLambda", {
-      code: Code.fromAsset(layer_lambda_path),
-      compatibleRuntimes: [Runtime.NODEJS_18_X],
-    })
+
 
     // LAMBDA THAT CREATE A SUBSCRIPTION IN THE BROKER TO SUBSCRIBE TO ALL ENTITIES
     const lambda_garnet_all_sub_path = `${__dirname}/lambda/suball`
     const lambda_garnet_all_sub = new Function(this, 'GarnetSubAllFunction', {
-    functionName: `garnet-sub-all-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`, 
+    functionName: `garnet-sub-all-lambda`, 
         description: 'Garnet Lake - Function that subscribe to all types in the broker to feed the Garnet Lake',
-        runtime: Runtime.NODEJS_18_X,
+        runtime: Runtime.NODEJS_20_X,
         code: Code.fromAsset(lambda_garnet_all_sub_path),
         handler: 'index.handler',
         timeout: Duration.seconds(50),
@@ -306,7 +311,7 @@ export class GarnetLake extends Construct {
 
     const bucket_provider = new Provider(this, 'CustomSubAllProvider', {
       onEventHandler: lambda_garnet_all_sub,
-      providerFunctionName: `garnet-provider-sub-all-${Names.uniqueId(this).slice(-4).toLowerCase()}`
+      providerFunctionName: `garnet-provider-sub-all`
     }) 
 
    new CustomResource(this, 'CustomSubAllResource', {
@@ -317,9 +322,9 @@ export class GarnetLake extends Construct {
           // CUSTOM RESOURCE WITH A LAMBDA THAT WILL CREATE ATHENA WORKGROUP AND GLUE DB
           const lambda_athena_path = `${__dirname}/lambda/athena`
           const lambda_athena = new Function(this, 'AthenaFunction', {
-                functionName: `garnet-lake-athena-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+                functionName: `garnet-lake-athena-lambda`,
                 description: 'Garnet Lake  - Function that creates Athena resources',
-                runtime: Runtime.NODEJS_18_X,
+                runtime: Runtime.NODEJS_20_X,
                 code: Code.fromAsset(lambda_athena_path),
                 handler: 'index.handler',
                 timeout: Duration.seconds(50),
@@ -341,7 +346,7 @@ export class GarnetLake extends Construct {
     
           const athena_provider = new Provider(this, 'AthenaProvider', {
             onEventHandler: lambda_athena,
-            providerFunctionName:  `garnet-provider-custom-athena-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            providerFunctionName:  `garnet-provider-custom-athena`,
           }) 
     
          const athena_resource = new CustomResource(this, 'CustomBucketAthenaResource', {

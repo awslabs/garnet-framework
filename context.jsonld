@@ -400,6 +400,7 @@
     "conferenceRoom": "https://uri.fiware.org/ns/data-models#conferenceRoom",
     "configuration": "https://smart-data-models.github.io/data-models/terms.jsonld#/definitions/configuration",
     "congested": "https://smart-data-models.github.io/data-models/terms.jsonld#/definitions/congested",
+    "connectivityStatus": "https://garnet-framework.dev/data-models/models#connectivityStatus",
     "conservatory": "https://uri.fiware.org/ns/data-models#conservatory",
     "construction": "https://uri.fiware.org/ns/data-models#construction",
     "constructionOrMaintenanceVehicle": "https://uri.fiware.org/ns/data-models#constructionOrMaintenanceVehicle",

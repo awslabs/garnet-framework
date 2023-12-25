@@ -23,9 +23,9 @@ export class GarnetBucket extends Construct {
       // CUSTOM RESOURCE WITH A LAMBDA THAT WILL CREATE GARNET BUCKET AND ATHENA RESULTS BUCKET IF NOT EXISTS
       const lambda_bucket_path = `${__dirname}/lambda/bucketHead`
       const lambda_bucket = new Function(this, 'BucketHeadFunction', {
-            functionName: `garnet-utils-bucket-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            functionName: `garnet-utils-bucket-lambda`,
             description: 'Garnet Utils - Function that creates Garnet Bucket if it does not exist',
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_bucket_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
@@ -42,7 +42,7 @@ export class GarnetBucket extends Construct {
 
       const bucket_provider = new Provider(this, 'CustomBucketProvider', {
         onEventHandler: lambda_bucket,
-        providerFunctionName:  `garnet-provider-custom-bucket-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+        providerFunctionName:  `garnet-provider-custom-bucket`,
       }) 
 
      const bucket_resource = new CustomResource(this, 'CustomBucketProviderResource', {

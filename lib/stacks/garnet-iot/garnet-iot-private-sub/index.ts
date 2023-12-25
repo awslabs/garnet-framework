@@ -2,7 +2,7 @@ import { Aws, CfnOutput, Duration, Names } from "aws-cdk-lib"
 import { EndpointType, LambdaRestApi } from "aws-cdk-lib/aws-apigateway"
 import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
 import { AnyPrincipal, Effect, Policy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
-import { Architecture, Code, Function, Runtime } from "aws-cdk-lib/aws-lambda"
+import { Architecture, Code, Function, LayerVersion, Runtime } from "aws-cdk-lib/aws-lambda"
 import { Construct } from "constructs"
 import { garnet_constant } from "../../garnet-constructs/constants"
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot"
@@ -21,9 +21,16 @@ export interface GarnetPrivateSubProps {
     constructor(scope: Construct, id: string, props: GarnetPrivateSubProps) {
       super(scope, id)
 
+          // LAMBDA LAYER (SHARED LIBRARIES)
+        const layer_lambda_path = `./lib/layers`;
+        const layer_lambda = new LayerVersion(this, "LayerLambda", {
+          code: Code.fromAsset(layer_lambda_path),
+          compatibleRuntimes: [Runtime.NODEJS_20_X],
+        })
+
         // SECURITY GROUP
         const sg_garnet_vpc_endpoint = new SecurityGroup(this, 'PrivateSubSecurityGroup', {
-            securityGroupName: `garnet-private-sub-endpoint-sg-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+            securityGroupName: `garnet-private-sub-endpoint-sg`,
             vpc: props.vpc,
             allowAllOutbound: true
         })
@@ -43,9 +50,10 @@ export interface GarnetPrivateSubProps {
         // LAMBDA 
         const lambda_garnet_private_sub_path = `${__dirname}/lambda/garnetSub`
         const lambda_garnet_private_sub = new Function(this, 'GarnetSubFunction', {
-        functionName: `garnet-private-sub-lambda-${Names.uniqueId(this).slice(-4).toLowerCase()}`, 
+        functionName: `garnet-private-sub-lambda`, 
         description: 'Garnet Private Sub - Function for the private subscription',
-            runtime: Runtime.NODEJS_18_X,
+            runtime: Runtime.NODEJS_20_X,
+            layers: [layer_lambda],
             code: Code.fromAsset(lambda_garnet_private_sub_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
@@ -118,7 +126,7 @@ export interface GarnetPrivateSubProps {
       
     // KINESIS FIREHOSE DELIVERY STREAM
     const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
-        deliveryStreamName: `garnet-sub-firehose-stream-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+        deliveryStreamName: `garnet-sub-firehose-stream`,
         deliveryStreamType: "DirectPut",
         extendedS3DestinationConfiguration: {
           bucketArn: bucket.bucketArn,
@@ -155,7 +163,7 @@ export interface GarnetPrivateSubProps {
     )
 
         // IOT RULE THAT LISTENS TO SUBSCRIPTIONS AND PUSH TO FIREHOSE
-        const iot_rule_sub_name = `garnet_subscriptions_rule_${Names.uniqueId(this).slice(-4).toLowerCase()}`
+        const iot_rule_sub_name = `garnet_subscriptions_rule`
   
         const iot_rule_sub_role = new Role(this, "RoleGarnetIotRuleIngestion", {
           assumedBy: new ServicePrincipal("iot.amazonaws.com"),

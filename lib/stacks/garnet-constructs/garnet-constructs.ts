@@ -15,6 +15,7 @@ export class GarnetConstructs extends NestedStack {
   public readonly bucket_name: string
   public readonly az1: string
   public readonly az2: string
+  public readonly rds_parameter_group_name: string
 
   constructor(scope: Construct, id: string, props?: NestedStackProps) {
     super(scope, id, props);
@@ -35,6 +36,7 @@ export class GarnetConstructs extends NestedStack {
     this.vpc = networking_construct.vpc
     this.secret = secret_construct.secret 
     this.bucket_name = bucket_construct.bucket_name
+    this.rds_parameter_group_name = utils_construct.rds_parameter_group
 
   }
 }

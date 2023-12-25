@@ -5,6 +5,7 @@ import { GarnetIotApi } from './garnet-iot-api'
 import { GarnetIot } from './garnet-iot-ingestion'
 import { GarnetPrivateSub } from './garnet-iot-private-sub'
 import { GarnetLake } from './garnet-iot-lake'
+import { GarnetIotThing } from './garnet-iot-thing'
 
 export interface GarnetIotStackProps extends NestedStackProps {
   dns_context_broker: string,
@@ -51,6 +52,9 @@ export class GarnetIotStack extends NestedStack {
       az1: props.az1,
       az2: props.az2
     })
+
+    // GARNET IOT THING PRESENCE 
+    const garnet_iot_thing_presence = new GarnetIotThing(this, 'IotPresence',{})
 
 
     this.iot_sqs_endpoint_url = garnet_iot_core_construct.sqs_garnet_iot_url

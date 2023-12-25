@@ -31,11 +31,13 @@ export const scorpiobroker_sqs_object = {
 }
 
 export const garnet_constant = {
-    garnet_version: "1.0.1", // DO NOT CHANGE
+    garnet_version: "1.1.0", // DO NOT CHANGE
     shadow_prefix: "Garnet",
     subAllName: 'GarnetDataLakeSub-DoNotDelete',
     iotDomainName: 'garnet-iot-domain', 
-    gluedbName: 'garnetdb'
+    gluedbName: 'garnetdb',
+    DBParameterGroupFamily: 'postgres16',
+    DBParameterGroupName: `garnet-parameter-group`
 }
 
 export enum Broker {

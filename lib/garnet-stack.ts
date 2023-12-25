@@ -12,7 +12,8 @@ export class GarnetStack extends Stack {
 
   getLogicalId(element: CfnElement): string {
     if (element?.node?.id?.includes('NestedStackResource')) {
-        return /([a-zA-Z0-9]+)\.NestedStackResource/.exec(element.node.id)![1] 
+        let stack_name = /([a-zA-Z0-9]+)\.NestedStackResource/.exec(element.node.id)![1]
+        return stack_name
     }
     return super.getLogicalId(element)
   }
@@ -24,7 +25,8 @@ export class GarnetStack extends Stack {
 
     let garnet_broker_stack = new GarnetScorpio(this, 'ScorpioBroker', {
         vpc: garnet_constructs.vpc, 
-        secret: garnet_constructs.secret
+        secret: garnet_constructs.secret,
+        rds_parameter_group_name: garnet_constructs.rds_parameter_group_name
       })
 
     const garnet_iot_stack  = new GarnetIotStack(this, 'GarnetIoT', {

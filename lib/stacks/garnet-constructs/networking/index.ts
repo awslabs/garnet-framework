@@ -18,7 +18,7 @@ export class GarnetNetworking extends Construct {
     const vpc = new Vpc(this, `VpcGarnet${broker_id}`, {
       natGateways: 1,
       availabilityZones: [`${props.az1}`,`${props.az2}`],
-      vpcName: `garnet-vpc-${broker_id.toLowerCase()}-${Names.uniqueId(this).slice(-4).toLowerCase()}`,
+      vpcName: `garnet-vpc-${broker_id.toLowerCase()}`,
       subnetConfiguration: [
         {
           subnetType: SubnetType.PRIVATE_WITH_EGRESS,
