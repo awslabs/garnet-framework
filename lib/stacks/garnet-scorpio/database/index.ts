@@ -1,7 +1,7 @@
 import { Aws, CfnOutput, CustomResource, Duration, Names, Token } from "aws-cdk-lib"
 import { Instance, InstanceClass, InstanceType, SecurityGroup, SubnetType, InstanceSize, Vpc, Port } from "aws-cdk-lib/aws-ec2"
 import { RetentionDays } from "aws-cdk-lib/aws-logs"
-import { Credentials, DatabaseCluster, DatabaseClusterEngine, DatabaseInstance, DatabaseInstanceEngine, DatabaseProxy, ParameterGroup, PostgresEngineVersion, ProxyTarget, ServerlessCluster, StorageType } from "aws-cdk-lib/aws-rds"
+import { CaCertificate, Credentials, DatabaseCluster, DatabaseClusterEngine, DatabaseInstance, DatabaseInstanceEngine, DatabaseProxy, ParameterGroup, PostgresEngineVersion, ProxyTarget, ServerlessCluster, StorageType } from "aws-cdk-lib/aws-rds"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 
 import { Construct } from "constructs"
@@ -47,9 +47,10 @@ export class GarnetScorpioDatabase extends Construct{
         // RDS Instance
         const database = new DatabaseInstance(this, 'DatabaseInstance', {
             credentials: Credentials.fromSecret(secret),
-            engine: DatabaseInstanceEngine.postgres({version: Parameters.garnet_scorpio.engine_version}),
+            engine: DatabaseInstanceEngine.postgres({version: PostgresEngineVersion.VER_16_1}),
             parameterGroup: rds_pm_group,
             multiAz: true, 
+            caCertificate: CaCertificate.RDS_CA_RDS4096_G1,
             cloudwatchLogsRetention: RetentionDays.THREE_MONTHS, 
             instanceType: Parameters.garnet_scorpio.rds_instance_type,
             storageType: Parameters.garnet_scorpio.rds_storage_type,
@@ -78,7 +79,6 @@ export class GarnetScorpioDatabase extends Construct{
 
         sg_database.addIngressRule(sg_proxy, Port.tcp(5432))
         this.sg_proxy = sg_proxy
-
         // Proxy
         const rds_proxy = new DatabaseProxy(this, 'RdsProxy', {
             dbProxyName: `garnet-proxy-rds`,
@@ -95,7 +95,8 @@ export class GarnetScorpioDatabase extends Construct{
         this.database_port = `${Token.asString(database.dbInstanceEndpointPort)}`
 
         new CfnOutput(this, 'database_proxy_endpoint', {
-            value: rds_proxy.endpoint
+           value: rds_proxy.endpoint
+    
         })
         new CfnOutput(this, 'database_port', {
             value: `${Token.asString(database.dbInstanceEndpointPort)}`

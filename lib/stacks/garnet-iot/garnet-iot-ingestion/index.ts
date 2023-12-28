@@ -178,7 +178,7 @@ export class GarnetIot extends Construct {
         ],
         resources: ["*"],
       })
-    );
+    )
 
     // ADD PERMISSION FOR LAMBDA TO ACCESS SQS
     lambda_to_context_broker.addToRolePolicy(
@@ -190,7 +190,7 @@ export class GarnetIot extends Construct {
         ],
         resources: [`${sqs_to_context_broker.queueArn}`],
       })
-    );
+    )
 
     lambda_to_context_broker.addToRolePolicy(
       new PolicyStatement({
@@ -202,7 +202,7 @@ export class GarnetIot extends Construct {
     );
 
     lambda_to_context_broker.addEventSource(
-      new SqsEventSource(sqs_to_context_broker, { batchSize: 10 })
+      new SqsEventSource(sqs_to_context_broker, { batchSize: 10, maxBatchingWindow: Duration.seconds(Parameters.garnet_iot.lambda_broker_batch_window), maxConcurrency: Parameters.garnet_iot.lambda_broker_concurent_sqs })
     );
   }
 }

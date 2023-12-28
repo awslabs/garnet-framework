@@ -31,8 +31,8 @@ export class GarnetNetworking extends Construct {
         {
           subnetType: SubnetType.PUBLIC,
           name: `garnet-subnet-public-${broker_id.toLowerCase()}`,
-        },
-      ],
+        }
+      ]
     })
 
 
