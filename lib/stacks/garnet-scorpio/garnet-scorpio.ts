@@ -12,8 +12,7 @@ import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 
 export interface GarnetScorpioProps extends NestedStackProps{
   vpc: Vpc,
-  secret: Secret, 
-  rds_parameter_group_name: string
+  secret: Secret
 }
 
 export class GarnetScorpio extends NestedStack {
@@ -27,8 +26,7 @@ export class GarnetScorpio extends NestedStack {
 
     const database_construct = new GarnetScorpioDatabase(this, "Database", {
       vpc: props.vpc,
-      secret_arn: props.secret.secretArn,
-      rds_parameter_group_name: props.rds_parameter_group_name
+      secret_arn: props.secret.secretArn
     })
 
     const fargate_construct = new GarnetScorpioFargate( this, "Fargate", {

@@ -1,12 +1,10 @@
 import { Construct } from "constructs";
-import { azlist, scorpiobroker_sqs_object, garnet_constant } from "../constants"
-import { Aws, CfnOutput, CustomResource, Duration, Names, Stack } from "aws-cdk-lib";
+import { azlist, scorpiobroker_sqs_object } from "../constants"
+import { Aws, CustomResource, Duration, Stack } from "aws-cdk-lib";
 import { Code, Runtime, Function, Architecture } from "aws-cdk-lib/aws-lambda";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { Provider } from "aws-cdk-lib/custom-resources";
 import { Parameters } from "../../../../parameters";
-import { DatabaseInstanceEngine, ParameterGroup, PostgresEngineVersion } from "aws-cdk-lib/aws-rds";
-import { EngineVersion } from "aws-cdk-lib/aws-opensearchservice";
 
 export interface GarnetUtilProps {}
 
@@ -14,7 +12,6 @@ export class Utils extends Construct {
 
     public readonly az1: string
     public readonly az2: string
-    public readonly rds_parameter_group: string
 
     constructor(scope: Construct, id: string, props?: GarnetUtilProps) {
         super(scope, id)
@@ -64,43 +61,6 @@ export class Utils extends Construct {
 
         this.az1 = get_az.getAtt('az1').toString()
         this.az2 = get_az.getAtt('az2').toString()
-
-
-        // RDS PARAMETER GROUP 
-        const parameter_rds_lambda_path = `${__dirname}/lambda/parameterRds`
-        const parameter_rds_lambda = new Function(this, 'CustomParameterRdsLambda', {
-          functionName: `garnet-custom-parameter-group-rds-lambda`,
-          description: 'Garnet Custom - Function that creates a parameter group for db disabling tls', 
-            runtime: Runtime.NODEJS_20_X,
-            code: Code.fromAsset(parameter_rds_lambda_path),
-            handler: 'index.handler',
-            timeout: Duration.seconds(50),
-            architecture: Architecture.ARM_64,
-            environment: {
-              DBParameterGroupName: garnet_constant.DBParameterGroupName,
-              DBParameterGroupFamily: garnet_constant.DBParameterGroupFamily
-            }
-      })
-      parameter_rds_lambda.addToRolePolicy(new PolicyStatement({
-        actions: [				
-            "rds:CreateDBParameterGroup",
-            "rds:ModifyDBParameterGroup",
-            "rds:DescribeDBParameterGroups",
-            "rds:DeleteDBParameterGroup"
-        ],
-        resources: [`*`] 
-        }))
-
-        const parameter_rds_provider = new Provider(this, 'parameterRdsProvider', {
-        onEventHandler: parameter_rds_lambda,
-        providerFunctionName: `garnet-provider-utils-parameter-rds`
-      }) 
-      
-      const parameter_rds_resource = new CustomResource(this, 'parameterRdsCustomResource', {
-        serviceToken: parameter_rds_provider.serviceToken
-      })
-
-      this.rds_parameter_group = parameter_rds_resource.getAtt('name').toString()
       
       // CLEAN SQS QUEUES CREATED BY SCORPIO BROKER 
       if(Parameters.garnet_broker == 'Scorpio'){

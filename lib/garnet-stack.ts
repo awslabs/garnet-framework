@@ -25,8 +25,7 @@ export class GarnetStack extends Stack {
 
     let garnet_broker_stack = new GarnetScorpio(this, 'ScorpioBroker', {
         vpc: garnet_constructs.vpc, 
-        secret: garnet_constructs.secret,
-        rds_parameter_group_name: garnet_constructs.rds_parameter_group_name
+        secret: garnet_constructs.secret
       })
 
     const garnet_iot_stack  = new GarnetIotStack(this, 'GarnetIoT', {

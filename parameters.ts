@@ -1,6 +1,5 @@
 import { Aws } from "aws-cdk-lib"
-import { InstanceClass, InstanceSize, InstanceType } from "aws-cdk-lib/aws-ec2"
-import {PostgresEngineVersion, StorageType } from "aws-cdk-lib/aws-rds"
+import {DBClusterStorageType} from "aws-cdk-lib/aws-rds"
 import { Broker } from "./lib/stacks/garnet-constructs/constants"
 
 export const Parameters = {
@@ -14,18 +13,19 @@ export const Parameters = {
         fargate_cpu: 1024, // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
         fargate_memory_limit: 4096, // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
         autoscale_requests_number: 10, 
-        autoscale_min_capacity: 10, 
-        autoscale_max_capacity: 50
+        autoscale_min_capacity: 2, 
+        autoscale_max_capacity: 20
     },
     // SCORPIO BROKER PARAMETERS
     garnet_scorpio: {
         image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.11', // Link to ECR Public gallery of Scorpio Broker image.
-        rds_instance_type: InstanceType.of( InstanceClass.MEMORY7_GRAVITON, InstanceSize.XLARGE), // see https://aws.amazon.com/rds/instance-types/
-        rds_storage_type: StorageType.IO1, // see https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/CHAP_Storage.html
+        aurora_min_capacity: 0.5, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.min_capacity_considerations
+        aurora_max_capacity: 10, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.max_capacity_considerations
+        storage_type: DBClusterStorageType.AURORA_IOPT1, //  https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.StorageReliability.html#aurora-storage-type
         dbname: 'scorpio'
     }, 
     garnet_iot: {
-        lambda_broker_batch_window: 2, // The maximum amount of time to gather records before invoking the function, in seconds.
+        lambda_broker_batch_window: 1, // The maximum amount of time to gather records before invoking the function, in seconds.
         lambda_broker_concurent_sqs: 20 // The maximum concurrency setting limits the number of concurrent instances of the function that an Amazon SQS event source can invoke.
     }
 }

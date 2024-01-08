@@ -35,9 +35,7 @@ export const garnet_constant = {
     shadow_prefix: "Garnet",
     subAllName: 'GarnetDataLakeSub-DoNotDelete',
     iotDomainName: 'garnet-iot-domain', 
-    gluedbName: 'garnetdb',
-    DBParameterGroupFamily: 'postgres16',
-    DBParameterGroupName: `garnet-parameter-group`
+    gluedbName: 'garnetdb'
 }
 
 export enum Broker {
