@@ -1,14 +1,12 @@
 import { Aws, CfnOutput, CustomResource, Duration, Names, Token } from "aws-cdk-lib"
 import { Instance, InstanceClass, InstanceType, SecurityGroup, SubnetType, InstanceSize, Vpc, Port } from "aws-cdk-lib/aws-ec2"
 import { RetentionDays } from "aws-cdk-lib/aws-logs"
-import { CaCertificate, Credentials, DatabaseCluster, DatabaseClusterEngine, DatabaseInstance, DatabaseInstanceEngine, DatabaseProxy, ParameterGroup, PostgresEngineVersion, ProxyTarget, ServerlessCluster, StorageType } from "aws-cdk-lib/aws-rds"
+import { AuroraPostgresEngineVersion, CaCertificate, ClusterInstance, Credentials, DBClusterStorageType, DatabaseCluster, DatabaseClusterEngine, DatabaseInstance, DatabaseInstanceEngine, DatabaseProxy, ParameterGroup, PostgresEngineVersion, ProxyTarget, StorageType } from "aws-cdk-lib/aws-rds"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
-import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
-import { Runtime, Function, Code, Architecture } from "aws-cdk-lib/aws-lambda"
-import { Provider } from "aws-cdk-lib/custom-resources"
+import { Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 
 export interface GarnetScorpioDatabaseProps {
     vpc: Vpc
@@ -45,22 +43,46 @@ export class GarnetScorpioDatabase extends Construct{
         const rds_pm_group = ParameterGroup.fromParameterGroupName(this, 'RdsPmGroup', props.rds_parameter_group_name)
 
         // RDS Instance
-        const database = new DatabaseInstance(this, 'DatabaseInstance', {
-            credentials: Credentials.fromSecret(secret),
-            engine: DatabaseInstanceEngine.postgres({version: PostgresEngineVersion.VER_16_1}),
-            parameterGroup: rds_pm_group,
-            multiAz: true, 
-            caCertificate: CaCertificate.RDS_CA_RDS4096_G1,
-            cloudwatchLogsRetention: RetentionDays.THREE_MONTHS, 
-            instanceType: Parameters.garnet_scorpio.rds_instance_type,
-            storageType: Parameters.garnet_scorpio.rds_storage_type,
+        // const database = new DatabaseInstance(this, 'DatabaseInstance', {
+        //     credentials: Credentials.fromSecret(secret),
+        //     engine: DatabaseInstanceEngine.postgres({version: PostgresEngineVersion.VER_16_1}),
+        //     parameterGroup: rds_pm_group,
+        //     multiAz: true, 
+        //     caCertificate: CaCertificate.RDS_CA_RDS4096_G1,
+        //     cloudwatchLogsRetention: RetentionDays.THREE_MONTHS, 
+        //     instanceType: Parameters.garnet_scorpio.rds_instance_type,
+        //     storageType: Parameters.garnet_scorpio.rds_storage_type,
+        //     vpc: props.vpc, 
+        //     securityGroups: [sg_database],
+        //     databaseName: Parameters.garnet_scorpio.dbname,
+        //     vpcSubnets:{
+        //         subnetType: SubnetType.PRIVATE_ISOLATED
+        //     }
+        // })
+
+
+
+        //Serverless Cluster
+        const cluster = new DatabaseCluster(this, 'DatabaseAurora', {
+            engine: DatabaseClusterEngine.auroraPostgres({
+                version: AuroraPostgresEngineVersion.VER_15_4
+            }),
+            clusterIdentifier: `garnet-serverless-aurora-cluster`, 
+            credentials: Credentials.fromSecret(secret), 
             vpc: props.vpc, 
             securityGroups: [sg_database],
-            databaseName: Parameters.garnet_scorpio.dbname,
+            defaultDatabaseName: Parameters.garnet_scorpio.dbname,
             vpcSubnets:{
                 subnetType: SubnetType.PRIVATE_ISOLATED
-            }
+            },
+            writer: ClusterInstance.serverlessV2('writer'), 
+            serverlessV2MinCapacity: 0.5,
+            serverlessV2MaxCapacity: 20,
+            storageType: DBClusterStorageType.AURORA_IOPT1
+
         })
+
+
 
 
         // ROLE FOR PROXY
@@ -80,9 +102,19 @@ export class GarnetScorpioDatabase extends Construct{
         sg_database.addIngressRule(sg_proxy, Port.tcp(5432))
         this.sg_proxy = sg_proxy
         // Proxy
+        // const rds_proxy = new DatabaseProxy(this, 'RdsProxy', {
+        //     dbProxyName: `garnet-proxy-rds`,
+        //     proxyTarget: ProxyTarget.fromInstance(database),
+        //     secrets: [secret],
+        //     vpc: props.vpc, 
+        //     idleClientTimeout: Duration.minutes(5), 
+        //     requireTLS: false,
+        //     role: role_proxy,
+        //     securityGroups: [sg_proxy]
+        // })
         const rds_proxy = new DatabaseProxy(this, 'RdsProxy', {
             dbProxyName: `garnet-proxy-rds`,
-            proxyTarget: ProxyTarget.fromInstance(database),
+            proxyTarget: ProxyTarget.fromCluster(cluster),
             secrets: [secret],
             vpc: props.vpc, 
             idleClientTimeout: Duration.minutes(5), 
@@ -92,14 +124,16 @@ export class GarnetScorpioDatabase extends Construct{
         })
 
         this.database_endpoint = rds_proxy.endpoint
-        this.database_port = `${Token.asString(database.dbInstanceEndpointPort)}`
+       // this.database_port = `${Token.asString(database.dbInstanceEndpointPort)}`
+        this.database_port = `${Token.asString(cluster.clusterEndpoint.port)}`
 
         new CfnOutput(this, 'database_proxy_endpoint', {
-           value: rds_proxy.endpoint
+           value: this.database_endpoint
     
         })
         new CfnOutput(this, 'database_port', {
-            value: `${Token.asString(database.dbInstanceEndpointPort)}`
+            //value: `${Token.asString(database.dbInstanceEndpointPort)}`
+            value: this.database_port
         })
        
 
