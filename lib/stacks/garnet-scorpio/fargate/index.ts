@@ -103,6 +103,9 @@ export class GarnetScorpioFargate extends Construct {
             healthCheckGracePeriod: Duration.seconds(20),  
             publicLoadBalancer: false, 
             loadBalancerName: `garnet-loadbalancer`,
+            // taskDefinition: [
+
+            // ],
             taskImageOptions: {
                 image: ContainerImage.fromRegistry(props.image_context_broker),
                 taskRole: fargate_task_role,
