@@ -18,6 +18,7 @@ export interface GarnetIotprops {
 
 export class GarnetIot extends Construct {
   public readonly sqs_garnet_iot_url: string;
+  public readonly sqs_garnet_iot_arn: string;
   public readonly sns_garnet_iot: Topic;
   public readonly iot_rule_sub_name: string
 
@@ -48,7 +49,8 @@ export class GarnetIot extends Construct {
       queueName: `garnet-iot-queue-${Aws.REGION}`,
       visibilityTimeout: Duration.seconds(55)
     })
-    this.sqs_garnet_iot_url = sqs_garnet_endpoint.queueUrl;
+    this.sqs_garnet_iot_url = sqs_garnet_endpoint.queueUrl
+    this.sqs_garnet_iot_arn = sqs_garnet_endpoint.queueArn
 
     // LAMBDA TO UPDATE DEVICE SHADOW
     const lambda_update_shadow_path = `${__dirname}/lambda/updateShadow`;

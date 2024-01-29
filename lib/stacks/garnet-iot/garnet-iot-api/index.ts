@@ -14,7 +14,10 @@ import { garnet_constant } from "../../garnet-constructs/constants"
 export interface GarnetIotApiProps {
     readonly api_ref: string,
     readonly vpc: Vpc,
-    dns_context_broker: string
+    dns_context_broker: string,
+    garnet_iot_sqs_url: string, 
+    garnet_iot_sqs_arn: string, 
+    garnet_private_endpoint: string
 }
 
 export class GarnetIotApi extends Construct {
@@ -50,8 +53,11 @@ export class GarnetIotApi extends Construct {
             architecture: Architecture.ARM_64,
 
             environment: {
-                CONTEXT_BROKER: Parameters.garnet_broker,
-                GARNET_VERSION: garnet_constant.garnet_version
+                    CONTEXT_BROKER: Parameters.garnet_broker,
+                    GARNET_VERSION: garnet_constant.garnet_version, 
+                    GARNET_PRIVATE_ENDPOINT: props.garnet_private_endpoint, 
+                    GARNET_IOT_SQS_URL: props.garnet_iot_sqs_url, 
+                    GARNET_IOT_SQS_ARN: props.garnet_iot_sqs_arn
                 }   
         })
 
