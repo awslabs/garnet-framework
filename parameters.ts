@@ -10,22 +10,23 @@ export const Parameters = {
     smart_data_model_url : 'https://raw.githubusercontent.com/awslabs/garnet-framework/main/context.jsonld',  
     // FARGATE PARAMETERS
     garnet_fargate: {
-        fargate_cpu: 1024, // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
-        fargate_memory_limit: 4096, // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
+        fargate_cpu: 2048, // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
+        fargate_memory_limit: 16384, // https://docs.aws.amazon.com/AmazonECS/latest/developerguide/task_definition_parameters.html#task_size
         autoscale_requests_number: 10, 
-        autoscale_min_capacity: 2, 
-        autoscale_max_capacity: 20
+        autoscale_min_capacity: 30, 
+        autoscale_max_capacity: 100
     },
     // SCORPIO BROKER PARAMETERS
     garnet_scorpio: {
-        image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.11', // Link to ECR Public gallery of Scorpio Broker image.
-        aurora_min_capacity: 0.5, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.min_capacity_considerations
-        aurora_max_capacity: 10, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.max_capacity_considerations
+        image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.12', // Link to ECR Public gallery of Scorpio Broker image: https://gallery.ecr.aws/garnet/scorpio.
+        aurora_min_capacity: 2, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.min_capacity_considerations
+        aurora_max_capacity: 30, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.max_capacity_considerations
         storage_type: DBClusterStorageType.AURORA_IOPT1, //  https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.StorageReliability.html#aurora-storage-type
         dbname: 'scorpio'
     }, 
     garnet_iot: {
-        lambda_broker_batch_window: 1, // The maximum amount of time to gather records before invoking the function, in seconds.
-        lambda_broker_concurent_sqs: 20 // The maximum concurrency setting limits the number of concurrent instances of the function that an Amazon SQS event source can invoke.
+        lambda_broker_batch_window: 3, // The maximum amount of time to gather records before invoking the function, in seconds.
+        lambda_broker_concurent_sqs: 10, // The maximum concurrency setting limits the number of concurrent instances of the function that an Amazon SQS event source can invoke.
+        lambda_broker_batch_size: 50
     }
 }

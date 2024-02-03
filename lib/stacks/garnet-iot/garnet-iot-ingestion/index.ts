@@ -4,7 +4,7 @@ import { ManagedPolicy, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
 import { Code, LayerVersion, Runtime, Function,Architecture} from "aws-cdk-lib/aws-lambda";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
-import { RetentionDays } from "aws-cdk-lib/aws-logs";
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Topic } from "aws-cdk-lib/aws-sns";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
@@ -18,6 +18,7 @@ export interface GarnetIotprops {
 
 export class GarnetIot extends Construct {
   public readonly sqs_garnet_iot_url: string;
+  public readonly sqs_garnet_iot_arn: string;
   public readonly sns_garnet_iot: Topic;
   public readonly iot_rule_sub_name: string
 
@@ -48,7 +49,8 @@ export class GarnetIot extends Construct {
       queueName: `garnet-iot-queue-${Aws.REGION}`,
       visibilityTimeout: Duration.seconds(55)
     })
-    this.sqs_garnet_iot_url = sqs_garnet_endpoint.queueUrl;
+    this.sqs_garnet_iot_url = sqs_garnet_endpoint.queueUrl
+    this.sqs_garnet_iot_arn = sqs_garnet_endpoint.queueArn
 
     // LAMBDA TO UPDATE DEVICE SHADOW
     const lambda_update_shadow_path = `${__dirname}/lambda/updateShadow`;
@@ -60,7 +62,9 @@ export class GarnetIot extends Construct {
       handler: "index.handler",
       layers: [layer_lambda],
       timeout: Duration.seconds(50),
-      logRetention: RetentionDays.THREE_MONTHS,
+      logGroup: new LogGroup(this, 'LambdaUpdateShadowLogs', {
+        retention: RetentionDays.ONE_MONTH,
+      }),
       architecture: Architecture.ARM_64,
       environment: {
         AWSIOTREGION: Aws.REGION,
@@ -152,7 +156,9 @@ export class GarnetIot extends Construct {
         code: Code.fromAsset(lambda_to_context_broker_path),
         handler: "index.handler",
         timeout: Duration.seconds(50),
-        logRetention: RetentionDays.THREE_MONTHS,
+        logGroup: new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
+          retention: RetentionDays.ONE_MONTH,
+        }),
         layers: [layer_lambda],
         architecture: Architecture.ARM_64,
         environment: {
@@ -202,7 +208,10 @@ export class GarnetIot extends Construct {
     );
 
     lambda_to_context_broker.addEventSource(
-      new SqsEventSource(sqs_to_context_broker, { batchSize: 10, maxBatchingWindow: Duration.seconds(Parameters.garnet_iot.lambda_broker_batch_window), maxConcurrency: Parameters.garnet_iot.lambda_broker_concurent_sqs })
+      new SqsEventSource(sqs_to_context_broker, { 
+        batchSize: Parameters.garnet_iot.lambda_broker_batch_size, 
+        maxBatchingWindow: Duration.seconds(Parameters.garnet_iot.lambda_broker_batch_window), 
+        maxConcurrency: Parameters.garnet_iot.lambda_broker_concurent_sqs })
     );
   }
 }

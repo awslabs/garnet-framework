@@ -4,7 +4,7 @@ import { CfnIntegration, CfnRoute, CfnVpcLink } from "aws-cdk-lib/aws-apigateway
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
 import { PolicyStatement } from "aws-cdk-lib/aws-iam"
 import { Runtime, Function, Code, CfnPermission, LayerVersion, Architecture } from "aws-cdk-lib/aws-lambda"
-import { RetentionDays } from "aws-cdk-lib/aws-logs"
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources"
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
@@ -14,7 +14,10 @@ import { garnet_constant } from "../../garnet-constructs/constants"
 export interface GarnetIotApiProps {
     readonly api_ref: string,
     readonly vpc: Vpc,
-    dns_context_broker: string
+    dns_context_broker: string,
+    garnet_iot_sqs_url: string, 
+    garnet_iot_sqs_arn: string, 
+    garnet_private_endpoint: string
 }
 
 export class GarnetIotApi extends Construct {
@@ -45,13 +48,18 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_garnet_version_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logRetention: RetentionDays.THREE_MONTHS,
+            logGroup: new LogGroup(this, 'LambdaGarnetVersionLogs', {
+                retention: RetentionDays.ONE_MONTH,
+            }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
 
             environment: {
-                CONTEXT_BROKER: Parameters.garnet_broker,
-                GARNET_VERSION: garnet_constant.garnet_version
+                    CONTEXT_BROKER: Parameters.garnet_broker,
+                    GARNET_VERSION: garnet_constant.garnet_version, 
+                    GARNET_PRIVATE_ENDPOINT: props.garnet_private_endpoint, 
+                    GARNET_IOT_SQS_URL: props.garnet_iot_sqs_url, 
+                    GARNET_IOT_SQS_ARN: props.garnet_iot_sqs_arn
                 }   
         })
 
@@ -102,7 +110,9 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_post_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logRetention: RetentionDays.THREE_MONTHS,
+            logGroup: new LogGroup(this, 'LambdaPostThingLogs', {
+                retention: RetentionDays.ONE_MONTH,
+            }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
@@ -173,7 +183,9 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_delete_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logRetention: RetentionDays.THREE_MONTHS,
+            logGroup: new LogGroup(this, 'LambdaDeleteThingLogs', {
+                retention: RetentionDays.ONE_MONTH,
+            }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
@@ -238,7 +250,9 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_get_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logRetention: RetentionDays.THREE_MONTHS,
+            logGroup: new LogGroup(this, 'LambdaGetThingLogs', {
+                retention: RetentionDays.ONE_MONTH,
+            }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
@@ -250,6 +264,7 @@ export class GarnetIotApi extends Construct {
         lambda_get_thing.addToRolePolicy(new PolicyStatement({
             actions: [
                 "iot:GetThing",
+                "iot:ListThings",
                 "iot:ListNamedShadowsForThing",
                 "iot:getThingShadow"
             ],
@@ -301,7 +316,9 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_get_things_path),
             handler: 'index.handler',
             timeout: Duration.minutes(3),
-            logRetention: RetentionDays.THREE_MONTHS,
+            logGroup: new LogGroup(this, 'LambdaGetThingsLogs', {
+                retention: RetentionDays.ONE_MONTH,
+            }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
@@ -315,7 +332,7 @@ export class GarnetIotApi extends Construct {
                 "iot:ListThings"
             ],
             resources: [
-                `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:index/*`
+                `*`
             ]
         }))
 
@@ -364,7 +381,9 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_post_shadows_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
-            logRetention: RetentionDays.THREE_MONTHS,
+            logGroup: new LogGroup(this, 'LambdaPostShadowsLogs', {
+                retention: RetentionDays.ONE_MONTH,
+            }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {

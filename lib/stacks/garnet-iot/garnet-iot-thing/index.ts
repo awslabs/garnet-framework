@@ -1,6 +1,6 @@
 import { Aws, Duration, Names } from "aws-cdk-lib";
 import { Runtime, Function, Code, Architecture, LayerVersion } from "aws-cdk-lib/aws-lambda";
-import { RetentionDays } from "aws-cdk-lib/aws-logs";
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs"
 import { garnet_constant } from "../../garnet-constructs/constants";
@@ -34,14 +34,16 @@ export class GarnetIotThing extends Construct {
         // LAMBDA TO UPDATE DEVICE SHADOW
         const lambda_update_shadow_presence_path = `${__dirname}/lambda/presence`;
         const lambda_update_shadow_presence = new Function(this, "LambdaUpdatePresenceThing", {
-          functionName: `garnet-iot-presence_shadow-lambda`,
+          functionName: `garnet-iot-presence-shadow-lambda`,
           description: 'Garnet IoT Things Presence- Function that updates presence for Iot MQTT connected things',
           runtime: Runtime.NODEJS_20_X,
           layers: [layer_lambda],
           code: Code.fromAsset(lambda_update_shadow_presence_path),
           handler: "index.handler",
           timeout: Duration.seconds(50),
-          logRetention: RetentionDays.THREE_MONTHS,
+          logGroup: new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
+            retention: RetentionDays.ONE_MONTH,
+          }),
           architecture: Architecture.ARM_64,
           environment: {
             AWSIOTREGION: Aws.REGION,

@@ -30,18 +30,23 @@ export class GarnetIotStack extends NestedStack {
       dns_context_broker: props.dns_context_broker
     })
 
+        // GARNET IOT PRIVATE SUB 
+        const garnet_private_sub_construct = new GarnetPrivateSub(this, "PrivateSub", {
+          vpc: props.vpc,
+          bucket_name: props.bucket_name
+        })
+    
+
     // GARNET IOT API 
     const garnet_iot_api_construct= new GarnetIotApi(this, 'Api', {
       api_ref: props.api_ref,
       vpc: props.vpc, 
-      dns_context_broker: props.dns_context_broker
+      dns_context_broker: props.dns_context_broker, 
+      garnet_private_endpoint: garnet_private_sub_construct.private_sub_endpoint, 
+      garnet_iot_sqs_url:  garnet_iot_core_construct.sqs_garnet_iot_url, 
+      garnet_iot_sqs_arn: garnet_iot_core_construct.sqs_garnet_iot_arn
     })
 
-    // GARNET IOT PRIVATE SUB 
-    const garnet_private_sub_construct = new GarnetPrivateSub(this, "PrivateSub", {
-      vpc: props.vpc,
-      bucket_name: props.bucket_name
-    })
 
 
     // GARNET IOT DATA LAKE 

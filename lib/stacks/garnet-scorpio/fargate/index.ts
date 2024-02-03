@@ -107,6 +107,8 @@ export class GarnetScorpioFargate extends Construct {
 
             // ],
             taskImageOptions: {
+                containerName: `garnet-scorpio-container`, 
+                family: `garnet-scorpio-task-definition`, 
                 image: ContainerImage.fromRegistry(props.image_context_broker),
                 taskRole: fargate_task_role,
                 secrets: {
@@ -117,11 +119,12 @@ export class GarnetScorpioFargate extends Construct {
                     DBHOST: props.db_endpoint,
                     DBPORT: props.db_port,   
                     DBNAME: Parameters.garnet_scorpio.dbname,
-                    SCORPIO_STARTUPDELAY: '5s',
+                    SCORPIO_STARTUPDELAY: '10s',
                     SCORPIO_ENTITY_MAX_LIMIT: '5000',
                     AWS_REGION: Aws.REGION,
                     QUARKUS_LOG_LEVEL: 'INFO',
-                    MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?greedy=true&delay=200",
+                    MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?greedy=true&delay=250",
+                    QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: '50',
                     ...scorpiobroker_sqs_object
                 },
                 containerPort: 9090,
@@ -137,7 +140,7 @@ export class GarnetScorpioFargate extends Construct {
         /** ENV 
          *     QUARKUS_DATASOURCE_REACTIVE_MAX_SIZE: '30',
          *     SCORPIO_ENTITY_MAX_LIMIT: '5000',
-               QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: '10', 
+               QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: '50', 
          */
 
 
