@@ -25,8 +25,8 @@ export const Parameters = {
         dbname: 'scorpio'
     }, 
     garnet_iot: {
-        lambda_broker_batch_window: 3, // The maximum amount of time to gather records before invoking the function, in seconds.
+        lambda_broker_batch_window: 2, // The maximum amount of time to gather records before invoking the function, in seconds.
         lambda_broker_concurent_sqs: 10, // The maximum concurrency setting limits the number of concurrent instances of the function that an Amazon SQS event source can invoke.
-        lambda_broker_batch_size: 50
+        lambda_broker_batch_size: 20
     }
 }

@@ -1,5 +1,5 @@
 import { Aws, Duration, Names } from "aws-cdk-lib";
-import { Runtime, Function, Code, Architecture, LayerVersion } from "aws-cdk-lib/aws-lambda";
+import { Runtime, Function, Code, Architecture, LayerVersion, CfnPermission } from "aws-cdk-lib/aws-lambda";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs"
@@ -7,6 +7,7 @@ import { garnet_constant } from "../../garnet-constructs/constants";
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
+import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
 
 export interface GarnetIotThingProps {}
 
@@ -17,6 +18,7 @@ export class GarnetIotThing extends Construct {
     constructor(scope: Construct, id: string, props?: GarnetIotThingProps) {
       super(scope, id)
 
+
           // LAMBDA LAYER (SHARED LIBRARIES)
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
@@ -24,14 +26,18 @@ export class GarnetIotThing extends Construct {
           compatibleRuntimes: [Runtime.NODEJS_20_X],
         })
     
-        // SQS ENTRY POINT
+
+        //  CONNECTIVITY STATUS 
+
+
+        // SQS ENTRY POINT CONNECTIVITY STATUS 
         const sqs_garnet_iot_presence = new Queue(this, "SqsGarnetPresenceThing", {
           queueName: `garnet-iot-presence-queue-${Aws.REGION}`,
           visibilityTimeout: Duration.seconds(55)
         })
 
     
-        // LAMBDA TO UPDATE DEVICE SHADOW
+        // LAMBDA TO UPDATE DEVICE SHADOW WITH CONNECTIVITY STATUS
         const lambda_update_shadow_presence_path = `${__dirname}/lambda/presence`;
         const lambda_update_shadow_presence = new Function(this, "LambdaUpdatePresenceThing", {
           functionName: `garnet-iot-presence-shadow-lambda`,
@@ -43,6 +49,7 @@ export class GarnetIotThing extends Construct {
           timeout: Duration.seconds(50),
           logGroup: new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
             retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-iot-presence-shadow-lambda-logs`
           }),
           architecture: Architecture.ARM_64,
           environment: {
@@ -63,15 +70,15 @@ export class GarnetIotThing extends Construct {
           })
         )
 
-            // ADD PERMISSION TO ACCESS AWS IoT DEVICE SHADOW
-            lambda_update_shadow_presence.addToRolePolicy(
-              new PolicyStatement({
-                actions: ["iot:UpdateThingShadow"],
-                resources: [
-                  `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:thing/*/${garnet_constant.shadow_prefix}-*`,
-                ],
-              })
-            )
+        // ADD PERMISSION TO ACCESS AWS IoT DEVICE SHADOW
+        lambda_update_shadow_presence.addToRolePolicy(
+          new PolicyStatement({
+            actions: ["iot:UpdateThingShadow"],
+            resources: [
+              `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:thing/*/${garnet_constant.shadow_prefix}-*`,
+            ],
+          })
+        )
 
         // ADD THE SQS  AS EVENT SOURCE FOR LAMBDA
         lambda_update_shadow_presence.addEventSource(
@@ -113,6 +120,101 @@ export class GarnetIotThing extends Construct {
         },
       })
     
+       // END CONNECTIVITY STATUS 
     
+
+
+       // THING GROUP MEMBERSHIP 
+
+       let event_param = {
+        eventConfigurations: { 
+          "THING_GROUP_MEMBERSHIP": { 
+            Enabled: true 
+          }
+        }
+       }
+
+       const iot_event = new AwsCustomResource(this, 'IotEventGroupMembership', {
+        onCreate: {
+            service: 'Iot',
+            action: 'UpdateEventConfigurations',
+            physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
+            parameters: event_param
+          },
+          onUpdate: {
+            service: 'Iot',
+            action: 'UpdateEventConfigurations',
+            physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
+            parameters: event_param
+          },
+          policy: AwsCustomResourcePolicy.fromSdkCalls({resources: AwsCustomResourcePolicy.ANY_RESOURCE})
+    })
+
+
+    // LAMBDA TO UPDATE DEVICE SHADOW WITH GROUP MEMBERSHIP
+    const lambda_update_group_membership_path = `${__dirname}/lambda/group`;
+    const lambda_update_group_membership = new Function(this, "LambdaUpdateGroupThing", {
+      functionName: `garnet-iot-group-thing-lambda`,
+      description: 'Garnet IoT Things Group- Function that updates Things Group membership for Things',
+      runtime: Runtime.NODEJS_20_X,
+      layers: [layer_lambda],
+      code: Code.fromAsset(lambda_update_group_membership_path),
+      handler: "index.handler",
+      timeout: Duration.seconds(50),
+      logGroup: new LogGroup(this, 'LambdaUpdateGroupThingLogs', {
+        retention: RetentionDays.ONE_MONTH,
+        logGroupName: `garnet-iot-group-thing-lambda-logs`
+      }),
+      architecture: Architecture.ARM_64,
+      environment: {
+        AWSIOTREGION: Aws.REGION,
+        SHADOW_PREFIX: garnet_constant.shadow_prefix
+      }
+    })
+
+    // ADD PERMISSION TO ACCESS AWS IoT DEVICE SHADOW
+    lambda_update_group_membership.addToRolePolicy(
+      new PolicyStatement({
+        actions: ["iot:UpdateThingShadow"],
+        resources: [
+          `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:thing/*/${garnet_constant.shadow_prefix}-*`,
+        ]
+      })
+    )
+    lambda_update_group_membership.addToRolePolicy(
+      new PolicyStatement({
+        actions: ["iot:ListThingGroupsForThing"],
+        resources: [
+          `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:thing/*`,
+        ]
+      })
+    )
+
+    // IOT RULE THAT LISTENS TO CHANGES IN GROUP MEMBERSHIP AND PUSH TO LAMBDA
+    const iot_rule_group_membership = new CfnTopicRule(this, "IoTRuleGroupMembership", {
+      ruleName: `garnet_iot_group_membership_rule`,
+      topicRulePayload: {
+        awsIotSqlVersion: "2016-03-23",
+        ruleDisabled: false,
+        sql: `SELECT *, topic(7) as thingName, topic(5) as thingGroup from '$aws/events/thingGroupMembership/thingGroup/+/thing/+/+'`,
+        actions: [
+          {
+            lambda: {
+              functionArn: lambda_update_group_membership.functionArn
+          }
+          }
+        ]
+      }
+    })
+
+    // GRANT IOT RULE PERMISSION TO INVOKE MODELING LAMBDA
+    new CfnPermission(this, 'LambdaGroupthingPermissionIotRule', {
+      principal: `iot.amazonaws.com`,
+      action: 'lambda:InvokeFunction',
+      functionName: lambda_update_group_membership.functionName,
+      sourceArn: `${iot_rule_group_membership.attrArn}`
+    })
+
+
     }
 }

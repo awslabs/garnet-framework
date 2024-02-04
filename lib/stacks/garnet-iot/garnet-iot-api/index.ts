@@ -50,6 +50,7 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaGarnetVersionLogs', {
                 retention: RetentionDays.ONE_MONTH,
+                logGroupName: `garnet-api-version-lambda-logs`
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -112,6 +113,7 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaPostThingLogs', {
                 retention: RetentionDays.ONE_MONTH,
+                logGroupName: `garnet-iot-api-post-thing-lambda-logs`
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -185,6 +187,7 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaDeleteThingLogs', {
                 retention: RetentionDays.ONE_MONTH,
+                logGroupName: `garnet-iot-api-delete-thing-lambda-logs`
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -252,6 +255,7 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaGetThingLogs', {
                 retention: RetentionDays.ONE_MONTH,
+                logGroupName: `garnet-iot-api-get-thing-lambda-logs`
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -318,6 +322,7 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.minutes(3),
             logGroup: new LogGroup(this, 'LambdaGetThingsLogs', {
                 retention: RetentionDays.ONE_MONTH,
+                logGroupName: `garnet-iot-api-get-things-lambda-logs`
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -383,6 +388,7 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(50),
             logGroup: new LogGroup(this, 'LambdaPostShadowsLogs', {
                 retention: RetentionDays.ONE_MONTH,
+                logGroupName: `garnet-iot-api-post-shadows-lambda-logs`
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,

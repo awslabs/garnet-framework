@@ -64,6 +64,7 @@ export class GarnetIot extends Construct {
       timeout: Duration.seconds(50),
       logGroup: new LogGroup(this, 'LambdaUpdateShadowLogs', {
         retention: RetentionDays.ONE_MONTH,
+        logGroupName: `garnet-iot-update-shadow-lambda-logs`
       }),
       architecture: Architecture.ARM_64,
       environment: {
@@ -158,6 +159,7 @@ export class GarnetIot extends Construct {
         timeout: Duration.seconds(50),
         logGroup: new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
           retention: RetentionDays.ONE_MONTH,
+          logGroupName: `garnet-iot-update-broker-lambda-logs`
         }),
         layers: [layer_lambda],
         architecture: Architecture.ARM_64,
