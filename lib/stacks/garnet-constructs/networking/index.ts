@@ -1,7 +1,6 @@
-import { CfnSubnet, Port, SecurityGroup, SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
+import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
-import { Aws, CfnOutput, Fn, Lazy, Names, Stack } from "aws-cdk-lib";
 
 export interface GarnetNetworkingProps {
   az1: string,
@@ -12,8 +11,9 @@ export class GarnetNetworking extends Construct {
   public readonly vpc: Vpc
   constructor(scope: Construct, id: string, props: GarnetNetworkingProps) {
     super(scope, id)
-    const stack = Stack.of(this)
+
     let broker_id = Parameters.garnet_broker
+
     // VPC
     const vpc = new Vpc(this, `VpcGarnet${broker_id}`, {
       natGateways: 1,
@@ -34,7 +34,6 @@ export class GarnetNetworking extends Construct {
         }
       ]
     })
-
 
     this.vpc = vpc;
   }

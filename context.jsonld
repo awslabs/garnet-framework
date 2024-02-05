@@ -1558,6 +1558,7 @@
     "thematic": "https://uri.fiware.org/ns/data-models#thematic",
     "themePark": "https://uri.fiware.org/ns/data-models#themePark",
     "Thing": "https://garnet-framework.dev/data-models/models#Thing",
+    "thingGroups": "https://garnet-framework.dev/data-models/models#thingGroups",
     "throttling": "https://uri.etsi.org/ngsi-ld/throttling",
     "thunderstorms": "https://uri.fiware.org/ns/data-models#thunderstorms",
     "thursday": "https://smart-data-models.github.io/data-models/terms.jsonld#/definitions/thursday",
