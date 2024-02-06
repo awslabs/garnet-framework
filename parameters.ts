@@ -18,7 +18,7 @@ export const Parameters = {
     },
     // SCORPIO BROKER PARAMETERS
     garnet_scorpio: {
-        image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.12', // Link to ECR Public gallery of Scorpio Broker image: https://gallery.ecr.aws/garnet/scorpio.
+        image_context_broker: 'public.ecr.aws/garnet/scorpio:4.1.14', // Link to ECR Public gallery of Scorpio Broker image: https://gallery.ecr.aws/garnet/scorpio.
         aurora_min_capacity: 1, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.min_capacity_considerations
         aurora_max_capacity: 2, // https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-serverless-v2.setting-capacity.html#aurora-serverless-v2.max_capacity_considerations
         storage_type: DBClusterStorageType.AURORA_IOPT1, //  https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/Aurora.Overview.StorageReliability.html#aurora-storage-type
