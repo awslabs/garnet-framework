@@ -120,11 +120,9 @@ export class GarnetScorpioFargate extends Construct {
                     DBPORT: props.db_port,   
                     DBNAME: Parameters.garnet_scorpio.dbname,
                     SCORPIO_STARTUPDELAY: '10s',
-                    SCORPIO_ENTITY_MAX_LIMIT: '5000',
                     AWS_REGION: Aws.REGION,
                     QUARKUS_LOG_LEVEL: 'INFO',
                     MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?greedy=true&delay=250",
-                    QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: '50',
                     ...scorpiobroker_sqs_object
                 },
                 containerPort: 9090,
@@ -136,12 +134,6 @@ export class GarnetScorpioFargate extends Construct {
             memoryLimitMiB: Parameters.garnet_fargate.fargate_memory_limit, // Default is 512
             securityGroups: [sg_fargate]
         })
-
-        /** ENV 
-         *     QUARKUS_DATASOURCE_REACTIVE_MAX_SIZE: '30',
-         *     SCORPIO_ENTITY_MAX_LIMIT: '5000',
-               QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: '50', 
-         */
 
 
         fargate_alb.service.autoScaleTaskCount({  
