@@ -4,7 +4,7 @@ import { Broker } from "./lib/stacks/garnet-constructs/constants"
 
 export const Parameters = {
     // GARNET PARAMETERS
-    aws_region: "eu-west-1", // see regions in which you can deploy Garnet: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability
+    aws_region: "us-east-1", // see regions in which you can deploy Garnet: https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability
     garnet_broker: Broker.SCORPIO, // DO NOT CHANGE 
     garnet_bucket: `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}`, // DO NOT CHANGE
     smart_data_model_url : 'https://raw.githubusercontent.com/awslabs/garnet-framework/main/context.jsonld',  
