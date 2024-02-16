@@ -1,9 +1,9 @@
-import { Aws, Duration, Names } from "aws-cdk-lib";
+import { Aws, Duration, Names, RemovalPolicy } from "aws-cdk-lib";
 import { Runtime, Function, Code, Architecture, LayerVersion, CfnPermission } from "aws-cdk-lib/aws-lambda";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs"
-import { garnet_constant } from "../../garnet-constructs/constants";
+import { garnet_constant } from "../../../../constants";
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
@@ -49,7 +49,8 @@ export class GarnetIotThing extends Construct {
           timeout: Duration.seconds(50),
           logGroup: new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-presence-shadow-lambda-logs`
+            logGroupName: `garnet-iot-presence-shadow-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
           }),
           architecture: Architecture.ARM_64,
           environment: {
@@ -150,7 +151,8 @@ export class GarnetIotThing extends Construct {
           },
           logGroup: new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-custom-things-event-logs`
+            logGroupName: `garnet-iot-custom-things-event-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
         }),
           policy: AwsCustomResourcePolicy.fromSdkCalls({resources: AwsCustomResourcePolicy.ANY_RESOURCE})
     })
@@ -168,7 +170,8 @@ export class GarnetIotThing extends Construct {
       timeout: Duration.seconds(50),
       logGroup: new LogGroup(this, 'LambdaUpdateGroupThingLogs', {
         retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-iot-group-thing-lambda-logs`
+        logGroupName: `garnet-iot-group-thing-lambda-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
       }),
       architecture: Architecture.ARM_64,
       environment: {

@@ -4,10 +4,11 @@ import { SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
 import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
+import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 
 export interface GarnetApiGatewayProps {
     readonly vpc: Vpc,
-    readonly fargate_alb: ApplicationLoadBalancedFargateService
+    readonly fargate_alb: ApplicationLoadBalancer
 }
 
 export class GarnetApiGateway extends Construct{
@@ -60,7 +61,7 @@ export class GarnetApiGateway extends Construct{
             connectionType: "VPC_LINK",
             description: "API Integration",
             connectionId: vpc_link.ref, 
-            integrationUri: props.fargate_alb.listener.listenerArn,
+            integrationUri: props.fargate_alb.listeners[0].listenerArn,
             payloadFormatVersion: "1.0",
         })
 

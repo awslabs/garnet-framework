@@ -1,11 +1,12 @@
-import { CustomResource, Duration, Names } from "aws-cdk-lib";
+import { CustomResource, Duration, Names, RemovalPolicy } from "aws-cdk-lib";
 import { Runtime, Function, Code, Architecture } from "aws-cdk-lib/aws-lambda";
 import { Construct } from "constructs";
 import { Parameters } from "../../../../parameters";
-import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
+import { PolicyStatement} from "aws-cdk-lib/aws-iam";
 import { Provider } from "aws-cdk-lib/custom-resources";
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose";
-import { Bucket } from "aws-cdk-lib/aws-s3";
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import {garnet_bucket } from './../../../../constants'
 
 export interface GarnetBucketProps {
 
@@ -29,9 +30,14 @@ export class GarnetBucket extends Construct {
             code: Code.fromAsset(lambda_bucket_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
+            logGroup: new LogGroup(this, 'LambdaBucketHeadFunctionLogs', {
+              retention: RetentionDays.ONE_MONTH,
+              logGroupName: `garnet-utils-bucket-lambda-logs`,
+              removalPolicy: RemovalPolicy.DESTROY
+          }),
             architecture: Architecture.ARM_64,
             environment: {
-              BUCKET_NAME: Parameters.garnet_bucket
+              BUCKET_NAME: garnet_bucket
             }
       })
 
@@ -42,7 +48,12 @@ export class GarnetBucket extends Construct {
 
       const bucket_provider = new Provider(this, 'CustomBucketProvider', {
         onEventHandler: lambda_bucket,
-        providerFunctionName:  `garnet-provider-custom-bucket`,
+        providerFunctionName:  `garnet-provider-custom-bucket-lambda`,
+        logGroup: new LogGroup(this, 'LambdaCustomBucketProviderLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          logGroupName: `garnet-provider-custom-bucket-lambda-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+      })
       }) 
 
      const bucket_resource = new CustomResource(this, 'CustomBucketProviderResource', {
@@ -50,7 +61,7 @@ export class GarnetBucket extends Construct {
           
       })
 
-    this.bucket_name = Parameters.garnet_bucket 
+    this.bucket_name = garnet_bucket
 
     }
 }

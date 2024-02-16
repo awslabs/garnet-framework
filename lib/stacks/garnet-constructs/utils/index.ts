@@ -1,10 +1,10 @@
 import { Construct } from "constructs";
-import { azlist, scorpiobroker_sqs_object } from "../constants"
-import { Aws, CustomResource, Duration, Stack } from "aws-cdk-lib";
+import { azlist, scorpiobroker_sqs_object } from "../../../../constants"
+import { Aws, CustomResource, Duration, RemovalPolicy, Stack } from "aws-cdk-lib";
 import { Code, Runtime, Function, Architecture } from "aws-cdk-lib/aws-lambda";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { Provider } from "aws-cdk-lib/custom-resources";
-import { Parameters } from "../../../../parameters";
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 
 export interface GarnetUtilProps {}
 
@@ -34,6 +34,11 @@ export class Utils extends Construct {
             functionName: `garnet-utils-az-lambda`,
               description: 'Garnet Utils - Function that checks if which AZs the stack can be deployed for HTTP VPC Link and IoT VPC Endpoint service availability', 
               runtime: Runtime.NODEJS_20_X,
+              logGroup: new LogGroup(this, 'LambdaAzFunctionLogs', {
+                retention: RetentionDays.ONE_MONTH,
+                logGroupName: `garnet-utils-az-lambda-logs`,
+                removalPolicy: RemovalPolicy.DESTROY
+            }),
               code: Code.fromAsset(get_az_func_path),
               handler: 'index.handler',
               timeout: Duration.seconds(50),
@@ -52,7 +57,12 @@ export class Utils extends Construct {
       
           const get_az_provider = new Provider(this, 'getAzCleanUpprovider', {
           onEventHandler: get_az_func,
-          providerFunctionName: `garnet-provider-utils-az`
+          providerFunctionName: `garnet-provider-utils-az-lambda`,
+          logGroup: new LogGroup(this, 'getAzCleanUpProviderLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-provider-utils-az-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
         }) 
         
         const get_az = new CustomResource(this, 'getAzCustomResource', {
@@ -63,7 +73,6 @@ export class Utils extends Construct {
         this.az2 = get_az.getAtt('az2').toString()
       
       // CLEAN SQS QUEUES CREATED BY SCORPIO BROKER 
-      if(Parameters.garnet_broker == 'Scorpio'){
 
         let sqs_urls = Object.values(scorpiobroker_sqs_object).map(q => `https://sqs.${Aws.REGION}.amazonaws.com/${Aws.ACCOUNT_ID}/${q}`)
 
@@ -72,6 +81,11 @@ export class Utils extends Construct {
           functionName: `garnet-utils-scorpio-sqs-lambda`,
           description: 'Garnet Utils - Function that deletes the SQS Queue created by the Scorpio Context Broker', 
             runtime: Runtime.NODEJS_20_X,
+            logGroup: new LogGroup(this, 'LambdaScorpioSqsFunctionLogs', {
+              retention: RetentionDays.ONE_MONTH,
+              logGroupName: `garnet-utils-scorpio-sqs-lambda-logs`,
+              removalPolicy: RemovalPolicy.DESTROY
+          }),
             code: Code.fromAsset(scorpio_sqs_lambda_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
@@ -87,14 +101,17 @@ export class Utils extends Construct {
     
         const scorpio_sqs_provider = new Provider(this, 'scorpioSqsProvider', {
         onEventHandler: scorpio_sqs_lambda,
-        providerFunctionName: `garnet-provider-utils-scorpio-sqs`
+        providerFunctionName: `garnet-provider-utils-scorpio-sqs-lambda`,
+        logGroup: new LogGroup(this, 'LambdaScorpioSqsProviderLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          logGroupName: `garnet-provider-utils-scorpio-sqs-lambda-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+      })
       }) 
       
-      const scorpio_sqs_resource = new CustomResource(this, 'scorpioSqsCustomResource', {
+      new CustomResource(this, 'scorpioSqsCustomResource', {
         serviceToken: scorpio_sqs_provider.serviceToken
       })
-
-      }
 
 
       // CLEAN INACTIVE GARNET TASK DEFINITION IN ECS
@@ -103,6 +120,11 @@ export class Utils extends Construct {
           functionName: `garnet-utils-clean-ecs-lambda`,
             description: 'Garnet Utils - Function that removes unactive ECS task definitions',
             runtime: Runtime.NODEJS_20_X,
+            logGroup: new LogGroup(this, 'LambdaCleanEcsFunctionLogs', {
+              retention: RetentionDays.ONE_MONTH,
+              logGroupName: `garnet-utils-clean-ecs-lambda-logs`,
+              removalPolicy: RemovalPolicy.DESTROY
+          }),
             code: Code.fromAsset(clean_ecs_lambda_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
@@ -128,7 +150,12 @@ export class Utils extends Construct {
     
         const clean_ecs_provider = new Provider(this, 'cleanEcsProvider', {
         onEventHandler: clean_ecs_lambda,
-        providerFunctionName: `garnet-provider-utils-clean-ecs`
+        providerFunctionName: `garnet-provider-utils-clean-ecs-lambda`,
+        logGroup: new LogGroup(this, 'LambdacleanEcsProviderLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          logGroupName: `garnet-provider-utils-clean-ecs-lambda-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+      }),
       }) 
       
       const scorpio_sqs_resource = new CustomResource(this, 'cleanEcsCustomResource', {

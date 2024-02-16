@@ -10,7 +10,8 @@ import { Bucket } from "aws-cdk-lib/aws-s3"
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
 import { Provider } from "aws-cdk-lib/custom-resources"
-import { garnet_constant } from "../../garnet-constructs/constants"
+import { garnet_bucket, garnet_constant } from "../../../../constants"
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 
 export interface GarnetLakeProps {
     vpc: Vpc, 
@@ -196,6 +197,11 @@ export class GarnetLake extends Construct {
     const lambda_garnet_authorizer_path = `${__dirname}/lambda/authorizer`
     const lambda_garnet_authorizer = new Function(this, 'LakeAuthorizerLambda', {
       functionName: `garnet-iot-authorizer-lambda`, 
+      logGroup: new LogGroup(this, 'LambdaGarnetIotAuthorizerLogs', {
+        retention: RetentionDays.ONE_MONTH,
+        logGroupName: `garnet-iot-authorizer-lambda-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
+      }),
       description: 'Garnet Lake - Function for the AWS IoT Authorizer',
           runtime: Runtime.NODEJS_20_X,
           code: Code.fromAsset(lambda_garnet_authorizer_path),
@@ -236,6 +242,11 @@ export class GarnetLake extends Construct {
           handler: 'index.handler',
           timeout: Duration.seconds(50),
           architecture: Architecture.ARM_64,
+          logGroup: new LogGroup(this, 'LambdaGarnetVersionLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-custom-iot-domain-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        }),
           environment: {
             DOMAIN_NAME: garnet_constant.iotDomainName,
             AUTHORIZER_NAME: Lazy.string( { produce(): string  { return iot_authorizer.authorizerName! } })
@@ -253,7 +264,13 @@ export class GarnetLake extends Construct {
   
       const custom_iot_domain_provider = new Provider(this, 'CustomIotDomainProvider', {
       onEventHandler: lambda_custom_iot_domain,
-      providerFunctionName: `garnet-provider-iot-domain`
+      providerFunctionName: `garnet-provider-iot-domain-lambda`,
+      logGroup: new LogGroup(this, 'CustomIotDomainProviderLogs', {
+        retention: RetentionDays.ONE_MONTH,
+        logGroupName: `garnet-provider-iot-domain-lambda-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
+    })
+
     }) 
     
     const custom_iot_domain_resource = new CustomResource(this, 'CustomIotDomainResource', {
@@ -291,6 +308,11 @@ export class GarnetLake extends Construct {
     functionName: `garnet-sub-all-lambda`, 
         description: 'Garnet Lake - Function that subscribe to all types in the broker to feed the Garnet Lake',
         runtime: Runtime.NODEJS_20_X,
+        logGroup: new LogGroup(this, 'LambdaGarnetSubAllFunctionLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          logGroupName: `garnet-sub-all-lambda-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+      }),
         code: Code.fromAsset(lambda_garnet_all_sub_path),
         handler: 'index.handler',
         timeout: Duration.seconds(50),
@@ -311,7 +333,13 @@ export class GarnetLake extends Construct {
 
     const bucket_provider = new Provider(this, 'CustomSubAllProvider', {
       onEventHandler: lambda_garnet_all_sub,
-      providerFunctionName: `garnet-provider-sub-all`
+      providerFunctionName: `garnet-provider-sub-all-lambda`,
+      logGroup: new LogGroup(this, 'CustomSubAllProviderLogs', {
+        retention: RetentionDays.ONE_MONTH,
+        logGroupName: `garnet-provider-sub-all-lambda-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
+    })
+
     }) 
 
    new CustomResource(this, 'CustomSubAllResource', {
@@ -324,13 +352,18 @@ export class GarnetLake extends Construct {
           const lambda_athena = new Function(this, 'AthenaFunction', {
                 functionName: `garnet-lake-athena-lambda`,
                 description: 'Garnet Lake  - Function that creates Athena resources',
+                logGroup: new LogGroup(this, 'LambdaAthenaFunctionLogs', {
+                  retention: RetentionDays.ONE_MONTH,
+                  logGroupName: `garnet-lake-athena-lambda-logs`,
+                  removalPolicy: RemovalPolicy.DESTROY
+                }),
                 runtime: Runtime.NODEJS_20_X,
                 code: Code.fromAsset(lambda_athena_path),
                 handler: 'index.handler',
                 timeout: Duration.seconds(50),
                 architecture: Architecture.ARM_64,
                 environment: {
-                  BUCKET_NAME: Parameters.garnet_bucket,
+                  BUCKET_NAME: garnet_bucket,
                   CATALOG_ID: Aws.ACCOUNT_ID,
                   GLUEDB_NAME: garnet_constant.gluedbName
                 }
@@ -346,7 +379,12 @@ export class GarnetLake extends Construct {
     
           const athena_provider = new Provider(this, 'AthenaProvider', {
             onEventHandler: lambda_athena,
-            providerFunctionName:  `garnet-provider-custom-athena`,
+            providerFunctionName:  `garnet-provider-custom-athena-lambda`,
+            logGroup: new LogGroup(this, 'LambdaAthenaProviderLogs', {
+              retention: RetentionDays.ONE_MONTH,
+              logGroupName: `garnet-provider-custom-athena-lambda-logs`,
+              removalPolicy: RemovalPolicy.DESTROY
+          })
           }) 
     
          const athena_resource = new CustomResource(this, 'CustomBucketAthenaResource', {

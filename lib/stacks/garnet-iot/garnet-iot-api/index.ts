@@ -1,4 +1,4 @@
-import { Aws, Duration, Names } from "aws-cdk-lib"
+import { Aws, Duration, Names, RemovalPolicy } from "aws-cdk-lib"
 
 import { CfnIntegration, CfnRoute, CfnVpcLink } from "aws-cdk-lib/aws-apigatewayv2"
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
@@ -6,8 +6,8 @@ import { PolicyStatement } from "aws-cdk-lib/aws-iam"
 import { Runtime, Function, Code, CfnPermission, LayerVersion, Architecture } from "aws-cdk-lib/aws-lambda"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Construct } from "constructs"
-import { Parameters } from "../../../../parameters"
-import { garnet_constant } from "../../garnet-constructs/constants"
+import { garnet_broker, garnet_constant } from "../../../../constants"
+import { deployment_params } from "../../../../sizing"
 
 
 export interface GarnetIotApiProps {
@@ -42,6 +42,7 @@ export class GarnetIotApi extends Construct {
         const lambda_garnet_version_path = `${__dirname}/lambda/garnetVersion`
         const lambda_garnet_version = new Function(this, 'LambdaGarnetVersion', {
             functionName: `garnet-api-version-lambda`,
+            vpc: props.vpc, 
             description: 'Garnet API - Function that returns the Garnet Version',
             runtime: Runtime.NODEJS_20_X,
             code: Code.fromAsset(lambda_garnet_version_path),
@@ -49,18 +50,20 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaGarnetVersionLogs', {
                 retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-api-version-lambda-logs`
+                logGroupName: `garnet-api-version-lambda-logs`,
+                removalPolicy: RemovalPolicy.DESTROY
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
-
             environment: {
-                    CONTEXT_BROKER: Parameters.garnet_broker,
+                    CONTEXT_BROKER: garnet_broker,
                     GARNET_VERSION: garnet_constant.garnet_version, 
                     GARNET_PRIVATE_ENDPOINT: props.garnet_private_endpoint, 
                     GARNET_IOT_SQS_URL: props.garnet_iot_sqs_url, 
-                    GARNET_IOT_SQS_ARN: props.garnet_iot_sqs_arn
-                }   
+                    GARNET_IOT_SQS_ARN: props.garnet_iot_sqs_arn,
+                    DNS_CONTEXT_BROKER: props.dns_context_broker,
+                    GARNET_ARCHITECTURE: deployment_params.architecture
+            }   
         })
 
         const garnet_version_integration = new CfnIntegration(this, 'GarnetVersionIntegration', {
@@ -112,7 +115,8 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaPostThingLogs', {
                 retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-post-thing-lambda-logs`
+                logGroupName: `garnet-iot-api-post-thing-lambda-logs`,
+                removalPolicy: RemovalPolicy.DESTROY
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -186,7 +190,8 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaDeleteThingLogs', {
                 retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-delete-thing-lambda-logs`
+                logGroupName: `garnet-iot-api-delete-thing-lambda-logs`,
+                removalPolicy: RemovalPolicy.DESTROY
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -254,7 +259,8 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(30),
             logGroup: new LogGroup(this, 'LambdaGetThingLogs', {
                 retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-get-thing-lambda-logs`
+                logGroupName: `garnet-iot-api-get-thing-lambda-logs`,
+                removalPolicy: RemovalPolicy.DESTROY
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -321,7 +327,8 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.minutes(3),
             logGroup: new LogGroup(this, 'LambdaGetThingsLogs', {
                 retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-get-things-lambda-logs`
+                logGroupName: `garnet-iot-api-get-things-lambda-logs`,
+                removalPolicy: RemovalPolicy.DESTROY
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
@@ -387,7 +394,8 @@ export class GarnetIotApi extends Construct {
             timeout: Duration.seconds(50),
             logGroup: new LogGroup(this, 'LambdaPostShadowsLogs', {
                 retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-post-shadows-lambda-logs`
+                logGroupName: `garnet-iot-api-post-shadows-lambda-logs`,
+                removalPolicy: RemovalPolicy.DESTROY
             }),
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,

@@ -9,7 +9,8 @@ import { Topic } from "aws-cdk-lib/aws-sns";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 import { Parameters } from "../../../../parameters"
-import { garnet_constant } from "../../garnet-constructs/constants";
+import { garnet_constant } from "../../../../constants";
+import { deployment_params } from "../../../../sizing";
 
 export interface GarnetIotprops {
   dns_context_broker: string
@@ -64,7 +65,8 @@ export class GarnetIot extends Construct {
       timeout: Duration.seconds(50),
       logGroup: new LogGroup(this, 'LambdaUpdateShadowLogs', {
         retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-iot-update-shadow-lambda-logs`
+        logGroupName: `garnet-iot-update-shadow-lambda-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
       }),
       architecture: Architecture.ARM_64,
       environment: {
@@ -159,7 +161,8 @@ export class GarnetIot extends Construct {
         timeout: Duration.seconds(50),
         logGroup: new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-iot-update-broker-lambda-logs`
+          logGroupName: `garnet-iot-update-broker-lambda-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
         }),
         layers: [layer_lambda],
         architecture: Architecture.ARM_64,
@@ -211,9 +214,10 @@ export class GarnetIot extends Construct {
 
     lambda_to_context_broker.addEventSource(
       new SqsEventSource(sqs_to_context_broker, { 
-        batchSize: Parameters.garnet_iot.lambda_broker_batch_size, 
-        maxBatchingWindow: Duration.seconds(Parameters.garnet_iot.lambda_broker_batch_window), 
-        maxConcurrency: Parameters.garnet_iot.lambda_broker_concurent_sqs })
-    );
+        batchSize: deployment_params.lambda_broker_batch_size, 
+        maxBatchingWindow: Duration.seconds(deployment_params.lambda_broker_batch_window), 
+        maxConcurrency: deployment_params.lambda_broker_concurent_sqs
+      })
+    )
   }
 }

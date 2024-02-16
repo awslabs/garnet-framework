@@ -1,13 +1,17 @@
-import { Aws, Duration, Names, SecretValue } from "aws-cdk-lib"
+import { Aws, Duration,  RemovalPolicy, SecretValue } from "aws-cdk-lib"
 import { Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
-import { Cluster, ContainerImage, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
-import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
-import { RetentionDays } from "aws-cdk-lib/aws-logs"
+import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
+
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
-import {scorpiobroker_sqs_object} from "../../garnet-constructs/constants"
+import {garnet_broker, garnet_constant, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
+import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerCondition } from "aws-cdk-lib/aws-elasticloadbalancingv2"
+
+import { deployment_params } from "../../../../sizing"
+import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
 
 export interface GarnetScorpioFargateProps {
     vpc: Vpc
@@ -19,7 +23,7 @@ export interface GarnetScorpioFargateProps {
 }
 
 export class GarnetScorpioFargate extends Construct {
-    public readonly fargate_alb : ApplicationLoadBalancedFargateService
+    public readonly fargate_alb : ApplicationLoadBalancer
 
     constructor(scope: Construct, id: string, props: GarnetScorpioFargateProps) {
         super(scope, id)
@@ -43,30 +47,49 @@ export class GarnetScorpioFargate extends Construct {
         if (!props.image_context_broker){
             throw new Error('The property image_context_broker is required to create an instance of ScorpioServerlessFargate Construct')
         }
+        if (deployment_params.architecture != 'concentrated' && deployment_params.architecture != 'distributed'){
+            throw new Error('The selected architecture is not valid. Please select concentrated or distributed')
+        }
+        
 
+        // SECRET FOR DATABASE CREDENTIALS
         const secret = Secret.fromSecretCompleteArn(this, 'Secret', props.secret_arn)
+        const db_pass = SecretValue.secretsManager(secret.secretArn).toJSON()
 
-        const sg_fargate = new SecurityGroup(this, 'SecurityGroupScorpio', {
+
+        // SECURITY GROUP APPLICATION LOAD BALANCER
+        const sg_alb = new SecurityGroup(this, "SecurityGroupAlbScorpio", {
             vpc: props.vpc,
-            securityGroupName: `garnet-${Parameters.garnet_broker.toLowerCase()}-fargate-sg`
+            securityGroupName:  `garnet-${garnet_broker.toLowerCase()}-alb-sg`
         })
 
-        const sg_proxy = SecurityGroup.fromSecurityGroupId(this, 'sgDb', props.sg_proxy.securityGroupId)
 
+        // FARGATE SECURITY GROUP 
+        const sg_fargate = new SecurityGroup(this, 'SecurityGroupScorpio', {
+            vpc: props.vpc,
+            securityGroupName: `garnet-${garnet_broker.toLowerCase()}-fargate-sg`
+        })
+
+        // SECURITY GROUP FOR RDS PROXY
+        const sg_proxy = SecurityGroup.fromSecurityGroupId(this, 'sgDb', props.sg_proxy.securityGroupId)
 
         sg_proxy.addIngressRule(sg_fargate, Port.tcp(5432))
 
+
+        // FARGATE CLUSTER 
         const fargate_cluster = new Cluster(this, 'FargateScorpioCluster', {
             vpc: props.vpc,
-            clusterName: `garnet-fargate-cluster-${Parameters.garnet_broker.toLowerCase()}`
+            clusterName: `garnet-fargate-cluster-${garnet_broker.toLowerCase()}`
         })
 
-        const db_pass = SecretValue.secretsManager(secret.secretArn).toJSON()
+        fargate_cluster.addDefaultCloudMapNamespace({
+            name: "garnet.local"
+        })
 
+        // FARGATE TASK ROLE
         const fargate_task_role = new Role(this, 'TaskRole', {
             assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com")
         })
-
         fargate_task_role.addToPolicy(
             new PolicyStatement({
                 resources: [
@@ -77,7 +100,6 @@ export class GarnetScorpioFargate extends Construct {
                 ]
             })
         )
-
         fargate_task_role.addToPolicy(
             new PolicyStatement({
                 resources: [
@@ -90,67 +112,891 @@ export class GarnetScorpioFargate extends Construct {
             })
         )
 
-   
-        const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
+        // SCORPIO TASK ENV
+        let scorpio_task_env = {
+            DBHOST: props.db_endpoint,
+            DBPORT: props.db_port,
+            DBNAME: garnet_constant.dbname,
+            SCORPIO_AT_CONTEXT_SERVER: `http://atcontextserver:2023`,
+            SCORPIO_ENTITY_MANAGER_SERVER: `http://entitymanager:1025`,
+            SCORPIO_STARTUPDELAY: "5s",
+            SCORPIO_ENTITY_MAX_LIMIT: "1000",
+            AWS_REGION: Aws.REGION,
+            QUARKUS_LOG_LEVEL: "INFO",
+            MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?greedy=true&delay=200",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "15",
+            ...scorpiobroker_sqs_object 
+        }
+
+        
+  if (deployment_params.architecture == 'distributed') {
+
+            // APPLICATION LOAD BALANCER 
+            const fargate_alb = new ApplicationLoadBalancer(this, "ScorpioLoadBalancer", {
+                vpc: props.vpc,
+                internetFacing: false, 
+                securityGroup: sg_alb, 
+                loadBalancerName: `garnet-${garnet_broker.toLowerCase()}-fargate-alb`,
+                idleTimeout: Duration.seconds(60),
+                dropInvalidHeaderFields: true,
+                deletionProtection: false
+            })
+    
+            // LISTENER FOR APPLICATION LOAD BALANCER 
+            const fargate_alb_listener = fargate_alb.addListener("ScorpioFargateAlbListener", {
+                defaultAction: ListenerAction.fixedResponse(404, {
+                    messageBody: "Not Found"
+                }), 
+                port: 80
+            })
+    
+            this.fargate_alb = fargate_alb
+
+        // SCORPIO ENTITY MANAGER 
+        const entity_manager_task_def = new FargateTaskDefinition( this,"ScorpioEntityManagerFargateDefinition", {
+              taskRole: fargate_task_role,
+              cpu: deployment_params.entitymanager_fargate_cpu!,
+              memoryLimitMiB: deployment_params.entitymanager_fargate_memory_limit!,
+              family: `garnet-scorpio-entity-manager-definition`
+        })
+        entity_manager_task_def.addContainer("entityManager", {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.entity_manager),
+            environment: scorpio_task_env,
+            secrets: {
+              DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+              DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+            },
+            containerName: "scorpioEntityManager",
+            portMappings: [
+              {
+                name: "entitymanager",
+                containerPort: 1025,
+                hostPort: 1025,
+              },
+            ],
+            logging: LogDrivers.awsLogs({
+              streamPrefix: `garnet/scorpio`,
+              logGroup: new LogGroup(this, 'ScorpioEntityManagerLogs', {
+                retention: RetentionDays.ONE_MONTH, 
+                logGroupName: `entity-manager`,
+                removalPolicy: RemovalPolicy.DESTROY
+              })
+            })
+        })
+        const entity_manager_service = new FargateService(this, "EntityManagerService",{
             cluster: fargate_cluster,
-            serviceName: `garnet-fargate-service-${Parameters.garnet_broker.toLowerCase()}`,
+            taskDefinition: entity_manager_task_def,
+            serviceConnectConfiguration: {
+              namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+              services: [
+                {
+                  portMappingName: "entitymanager",
+                  dnsName: "entitymanager",
+                  port: 1025,
+                },
+              ],
+            },
+            minHealthyPercent: 50,
+            maxHealthyPercent: 400,
+            serviceName: "entitymanager",
+            assignPublicIp: false,
+            securityGroups: [sg_fargate],
+          }
+        )
+   
+        const entity_manager_target = fargate_alb_listener.addTargets("EntityManagerTarget", {
+          targets: [entity_manager_service],
+          conditions: [
+            ListenerCondition.pathPatterns([
+              "/ngsi-ld/v1/entities",
+              "/ngsi-ld/v1/entities/*",
+              "/ngsi-ld/v1/entityOperations/*",
+            ])
+          ],
+          priority: 110,
+          targetGroupName: "EntityManager",
+          healthCheck: {
+            path: "/q/health",
+            port: "1025",
+          },
+          protocol: ApplicationProtocol.HTTP,
+        })
+    
+        fargate_alb_listener.addTargets("EntityManagerTargetQ", {
+            targets: [entity_manager_service],
+            conditions: [
+              ListenerCondition.httpRequestMethods(["GET"]),
+              ListenerCondition.pathPatterns([
+                "/q/*",
+              ]),
+              ListenerCondition.httpHeader("container", ["entitymanager"])
+            ],
+            targetGroupName: "EntityManagerTargetGroupQ",
+            priority: 480,
+            healthCheck: {
+              path: "/q/health",
+              port: "1025",
+            },
+            protocol: ApplicationProtocol.HTTP,
+        })
+    
+        entity_manager_service.autoScaleTaskCount({
+            minCapacity: deployment_params.entitymanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.entitymanager_autoscale_max_capacity!
+        }).scaleOnRequestCount("RequestScaling", {
+            requestsPerTarget: deployment_params.autoscale_requests_number!,
+            targetGroup: entity_manager_target,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30),
+        })
+    
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(1025));
+        sg_fargate.addIngressRule(sg_fargate, Port.tcp(1025));
+
+
+
+        // SCORPIO QUERY MANAGER 
+        const query_manager_task_def = new FargateTaskDefinition( this, "ScorpioQueryManagerFargateDefinition", {
+              taskRole: fargate_task_role,
+              cpu: deployment_params.querymanager_fargate_cpu,
+              memoryLimitMiB: deployment_params.querymanager_fargate_memory_limit,
+              family: `garnet-scorpio-query-manager-definition`
+        })
+        query_manager_task_def.addContainer("queryManager", {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.query_manager),
+            environment: scorpio_task_env,
+            secrets: {
+              DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+              DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+            },
+            containerName: "queryManager",
+            portMappings: [
+              {
+                containerPort: 1026,
+                hostPort: 1026,
+              },
+            ],
+            logging: LogDrivers.awsLogs({
+                streamPrefix: `garnet/scorpio`,
+                logGroup: new LogGroup(this, 'ScorpioQueryManagerLogs', {
+                  retention: RetentionDays.ONE_MONTH, 
+                  logGroupName: `query-manager`,
+                  removalPolicy: RemovalPolicy.DESTROY
+                })
+            })
+        })
+
+        const query_manager_service =  new FargateService(this, "QueryManagerService", {
+            cluster: fargate_cluster, 
+            taskDefinition: query_manager_task_def,
+            serviceConnectConfiguration: {
+                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName
+            },
+            minHealthyPercent: 50,
+            maxHealthyPercent: 400,
+            serviceName: "querymanager",
+            assignPublicIp: false,
+            securityGroups: [sg_fargate],
+        })
+     
+        const query_manager_target = fargate_alb_listener.addTargets("QueryManagerTarget", {
+        targets: [query_manager_service],
+        conditions: [
+            ListenerCondition.httpRequestMethods(["GET"]),
+            ListenerCondition.pathPatterns([
+            "/ngsi-ld/v1/entities",
+            "/ngsi-ld/v1/entities/*",
+            "/ngsi-ld/v1/types",
+            "/ngsi-ld/v1/types/*",
+            ])
+        ],
+        targetGroupName: "QueryManager",
+        priority: 100,
+        healthCheck: {
+            path: "/q/health",
+            port: "1026",
+        },
+        protocol: ApplicationProtocol.HTTP,
+        })
+     
+        fargate_alb_listener.addTargets("QueryManagerTargetAttributes", {
+        targets: [query_manager_service],
+        conditions: [
+            ListenerCondition.httpRequestMethods(["GET"]),
+            ListenerCondition.pathPatterns([
+            "/ngsi-ld/v1/attributes",
+            "/ngsi-ld/v1/attributes/*",
+            ]),
+        ],
+        targetGroupName: "QueryManagerAttr",
+        priority: 95,
+        healthCheck: {
+            path: "/q/health",
+            port: "1026",
+        },
+        protocol: ApplicationProtocol.HTTP,
+        })
+     
+        fargate_alb_listener.addTargets("QueryManagerTargetQ", {
+            targets: [query_manager_service],
+            conditions: [
+            ListenerCondition.httpRequestMethods(["GET"]),
+            ListenerCondition.pathPatterns([
+                "/q/*",
+            ]),
+            ListenerCondition.httpHeader("container", ["querymanager"]),
+            ],
+            targetGroupName: "QueryManagerQ",
+            priority: 500,
+            healthCheck: {
+            path: "/q/health",
+            port: "1026",
+            },
+            protocol: ApplicationProtocol.HTTP,
+        })
+    
+        query_manager_service
+        .autoScaleTaskCount({
+            minCapacity: deployment_params.querymanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.querymanager_autoscale_max_capacity!,
+        })
+        .scaleOnRequestCount("RequestScaling", {
+            requestsPerTarget: deployment_params.autoscale_requests_number,
+            targetGroup: query_manager_target,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30),
+        })
+     
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(1026));
+     
+        
+        
+        // SCORPIO SUBSCRIPTION MANAGER   
+        const subscription_manager_task_def = new FargateTaskDefinition( this, "ScorpioSubscriptionManagerFargateDefinition",{
+              taskRole: fargate_task_role,
+              cpu: deployment_params.subscriptionmanager_fargate_cpu!,
+              memoryLimitMiB: deployment_params.subscriptionmanager_fargate_memory_limit!,
+              family: `garnet-scorpio-subscription-manager-definition`
+        })
+        subscription_manager_task_def.addContainer("subscriptionManager", {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.subscription_manager),
+            environment: scorpio_task_env,
+            secrets: {
+              DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+              DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+            },
+            containerName: "subscriptionManager",
+            portMappings: [
+              {
+                containerPort: 2026,
+                hostPort: 2026,
+              }
+            ],
+            logging: LogDrivers.awsLogs({
+                streamPrefix: `garnet/scorpio`,
+                logGroup: new LogGroup(this, 'ScorpioSubscriptionManagerLogs', {
+                  retention: RetentionDays.ONE_MONTH, 
+                  logGroupName: `subscription-manager`,
+                  removalPolicy: RemovalPolicy.DESTROY
+                })
+            })
+        })
+        const subscription_manager_service = new FargateService( this, "SubscriptionManagerService", {
+              cluster: fargate_cluster,
+              taskDefinition: subscription_manager_task_def,
+              serviceConnectConfiguration: {
+                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+              },
+              minHealthyPercent: 50,
+              maxHealthyPercent: 400,
+              serviceName: "subscriptionmanager",
+              assignPublicIp: false,
+              securityGroups: [sg_fargate],
+            }
+        )
+      
+        const subscription_manager_target = fargate_alb_listener.addTargets( "SubscriptionManagerTarget",{
+            targets: [subscription_manager_service],
+            conditions: [
+            ListenerCondition.pathPatterns([
+                "/ngsi-ld/v1/subscriptions",
+                "/ngsi-ld/v1/subscriptions/*",
+                "/remotenotify",
+                "/remotenotify/*",
+            ]),
+            ],
+            priority: 50,
+            targetGroupName: "SubscriptionManager",
+            healthCheck: {
+            path: "/q/health",
+            port: "2026",
+            },
+            protocol: ApplicationProtocol.HTTP,
+        }
+        )
+    
+        fargate_alb_listener.addTargets("SubscriptionManagerTargetQ", {
+            targets: [subscription_manager_service],
+            conditions: [
+            ListenerCondition.httpRequestMethods(["GET"]),
+            ListenerCondition.pathPatterns([
+                "/q/*",
+            ]),
+            ListenerCondition.httpHeader("container", ["subscriptionmanager"]),
+            ],
+            targetGroupName: "SubscriptionManagerQ",
+            priority: 450,
+            healthCheck: {
+            path: "/q/health",
+            port: "2026",
+            },
+            protocol: ApplicationProtocol.HTTP,
+        })
+      
+        subscription_manager_service
+        .autoScaleTaskCount({
+            minCapacity: deployment_params.subscriptionmanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.subscriptionmanager_autoscale_max_capacity!,
+        })
+        .scaleOnRequestCount("RequestScaling", {
+            requestsPerTarget: deployment_params.autoscale_requests_number!,
+            targetGroup: subscription_manager_target,
+            scaleInCooldown: Duration.seconds(5),
+            scaleOutCooldown: Duration.seconds(10),
+        })
+      
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(2026))
+
+
+        // SCORPIO HISTORY ENTITY MANAGER 
+        const history_entity_manager_task_def = new FargateTaskDefinition( this, "ScorpioHistoryEntityManagerFargateDefinition", {
+            taskRole: fargate_task_role,
+            cpu: deployment_params.historyentitymanager_fargate_cpu!,
+            memoryLimitMiB: deployment_params.historyentitymanager_fargate_memory_limit!,
+            family: `garnet-scorpio-history-entity-manager-definition`
+        })
+
+        history_entity_manager_task_def.addContainer("historyEntityManager", {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.history_entity_manager),
+            environment: scorpio_task_env,
+            secrets: {
+              DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+              DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+            },
+            containerName: "scorpioHistoryEntityManager",
+            portMappings: [
+              {
+                containerPort: 1040,
+                hostPort: 1040,
+              }
+            ],
+            logging: LogDrivers.awsLogs({
+                streamPrefix: `garnet/scorpio`,
+                logGroup: new LogGroup(this, 'ScorpioHistoryEntityManagerLogs', {
+                  retention: RetentionDays.ONE_MONTH, 
+                  logGroupName: `history-entity-manager`,
+                  removalPolicy: RemovalPolicy.DESTROY
+                })
+            })
+        })
+
+        const history_entity_manager_service = new FargateService( this, "HistoryEntityManagerService",{
+              cluster: fargate_cluster,
+              taskDefinition: history_entity_manager_task_def,
+              serviceConnectConfiguration: {
+                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+              },
+              minHealthyPercent: 50,
+              maxHealthyPercent: 400,
+              serviceName: "historyentitymanager",
+              assignPublicIp: false,
+              securityGroups: [sg_fargate],
+            }
+        )
+      
+        const history_entity_manager_target = fargate_alb_listener.addTargets( "HistoryEntityManager", {
+            targets: [history_entity_manager_service],
+            conditions: [
+                ListenerCondition.httpRequestMethods(["POST", "DELETE", "PATCH"]),
+                ListenerCondition.pathPatterns(["/ngsi-ld/v1/temporal/entities/*"])
+            ],
+            priority: 30,
+            targetGroupName: "HistoryEntityManager",
+            healthCheck: {
+                path: "/q/health",
+                port: "1040",
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+      
+        fargate_alb_listener.addTargets("HistoryEntityManagerTargetQ", {
+            targets: [history_entity_manager_service],
+            conditions: [
+                ListenerCondition.httpRequestMethods(["GET"]),
+                ListenerCondition.pathPatterns([
+                    "/q/*"
+                ]),
+                ListenerCondition.httpHeader("container", ["historyentitymanager"])
+            ],
+            targetGroupName: "HistoryEntityManagerQ",
+            priority: 470,
+            healthCheck: {
+                path: "/q/health",
+                port: "1040"
+            },
+            protocol: ApplicationProtocol.HTTP,
+        })
+      
+        history_entity_manager_service
+        .autoScaleTaskCount({
+            minCapacity: deployment_params.historyentitymanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.historyentitymanager_autoscale_max_capacity!,
+        })
+        .scaleOnRequestCount("RequestScaling", {
+            requestsPerTarget: deployment_params.autoscale_requests_number!,
+            targetGroup: history_entity_manager_target,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30),
+        })
+      
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(1040))
+
+
+
+        // SCORPIO HISTORY QUERY MANAGER 
+        const history_query_manager_task_def = new FargateTaskDefinition( this, "ScorpioHistoryQueryManagerFargateDefinition", {
+            taskRole: fargate_task_role,
+            cpu: deployment_params.historyquerymanager_fargate_cpu!,
+            memoryLimitMiB: deployment_params.historyquerymanager_fargate_memory_limit!,
+            family: `garnet-scorpio-history-query-manager-definition`
+        })
+        history_query_manager_task_def.addContainer("historyQueryManager", {
+        essential: true,
+        image: ContainerImage.fromRegistry(garnet_scorpio_images.history_query_manager),
+        environment: { QUARKUS_HTTP_PORT: "1041", ...scorpio_task_env },
+        secrets: {
+            DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+            DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+        },
+        containerName: "scorpioHistoryQueryManager",
+        portMappings: [
+            {
+            containerPort: 1041,
+            hostPort: 1041,
+            }
+        ],
+        logging: LogDrivers.awsLogs({
+            streamPrefix: `garnet/scorpio`,
+            logGroup: new LogGroup(this, 'ScorpioHistoryQueryManagerLogs', {
+                retention: RetentionDays.ONE_MONTH, 
+                logGroupName: `history-query-manager`,
+                removalPolicy: RemovalPolicy.DESTROY
+            })
+        })
+        })
+        const history_query_manager_service = new FargateService(this, "HistoryQueryManagerService", {
+            cluster: fargate_cluster,
+            taskDefinition: history_query_manager_task_def,
+            serviceConnectConfiguration: {
+                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+            },
+            minHealthyPercent: 50,
+            maxHealthyPercent: 400,
+            serviceName: "historyquerymanager",
+            assignPublicIp: false,
+            securityGroups: [sg_fargate]
+        })
+      
+        const history_query_manager_target = fargate_alb_listener.addTargets("HistoryQueryManager", {
+            targets: [history_query_manager_service],
+            conditions: [
+                ListenerCondition.httpRequestMethods(["GET"]),
+                ListenerCondition.pathPatterns(["/ngsi-ld/v1/temporal/entities/*"])
+            ],
+            priority: 40,
+            targetGroupName: "HistoryQueryManager",
+            healthCheck: {
+                path: "/q/health",
+                port: "1041"
+            },
+            protocol: ApplicationProtocol.HTTP,
+        })
+      
+        fargate_alb_listener.addTargets("HistoryQueryManagerTargetGroupQ", {
+            targets: [history_query_manager_service],
+            conditions: [
+                ListenerCondition.httpRequestMethods(["GET"]),
+                ListenerCondition.pathPatterns(["/q/*"]),
+                ListenerCondition.httpHeader("container", ["historyquerymanager"])
+            ],
+            targetGroupName: "HistoryQueryManagerQ",
+            priority: 460,
+            healthCheck: {
+                path: "/q/health",
+                port: "1041"
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+      
+        history_query_manager_service
+        .autoScaleTaskCount({
+            minCapacity: deployment_params.historyquerymanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.historyquerymanager_autoscale_max_capacity!,
+        })
+        .scaleOnRequestCount("RequestScaling", {
+            requestsPerTarget: deployment_params.autoscale_requests_number,
+            targetGroup: history_query_manager_target,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30),
+        })
+      
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(1041));
+      
+
+        // SCORPIO AT CONTEXT SERVER 
+        const at_context_server_task_def = new FargateTaskDefinition( this, "ScorpioAtContextServerFargateDefinition", {
+            taskRole: fargate_task_role,
+            cpu: deployment_params.atcontextserver_fargate_cpu,
+            memoryLimitMiB: deployment_params.atcontextserver_fargate_memory_limit,
+            family: `garnet-scorpio-at-context-server-definition`
+        })
+        at_context_server_task_def.addContainer("atContextServer", {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.at_context_server),
+            environment: scorpio_task_env,
+            secrets: {
+                DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+                DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+            },
+            containerName: "atContextServer",
+            portMappings: [
+                {
+                name: "atcontextserver",
+                containerPort: 2023,
+                hostPort: 2023,
+                },
+            ],
+            logging: LogDrivers.awsLogs({
+                streamPrefix: `garnet/scorpio`,
+                logGroup: new LogGroup(this, 'ScorpioAtContextServerLogs', {
+                    retention: RetentionDays.ONE_MONTH, 
+                    logGroupName: `at-context-server`,
+                    removalPolicy: RemovalPolicy.DESTROY
+                })
+            })
+        })
+        const at_context_server_service = new FargateService(this,"AtContextServerService", {
+            cluster: fargate_cluster,
+            minHealthyPercent: 50,
+            maxHealthyPercent: 400,
+            serviceName: "atcontextserver",
+            taskDefinition: at_context_server_task_def,
+            assignPublicIp: false,
+            securityGroups: [sg_fargate],
+            serviceConnectConfiguration: {
+                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+                services: [
+                    {
+                        portMappingName: "atcontextserver",
+                        dnsName: "atcontextserver",
+                        port: 2023
+                    }
+                ]
+            }
+        })
+        
+        fargate_alb_listener.addTargets("AtContextServerTargetGroupQ", {
+            targets: [at_context_server_service],
+            conditions: [
+                ListenerCondition.httpRequestMethods(["GET"]),
+                ListenerCondition.pathPatterns(["/q/*"]),
+                ListenerCondition.httpHeader("container", ["atcontextserver"])
+            ],
+            targetGroupName: "AtContextServerQ",
+            priority: 420,
+            healthCheck: {
+                path: "/q/health",
+                port: "2023"
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+    
+        fargate_alb_listener.addTargets("AtContextServerTarget", {
+            targets: [at_context_server_service],
+            conditions: [
+                ListenerCondition.pathPatterns(["/ngsi-ld/v1/jsonldContexts/","/ngsi-ld/v1/jsonldContexts/*"]),
+            ],
+            priority: 111,
+            targetGroupName: "AtContextServer",
+            healthCheck: {
+                path: "/q/health",
+                port: "2023",
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+        
+      
+        at_context_server_service
+        .autoScaleTaskCount({
+            minCapacity: deployment_params.atcontextserver_autoscale_min_capacity!,
+            maxCapacity: deployment_params.atcontextserver_autoscale_max_capacity!,
+        })
+        .scaleOnCpuUtilization("CpuUtilizationScaling", {
+            targetUtilizationPercent: 50,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30),
+        })
+      
+        sg_fargate.addIngressRule(sg_fargate, Port.tcp(2023));
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(2023));
+      
+        
+        
+        // SCORPIO REGISTRY MANAGER            
+        const registry_manager_task_def = new FargateTaskDefinition( this, "ScorpioRegistryManagerFargateDefinition",{
+            taskRole: fargate_task_role,
+            cpu: deployment_params.registrymanager_fargate_cpu!,
+            memoryLimitMiB: deployment_params.registrymanager_fargate_memory_limit!,
+            family: `garnet-scorpio-registry-manager-definition`
+        })
+        registry_manager_task_def.addContainer("registryManager", {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.registry_manager),
+            environment: scorpio_task_env,
+            secrets: {
+                DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+                DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+            },
+            containerName: "registryManager",
+            portMappings: [
+                {
+                containerPort: 1030,
+                hostPort: 1030,
+                }
+            ],
+            logging: LogDrivers.awsLogs({
+                streamPrefix: `garnet/scorpio`,
+                logGroup: new LogGroup(this, 'ScorpioRegistryManagerLogs', {
+                    retention: RetentionDays.ONE_MONTH, 
+                    logGroupName: `registry-manager`,
+                    removalPolicy: RemovalPolicy.DESTROY
+                })
+            })
+        })
+        const registry_manager_service = new FargateService(this,"RegistryManagerService",{
+            cluster: fargate_cluster,
+            taskDefinition: registry_manager_task_def,
+            serviceConnectConfiguration: {
+                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+            },
+            minHealthyPercent: 50,
+            maxHealthyPercent: 400,
+            serviceName: "registrymanager",
+            assignPublicIp: false,
+            securityGroups: [sg_fargate]
+        })
+      
+        const registry_manager_target = fargate_alb_listener.addTargets("RegistryManagerTargetGroup", {
+            targets: [registry_manager_service],
+            conditions: [
+                ListenerCondition.pathPatterns(["/ngsi-ld/v1/csourceRegistrations","/ngsi-ld/v1/csourceRegistrations/*"])
+            ],
+            priority: 300,
+            targetGroupName: "RegistryManager",
+            healthCheck: {
+                path: "/q/health",
+                port: "1030"
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+      
+        fargate_alb_listener.addTargets("RegistryManagerQ", {
+            targets: [registry_manager_service],
+            conditions: [
+                ListenerCondition.httpRequestMethods(["GET"]),
+                ListenerCondition.pathPatterns(["/q/*"]),
+                ListenerCondition.httpHeader("container", ["registrymanager"])
+            ],
+            targetGroupName: "RegistryManagerQ",
+            priority: 440,
+            healthCheck: {
+                path: "/q/health",
+                port: "1030"
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+      
+        registry_manager_service
+        .autoScaleTaskCount({
+            minCapacity: deployment_params.registrymanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.registrymanager_autoscale_max_capacity!,
+        })
+        .scaleOnRequestCount("RequestScaling", {
+            requestsPerTarget: deployment_params.autoscale_requests_number!,
+            targetGroup: registry_manager_target,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30)
+        })
+      
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(1030))
+
+      
+        // SCORPIO REGISTRY SUBSCRIPTION MANAGER 
+        const registry_subscription_manager_task_def = new FargateTaskDefinition(this, "ScorpioRegistrySubscriptionManagerFargateDefinition", {
+            taskRole: fargate_task_role,
+            cpu: deployment_params.registrysubscriptionmanager_fargate_cpu!,
+            memoryLimitMiB: deployment_params.registrysubscriptionmanager_fargate_memory_limit!,
+            family: `garnet-scorpio-registry-subscription-manager-definition`
+        })
+        registry_subscription_manager_task_def.addContainer( "registrySubscriptionManager", {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.registry_subscription_manager),
+            environment: scorpio_task_env,
+            secrets: {
+                DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
+                DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
+            },
+            containerName: "registrySubscriptionManager",
+            portMappings: [
+                {
+                containerPort: 2025,
+                hostPort: 2025,
+                },
+            ],
+            logging: LogDrivers.awsLogs({
+                streamPrefix: `garnet/scorpio`,
+                logGroup: new LogGroup(this, 'ScorpioRegistrySubscriptionManagerFargateLogs', {
+                retention: RetentionDays.ONE_MONTH, 
+                logGroupName: `registry-subscription-manager`,
+                removalPolicy: RemovalPolicy.DESTROY
+                })
+            })
+            }
+        )
+      
+        const registry_subscription_manager_service = new FargateService(this,"RegistrySubscriptionManagerService",{
+            cluster: fargate_cluster,
+            taskDefinition: registry_subscription_manager_task_def,
+            serviceConnectConfiguration: {
+                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+            },
+            minHealthyPercent: 50,
+            maxHealthyPercent: 400,
+            serviceName: "registrysubscriptionmanager",
+            assignPublicIp: false,
+            securityGroups: [sg_fargate]
+        })
+    
+        const registry_subscription_manager_target = fargate_alb_listener.addTargets("RegistrySubscriptionManagerTargetGroup", {
+            targets: [registry_subscription_manager_service],
+            conditions: [
+                ListenerCondition.pathPatterns(["/ngsi-ld/v1/csourceSubscriptions","/ngsi-ld/v1/csourceSubscriptions/*"]),
+            ],
+            priority: 200,
+            targetGroupName: "RegistrySubManager",
+            healthCheck: {
+                path: "/q/health",
+                port: "2025"
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+      
+        fargate_alb_listener.addTargets("RegistrySubscriptionManagerQ", {
+            targets: [registry_subscription_manager_service],
+            conditions: [
+                ListenerCondition.httpRequestMethods(["GET"]),
+                ListenerCondition.pathPatterns(["/q/*"]),
+                ListenerCondition.httpHeader("container", ["registrysubscriptionmanager"]),
+            ],
+            targetGroupName: "RegistrySubManagerQ",
+            priority: 430,
+            healthCheck: {
+                path: "/q/health",
+                port: "2025"
+            },
+            protocol: ApplicationProtocol.HTTP
+        })
+      
+      
+        registry_subscription_manager_service
+        .autoScaleTaskCount({
+            minCapacity: deployment_params.registrysubscriptionmanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.registrysubscriptionmanager_autoscale_min_capacity!,
+        })
+        .scaleOnRequestCount("RequestScaling", {
+            requestsPerTarget: deployment_params.autoscale_requests_number,
+            targetGroup: registry_subscription_manager_target,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30),
+        })
+      
+        sg_fargate.addIngressRule(sg_alb, Port.tcp(2025))
+
+} else {
+
+
+     const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
+            cluster: fargate_cluster,
+            serviceName: `garnet-fargate-service-${garnet_broker.toLowerCase()}`,
             circuitBreaker: {
                 rollback: true
             },
-            cpu: Parameters.garnet_fargate.fargate_cpu,
+            cpu: deployment_params.all_fargate_cpu!,
+            memoryLimitMiB: deployment_params.all_fargate_memory_limit,
             minHealthyPercent: 50, 
             maxHealthyPercent: 400, 
             healthCheckGracePeriod: Duration.seconds(20),  
             publicLoadBalancer: false, 
             loadBalancerName: `garnet-loadbalancer`,
-            // taskDefinition: [
-
-            // ],
             taskImageOptions: {
                 containerName: `garnet-scorpio-container`, 
-                family: `garnet-scorpio-task-definition`, 
-                image: ContainerImage.fromRegistry(props.image_context_broker),
+                family: `garnet-scorpio-all-in-one-task-definition`, 
+                image: ContainerImage.fromRegistry(garnet_scorpio_images.allInOne),
                 taskRole: fargate_task_role,
                 secrets: {
                     DBPASS: ecsSecret.fromSecretsManager(secret, 'password'),
                     DBUSER: ecsSecret.fromSecretsManager(secret, 'username')
                 },
-                environment: {
-                    DBHOST: props.db_endpoint,
-                    DBPORT: props.db_port,   
-                    DBNAME: Parameters.garnet_scorpio.dbname,
-                    SCORPIO_STARTUPDELAY: '10s',
-                    AWS_REGION: Aws.REGION,
-                    QUARKUS_LOG_LEVEL: 'INFO',
-                    MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?greedy=true&delay=250",
-                    ...scorpiobroker_sqs_object
-                },
+                environment: scorpio_task_env,
                 containerPort: 9090,
                 logDriver: LogDrivers.awsLogs({
-                    streamPrefix: id, 
-                    logRetention: RetentionDays.THREE_MONTHS
+                    streamPrefix: `garnet/scorpio`,
+                    logGroup: new LogGroup(this, 'ScorpioAllInOneLogs', {
+                      retention: RetentionDays.ONE_MONTH, 
+                      logGroupName: `scorpio-all-in-one`,
+                      removalPolicy: RemovalPolicy.DESTROY
+                    })
                 })
             },
-            memoryLimitMiB: Parameters.garnet_fargate.fargate_memory_limit, // Default is 512
+ // Default is 512
             securityGroups: [sg_fargate]
         })
 
 
         fargate_alb.service.autoScaleTaskCount({  
-            minCapacity: Parameters.garnet_fargate.autoscale_min_capacity, 
-            maxCapacity: Parameters.garnet_fargate.autoscale_max_capacity
+            minCapacity: deployment_params.all_autoscale_min_capacity!, 
+            maxCapacity: deployment_params.all_autoscale_max_capacity!
             }).scaleOnRequestCount('RequestScaling', {
-            requestsPerTarget: Parameters.garnet_fargate.autoscale_requests_number,
+            requestsPerTarget: deployment_params.autoscale_requests_number!,
             targetGroup: fargate_alb.targetGroup,
-            scaleInCooldown: Duration.seconds(5), 
-            scaleOutCooldown: Duration.seconds(10)
+            scaleInCooldown: Duration.seconds(10), 
+            scaleOutCooldown: Duration.seconds(30)
         })
 
-        this.fargate_alb = fargate_alb
+        this.fargate_alb = fargate_alb.loadBalancer
+
         fargate_alb.targetGroup.configureHealthCheck({
             path: '/q/health',
             port: '9090'
         })
+
+}
+   
+       
 
     }
 
