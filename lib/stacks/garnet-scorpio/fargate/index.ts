@@ -136,7 +136,7 @@ export class GarnetScorpioFargate extends Construct {
                 vpc: props.vpc,
                 internetFacing: false, 
                 securityGroup: sg_alb, 
-                loadBalancerName: garnet_nomenclature.garnet_load_balancer,
+                loadBalancerName: `${garnet_nomenclature.garnet_load_balancer}-${deployment_params.architecture}`,
                 idleTimeout: Duration.seconds(60),
                 dropInvalidHeaderFields: true,
                 deletionProtection: false
@@ -951,7 +951,7 @@ export class GarnetScorpioFargate extends Construct {
             maxHealthyPercent: 400, 
             healthCheckGracePeriod: Duration.seconds(20),  
             publicLoadBalancer: false, 
-            loadBalancerName: garnet_nomenclature.garnet_load_balancer,
+            loadBalancerName: `${garnet_nomenclature.garnet_load_balancer}-${deployment_params.architecture}`,
             taskImageOptions: {
                 containerName: `${garnet_nomenclature.garnet_broker_allinone}-container`, 
                 family: `garnet-scorpio-all-in-one-task-definition`, 
