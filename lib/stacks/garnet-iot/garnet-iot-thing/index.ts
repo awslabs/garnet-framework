@@ -3,7 +3,7 @@ import { Runtime, Function, Code, Architecture, LayerVersion, CfnPermission } fr
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs"
-import { garnet_constant } from "../../../../constants";
+import { garnet_constant, garnet_nomenclature } from "../../../../constants";
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
@@ -40,7 +40,7 @@ export class GarnetIotThing extends Construct {
         // LAMBDA TO UPDATE DEVICE SHADOW WITH CONNECTIVITY STATUS
         const lambda_update_shadow_presence_path = `${__dirname}/lambda/presence`;
         const lambda_update_shadow_presence = new Function(this, "LambdaUpdatePresenceThing", {
-          functionName: `garnet-iot-presence-shadow-lambda`,
+          functionName: garnet_nomenclature.garnet_iot_presence_shadow_lambda,
           description: 'Garnet IoT Things Presence- Function that updates presence for Iot MQTT connected things',
           runtime: Runtime.NODEJS_20_X,
           layers: [layer_lambda],
@@ -49,7 +49,7 @@ export class GarnetIotThing extends Construct {
           timeout: Duration.seconds(50),
           logGroup: new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-presence-shadow-lambda-logs`,
+            logGroupName: `${garnet_nomenclature.garnet_iot_presence_shadow_lambda}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
           }),
           architecture: Architecture.ARM_64,
@@ -105,7 +105,7 @@ export class GarnetIotThing extends Construct {
 
       // IOT RULE THAT LISTENS TO CHANGES IN IoT PRESENCE AND PUSH TO SQS
       const iot_rule = new CfnTopicRule(this, "IoTRulePresence", {
-        ruleName: `garnet_iot_presence_rule`,
+        ruleName: garnet_nomenclature.garnet_iot_presence_rule,
         topicRulePayload: {
           awsIotSqlVersion: "2016-03-23",
           ruleDisabled: false,

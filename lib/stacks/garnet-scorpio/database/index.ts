@@ -6,7 +6,7 @@ import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import { deployment_params } from "../../../../sizing"
 import { Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
-import { garnet_broker, garnet_constant } from "../../../../constants"
+import { garnet_broker, garnet_constant, garnet_nomenclature } from "../../../../constants"
 
 export interface GarnetScorpioDatabaseProps {
     vpc: Vpc
@@ -33,7 +33,7 @@ export class GarnetScorpioDatabase extends Construct{
         const secret = Secret.fromSecretCompleteArn(this, 'Secret', props.secret_arn)
         const sg_database = new SecurityGroup(this, 'SecurityGroupDatabase', {
             vpc: props.vpc,
-            securityGroupName: `garnet-${garnet_broker.toLowerCase()}-database-sg`
+            securityGroupName: garnet_nomenclature.garnet_broker_sg_database
         })
 
 
@@ -68,7 +68,7 @@ export class GarnetScorpioDatabase extends Construct{
         // SECURITY GROUP FOR PROXY 
         const sg_proxy = new SecurityGroup(this, 'SecurityGroupProxyDatabase', {
             vpc: props.vpc,
-            securityGroupName: `garnet-${garnet_broker.toLowerCase()}-rds-proxy-sg`,
+            securityGroupName: garnet_nomenclature.garnet_broker_sg_rds,
             allowAllOutbound: true
         })
 

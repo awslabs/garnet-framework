@@ -29,8 +29,6 @@ export const garnet_constant = {
     gluedbName: 'garnetdb'
 }
 
-
-
 export const garnet_scorpio_images = {
     allInOne: `public.ecr.aws/garnet/scorpio:${garnet_scorpio_version}`,
     at_context_server: `public.ecr.aws/garnet/scorpio/at-context-server:${garnet_scorpio_version}`,
@@ -50,6 +48,49 @@ export const scorpiobroker_sqs_object = {
     "SCORPIO_TOPICS_TEMPORAL": `garnet-scorpiobroker-temporal`,
     "SCORPIO_TOPICS_INTERNALNOTIFICATION": `garnet-scorpiobroker-internalnotification`,
     "SCORPIO_TOPICS_INTERNALREGSUB": `garnet-scorpiobroker-internalregsub`,
+}
+
+export const garnet_nomenclature = {
+    //GARNET IOT LAMBDA
+    garnet_iot_update_shadow_lambda: `garnet-iot-update-shadow-lambda`, 
+    garnet_iot_update_broker_lambda: `garnet-iot-update-broker-lambda`,
+    garnet_lake_transform_lambda: `garnet-lake-transform-lambda`, 
+    garnet_iot_presence_shadow_lambda: `garnet-iot-presence-shadow-lambda`,
+    garnet_iot_authorizer_lambda: `garnet-iot-authorizer-lambda`,
+    garnet_private_sub_lambda: `garnet-private-sub-lambda`, 
+    garnet_iot_rule: `garnet_iot_rule`, 
+    garnet_lake_rule:`garnet_lake_rule`,
+    garnet_subscriptions_rule: `garnet_subscriptions_rule`,
+    garnet_iot_presence_rule: `garnet_iot_presence_rule`,
+
+    // GARNET BROKER CLUSTER
+    garnet_broker_cluster: `garnet-broker-cluster`,
+    
+    // GARNET BROKER SERVICES 
+    garnet_broker_entitymanager: `garnet-broker-entity-manager`,
+    garnet_broker_querymanager: `garnet-broker-query-manager`, 
+    garnet_broker_subscriptionmanager: `garnet-broker-subscription-manager`,
+    garnet_broker_historyentitymanager: `garnet-broker-history-entity-manager`,
+    garnet_broker_historyquerymanager: `garnet-broker-history-querymanager`, 
+    garnet_broker_atcontextserver: `garnet-broker-at-context-server`,
+    garnet_broker_registrymanager: `garnet-broker-registry-manager`,
+    garnet_broker_registrysubscriptionmanager: `garnet-broker-registry-subscription-manager`, 
+    garnet_broker_allinone: `garnet-broker-all-in-one`, 
+
+    // GARNET LOAD BALANCER 
+    garnet_load_balancer: `garnet-broker-alb`, 
+
+    // SECRET 
+    garnet_secret: `garnet/secret/broker`,
+
+    // SECURITY GROUPS
+    garnet_broker_sg_database: `garnet-broker-database-sg`,
+    garnet_broker_sg_rds: `garnet-broker-rds-proxy-sg`,
+    garnet_broker_sg_alb: `garnet-broker-alb-sg`,
+    garnet_broker_sg_fargate: `garnet-broker-fargate-sg`,
+
+    // LOG GROUP NAMES 
+
 }
 
 export const azlist: any = {

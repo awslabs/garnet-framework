@@ -4,7 +4,7 @@ import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, LogDriv
 
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
-import {garnet_broker, garnet_constant, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
+import {garnet_broker, garnet_constant, garnet_nomenclature, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
@@ -60,14 +60,14 @@ export class GarnetScorpioFargate extends Construct {
         // SECURITY GROUP APPLICATION LOAD BALANCER
         const sg_alb = new SecurityGroup(this, "SecurityGroupAlbScorpio", {
             vpc: props.vpc,
-            securityGroupName:  `garnet-${garnet_broker.toLowerCase()}-alb-sg`
+            securityGroupName:  garnet_nomenclature.garnet_broker_sg_alb
         })
 
 
         // FARGATE SECURITY GROUP 
         const sg_fargate = new SecurityGroup(this, 'SecurityGroupScorpio', {
             vpc: props.vpc,
-            securityGroupName: `garnet-${garnet_broker.toLowerCase()}-fargate-sg`
+            securityGroupName: garnet_nomenclature.garnet_broker_sg_fargate
         })
 
         // SECURITY GROUP FOR RDS PROXY
@@ -79,7 +79,7 @@ export class GarnetScorpioFargate extends Construct {
         // FARGATE CLUSTER 
         const fargate_cluster = new Cluster(this, 'FargateScorpioCluster', {
             vpc: props.vpc,
-            clusterName: `garnet-fargate-cluster-${garnet_broker.toLowerCase()}`
+            clusterName: garnet_nomenclature.garnet_broker_cluster
         })
 
         fargate_cluster.addDefaultCloudMapNamespace({
@@ -136,7 +136,7 @@ export class GarnetScorpioFargate extends Construct {
                 vpc: props.vpc,
                 internetFacing: false, 
                 securityGroup: sg_alb, 
-                loadBalancerName: `garnet-${garnet_broker.toLowerCase()}-fargate-alb`,
+                loadBalancerName: garnet_nomenclature.garnet_load_balancer,
                 idleTimeout: Duration.seconds(60),
                 dropInvalidHeaderFields: true,
                 deletionProtection: false
@@ -167,7 +167,7 @@ export class GarnetScorpioFargate extends Construct {
               DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
               DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
             },
-            containerName: "scorpioEntityManager",
+            containerName:`${garnet_nomenclature.garnet_broker_entitymanager}-container`,
             portMappings: [
               {
                 name: "entitymanager",
@@ -179,7 +179,7 @@ export class GarnetScorpioFargate extends Construct {
               streamPrefix: `garnet/scorpio`,
               logGroup: new LogGroup(this, 'ScorpioEntityManagerLogs', {
                 retention: RetentionDays.ONE_MONTH, 
-                logGroupName: `entity-manager`,
+                logGroupName: `${garnet_nomenclature.garnet_broker_entitymanager}-logs`,
                 removalPolicy: RemovalPolicy.DESTROY
               })
             })
@@ -199,7 +199,7 @@ export class GarnetScorpioFargate extends Construct {
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
-            serviceName: "entitymanager",
+            serviceName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate],
           }
@@ -271,7 +271,7 @@ export class GarnetScorpioFargate extends Construct {
               DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
               DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
             },
-            containerName: "queryManager",
+            containerName:`${garnet_nomenclature.garnet_broker_querymanager}-container`,
             portMappings: [
               {
                 containerPort: 1026,
@@ -282,7 +282,7 @@ export class GarnetScorpioFargate extends Construct {
                 streamPrefix: `garnet/scorpio`,
                 logGroup: new LogGroup(this, 'ScorpioQueryManagerLogs', {
                   retention: RetentionDays.ONE_MONTH, 
-                  logGroupName: `query-manager`,
+                  logGroupName: `${garnet_nomenclature.garnet_broker_querymanager}-logs`,
                   removalPolicy: RemovalPolicy.DESTROY
                 })
             })
@@ -296,7 +296,7 @@ export class GarnetScorpioFargate extends Construct {
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
-            serviceName: "querymanager",
+            serviceName: `${garnet_nomenclature.garnet_broker_querymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate],
         })
@@ -388,7 +388,7 @@ export class GarnetScorpioFargate extends Construct {
               DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
               DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
             },
-            containerName: "subscriptionManager",
+            containerName: `${garnet_nomenclature.garnet_broker_subscriptionmanager}-container`,
             portMappings: [
               {
                 containerPort: 2026,
@@ -399,7 +399,7 @@ export class GarnetScorpioFargate extends Construct {
                 streamPrefix: `garnet/scorpio`,
                 logGroup: new LogGroup(this, 'ScorpioSubscriptionManagerLogs', {
                   retention: RetentionDays.ONE_MONTH, 
-                  logGroupName: `subscription-manager`,
+                  logGroupName: `${garnet_nomenclature.garnet_broker_subscriptionmanager}-logs`,
                   removalPolicy: RemovalPolicy.DESTROY
                 })
             })
@@ -412,7 +412,7 @@ export class GarnetScorpioFargate extends Construct {
               },
               minHealthyPercent: 50,
               maxHealthyPercent: 400,
-              serviceName: "subscriptionmanager",
+              serviceName: `${garnet_nomenclature.garnet_broker_subscriptionmanager}-service`,
               assignPublicIp: false,
               securityGroups: [sg_fargate],
             }
@@ -487,7 +487,7 @@ export class GarnetScorpioFargate extends Construct {
               DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
               DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
             },
-            containerName: "scorpioHistoryEntityManager",
+            containerName: `${garnet_nomenclature.garnet_broker_historyentitymanager}-container`,
             portMappings: [
               {
                 containerPort: 1040,
@@ -498,7 +498,7 @@ export class GarnetScorpioFargate extends Construct {
                 streamPrefix: `garnet/scorpio`,
                 logGroup: new LogGroup(this, 'ScorpioHistoryEntityManagerLogs', {
                   retention: RetentionDays.ONE_MONTH, 
-                  logGroupName: `history-entity-manager`,
+                  logGroupName: `${garnet_nomenclature.garnet_broker_historyentitymanager}-logs`,
                   removalPolicy: RemovalPolicy.DESTROY
                 })
             })
@@ -512,7 +512,7 @@ export class GarnetScorpioFargate extends Construct {
               },
               minHealthyPercent: 50,
               maxHealthyPercent: 400,
-              serviceName: "historyentitymanager",
+              serviceName: `${garnet_nomenclature.garnet_broker_historyentitymanager}-service`,
               assignPublicIp: false,
               securityGroups: [sg_fargate],
             }
@@ -582,7 +582,7 @@ export class GarnetScorpioFargate extends Construct {
             DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
             DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
         },
-        containerName: "scorpioHistoryQueryManager",
+        containerName: `${garnet_nomenclature.garnet_broker_historyquerymanager}-container`,
         portMappings: [
             {
             containerPort: 1041,
@@ -593,7 +593,7 @@ export class GarnetScorpioFargate extends Construct {
             streamPrefix: `garnet/scorpio`,
             logGroup: new LogGroup(this, 'ScorpioHistoryQueryManagerLogs', {
                 retention: RetentionDays.ONE_MONTH, 
-                logGroupName: `history-query-manager`,
+                logGroupName: `${garnet_nomenclature.garnet_broker_historyquerymanager}-logs`,
                 removalPolicy: RemovalPolicy.DESTROY
             })
         })
@@ -606,7 +606,7 @@ export class GarnetScorpioFargate extends Construct {
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
-            serviceName: "historyquerymanager",
+            serviceName: `${garnet_nomenclature.garnet_broker_historyquerymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate]
         })
@@ -672,7 +672,7 @@ export class GarnetScorpioFargate extends Construct {
                 DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
                 DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
             },
-            containerName: "atContextServer",
+            containerName: `${garnet_nomenclature.garnet_broker_atcontextserver}-container`,
             portMappings: [
                 {
                 name: "atcontextserver",
@@ -684,7 +684,7 @@ export class GarnetScorpioFargate extends Construct {
                 streamPrefix: `garnet/scorpio`,
                 logGroup: new LogGroup(this, 'ScorpioAtContextServerLogs', {
                     retention: RetentionDays.ONE_MONTH, 
-                    logGroupName: `at-context-server`,
+                    logGroupName: `${garnet_nomenclature.garnet_broker_atcontextserver}-logs`,
                     removalPolicy: RemovalPolicy.DESTROY
                 })
             })
@@ -693,7 +693,7 @@ export class GarnetScorpioFargate extends Construct {
             cluster: fargate_cluster,
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
-            serviceName: "atcontextserver",
+            serviceName: `${garnet_nomenclature.garnet_broker_atcontextserver}-service`,
             taskDefinition: at_context_server_task_def,
             assignPublicIp: false,
             securityGroups: [sg_fargate],
@@ -771,7 +771,7 @@ export class GarnetScorpioFargate extends Construct {
                 DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
                 DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
             },
-            containerName: "registryManager",
+            containerName: `${garnet_nomenclature.garnet_broker_registrymanager}-container`,
             portMappings: [
                 {
                 containerPort: 1030,
@@ -782,7 +782,7 @@ export class GarnetScorpioFargate extends Construct {
                 streamPrefix: `garnet/scorpio`,
                 logGroup: new LogGroup(this, 'ScorpioRegistryManagerLogs', {
                     retention: RetentionDays.ONE_MONTH, 
-                    logGroupName: `registry-manager`,
+                    logGroupName: `${garnet_nomenclature.garnet_broker_registrymanager}-logs`,
                     removalPolicy: RemovalPolicy.DESTROY
                 })
             })
@@ -795,7 +795,7 @@ export class GarnetScorpioFargate extends Construct {
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
-            serviceName: "registrymanager",
+            serviceName: `${garnet_nomenclature.garnet_broker_registrymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate]
         })
@@ -860,7 +860,7 @@ export class GarnetScorpioFargate extends Construct {
                 DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
                 DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
             },
-            containerName: "registrySubscriptionManager",
+            containerName: `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}-container`,
             portMappings: [
                 {
                 containerPort: 2025,
@@ -871,7 +871,7 @@ export class GarnetScorpioFargate extends Construct {
                 streamPrefix: `garnet/scorpio`,
                 logGroup: new LogGroup(this, 'ScorpioRegistrySubscriptionManagerFargateLogs', {
                 retention: RetentionDays.ONE_MONTH, 
-                logGroupName: `registry-subscription-manager`,
+                logGroupName: `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}-logs`,
                 removalPolicy: RemovalPolicy.DESTROY
                 })
             })
@@ -886,7 +886,7 @@ export class GarnetScorpioFargate extends Construct {
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
-            serviceName: "registrysubscriptionmanager",
+            serviceName: `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate]
         })
@@ -941,7 +941,7 @@ export class GarnetScorpioFargate extends Construct {
 
      const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
             cluster: fargate_cluster,
-            serviceName: `garnet-fargate-service-${garnet_broker.toLowerCase()}`,
+            serviceName: `${garnet_nomenclature.garnet_broker_allinone}-service`,
             circuitBreaker: {
                 rollback: true
             },
@@ -951,9 +951,9 @@ export class GarnetScorpioFargate extends Construct {
             maxHealthyPercent: 400, 
             healthCheckGracePeriod: Duration.seconds(20),  
             publicLoadBalancer: false, 
-            loadBalancerName: `garnet-loadbalancer`,
+            loadBalancerName: garnet_nomenclature.garnet_load_balancer,
             taskImageOptions: {
-                containerName: `garnet-scorpio-container`, 
+                containerName: `${garnet_nomenclature.garnet_broker_allinone}-container`, 
                 family: `garnet-scorpio-all-in-one-task-definition`, 
                 image: ContainerImage.fromRegistry(garnet_scorpio_images.allInOne),
                 taskRole: fargate_task_role,
@@ -967,7 +967,7 @@ export class GarnetScorpioFargate extends Construct {
                     streamPrefix: `garnet/scorpio`,
                     logGroup: new LogGroup(this, 'ScorpioAllInOneLogs', {
                       retention: RetentionDays.ONE_MONTH, 
-                      logGroupName: `scorpio-all-in-one`,
+                      logGroupName: `${garnet_nomenclature.garnet_broker_allinone}-logs`,
                       removalPolicy: RemovalPolicy.DESTROY
                     })
                 })

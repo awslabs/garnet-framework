@@ -10,7 +10,7 @@ import { Bucket } from "aws-cdk-lib/aws-s3"
 import { Construct } from "constructs"
 import { Parameters } from "../../../../parameters"
 import { Provider } from "aws-cdk-lib/custom-resources"
-import { garnet_bucket, garnet_constant } from "../../../../constants"
+import { garnet_bucket, garnet_constant, garnet_nomenclature } from "../../../../constants"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 
 export interface GarnetLakeProps {
@@ -56,7 +56,7 @@ export class GarnetLake extends Construct {
     // LAMBDA THAT EXTRACT ENTITIES FROM SUBSCRIPTION IN FIREHOSE STREAM
     const lambda_transform_path = `${__dirname}/lambda/transform`
     const lambda_transform = new Function(this, 'LakeTransformLambda', {
-    functionName: `garnet-lake-transform-lambda`, 
+    functionName: garnet_nomenclature.garnet_lake_transform_lambda, 
         description: 'Garnet Lake - Function that transforms the Kinesis Firehose records to extract entities from notifications',
         runtime: Runtime.NODEJS_20_X,
         layers: [layer_lambda],
@@ -124,7 +124,7 @@ export class GarnetLake extends Construct {
     lambda_transform.grantInvoke(role_firehose)
 
     // IOT RULE THAT LISTENS TO SUBSCRIPTIONS AND PUSH TO FIREHOSE
-    const iot_rule_lake_name = `garnet_lake_rule`
+    const iot_rule_lake_name = garnet_nomenclature.garnet_lake_rule
     this.iot_rule_lake_name = iot_rule_lake_name
 
     const iot_rule_lake_role = new Role(this, "RoleGarnetLakeIotRuleIngestion", {
@@ -196,7 +196,7 @@ export class GarnetLake extends Construct {
 
     const lambda_garnet_authorizer_path = `${__dirname}/lambda/authorizer`
     const lambda_garnet_authorizer = new Function(this, 'LakeAuthorizerLambda', {
-      functionName: `garnet-iot-authorizer-lambda`, 
+      functionName: garnet_nomenclature.garnet_iot_authorizer_lambda, 
       logGroup: new LogGroup(this, 'LambdaGarnetIotAuthorizerLogs', {
         retention: RetentionDays.ONE_MONTH,
         logGroupName: `garnet-iot-authorizer-lambda-logs`,

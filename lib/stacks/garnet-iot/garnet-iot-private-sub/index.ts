@@ -4,7 +4,7 @@ import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-li
 import { AnyPrincipal, Effect, Policy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { Architecture, Code, Function, LayerVersion, Runtime } from "aws-cdk-lib/aws-lambda"
 import { Construct } from "constructs"
-import { garnet_constant } from "../../../../constants"
+import { garnet_constant, garnet_nomenclature } from "../../../../constants"
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { Bucket } from "aws-cdk-lib/aws-s3"
@@ -51,7 +51,7 @@ export interface GarnetPrivateSubProps {
         // LAMBDA 
         const lambda_garnet_private_sub_path = `${__dirname}/lambda/garnetSub`
         const lambda_garnet_private_sub = new Function(this, 'LambdaGarnetSubFunction', {
-        functionName: `garnet-private-sub-lambda`, 
+        functionName: garnet_nomenclature.garnet_private_sub_lambda, 
         logGroup: new LogGroup(this, 'LambdaGarnetSubFunctionLogs', {
           retention: RetentionDays.ONE_MONTH,
           logGroupName: `garnet-private-sub-lambda-logs`,
@@ -169,7 +169,7 @@ export interface GarnetPrivateSubProps {
     )
 
         // IOT RULE THAT LISTENS TO SUBSCRIPTIONS AND PUSH TO FIREHOSE
-        const iot_rule_sub_name = `garnet_subscriptions_rule`
+        const iot_rule_sub_name = garnet_nomenclature.garnet_subscriptions_rule
   
         const iot_rule_sub_role = new Role(this, "RoleGarnetIotRuleIngestion", {
           assumedBy: new ServicePrincipal("iot.amazonaws.com"),

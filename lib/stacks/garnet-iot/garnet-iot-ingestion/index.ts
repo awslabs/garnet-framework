@@ -9,7 +9,7 @@ import { Topic } from "aws-cdk-lib/aws-sns";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 import { Parameters } from "../../../../parameters"
-import { garnet_constant } from "../../../../constants";
+import { garnet_constant, garnet_nomenclature } from "../../../../constants";
 import { deployment_params } from "../../../../sizing";
 
 export interface GarnetIotprops {
@@ -56,7 +56,7 @@ export class GarnetIot extends Construct {
     // LAMBDA TO UPDATE DEVICE SHADOW
     const lambda_update_shadow_path = `${__dirname}/lambda/updateShadow`;
     const lambda_update_shadow = new Function(this, "LambdaUpdateShadow", {
-      functionName: `garnet-iot-update-shadow-lambda`,
+      functionName: garnet_nomenclature.garnet_iot_update_shadow_lambda,
       description: 'Garnet IoT - Function that updates shadows',
       runtime: Runtime.NODEJS_20_X,
       code: Code.fromAsset(lambda_update_shadow_path),
@@ -65,7 +65,7 @@ export class GarnetIot extends Construct {
       timeout: Duration.seconds(50),
       logGroup: new LogGroup(this, 'LambdaUpdateShadowLogs', {
         retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-iot-update-shadow-lambda-logs`,
+        logGroupName: `${garnet_nomenclature.garnet_iot_update_shadow_lambda}-logs`,
         removalPolicy: RemovalPolicy.DESTROY
       }),
       architecture: Architecture.ARM_64,
@@ -126,7 +126,7 @@ export class GarnetIot extends Construct {
 
     // IOT RULE THAT LISTENS TO CHANGES IN GARNET SHADOWS AND PUSH TO SQS
     const iot_rule = new CfnTopicRule(this, "IoTRuleShadows", {
-      ruleName: `garnet_iot_rule`,
+      ruleName: garnet_nomenclature.garnet_iot_rule,
       topicRulePayload: {
         awsIotSqlVersion: "2016-03-23",
         ruleDisabled: false,
@@ -149,7 +149,7 @@ export class GarnetIot extends Construct {
     // LAMBDA THAT GETS MESSAGES FROM THE QUEUE AND UPDATES CONTEXT BROKER
     const lambda_to_context_broker_path = `${__dirname}/lambda/updateContextBroker`;
     const lambda_to_context_broker = new Function(this,"LambdaUpdateContextBroker", {
-        functionName: `garnet-iot-update-broker-lambda`,
+        functionName: garnet_nomenclature.garnet_iot_update_broker_lambda,
         description: 'Garnet IoT - Function that updates the context broker',
         vpc: props.vpc,
         vpcSubnets: {
@@ -161,7 +161,7 @@ export class GarnetIot extends Construct {
         timeout: Duration.seconds(50),
         logGroup: new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-iot-update-broker-lambda-logs`,
+          logGroupName: `${garnet_nomenclature.garnet_iot_update_broker_lambda}-logs`,
           removalPolicy: RemovalPolicy.DESTROY
         }),
         layers: [layer_lambda],
