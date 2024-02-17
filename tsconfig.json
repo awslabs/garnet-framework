@@ -4,6 +4,7 @@
     "module": "commonjs",
     "lib": [
       "es2020",
+      "ES2021.String",
       "dom"
     ],
     "declaration": true,

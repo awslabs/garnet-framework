@@ -65,17 +65,17 @@ export class GarnetIotApi extends Construct {
                     GARNET_ARCHITECTURE: deployment_params.architecture,
                     GARNET_CONTAINERS: deployment_params.architecture == 'distributed' ? 
                                                                         JSON.stringify([
-                                                                            `${garnet_nomenclature.garnet_broker_atcontextserver}-service`,
-                                                                            `${garnet_nomenclature.garnet_broker_entitymanager}-service`,
-                                                                            `${garnet_nomenclature.garnet_broker_historyentitymanager}-service`,
-                                                                            `${garnet_nomenclature.garnet_broker_historyquerymanager}-service`,
-                                                                            `${garnet_nomenclature.garnet_broker_querymanager}-service`,
-                                                                            `${garnet_nomenclature.garnet_broker_registrymanager}-service`,
-                                                                            `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}-service`,
-                                                                            `${garnet_nomenclature.garnet_broker_subscriptionmanager}-service`
+                                                                            `${garnet_nomenclature.garnet_broker_atcontextserver}`,
+                                                                            `${garnet_nomenclature.garnet_broker_entitymanager}`,
+                                                                            `${garnet_nomenclature.garnet_broker_historyentitymanager}`,
+                                                                            `${garnet_nomenclature.garnet_broker_historyquerymanager}`,
+                                                                            `${garnet_nomenclature.garnet_broker_querymanager}`,
+                                                                            `${garnet_nomenclature.garnet_broker_registrymanager}`,
+                                                                            `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}`,
+                                                                            `${garnet_nomenclature.garnet_broker_subscriptionmanager}`
                                                                         ]) : 
                                                                         JSON.stringify([
-                                                                            `${garnet_nomenclature.garnet_broker_allinone}-service`
+                                                                            `${garnet_nomenclature.garnet_broker_allinone}`
                                                                         ])
             }   
         })

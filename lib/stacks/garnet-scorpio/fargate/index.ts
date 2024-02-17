@@ -170,7 +170,7 @@ export class GarnetScorpioFargate extends Construct {
             containerName:`${garnet_nomenclature.garnet_broker_entitymanager}-container`,
             portMappings: [
               {
-                name: "entitymanager",
+                name: garnet_nomenclature.garnet_broker_entitymanager,
                 containerPort: 1025,
                 hostPort: 1025,
               },
@@ -191,8 +191,8 @@ export class GarnetScorpioFargate extends Construct {
               namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
               services: [
                 {
-                  portMappingName: "entitymanager",
-                  dnsName: "entitymanager",
+                  portMappingName: `${garnet_nomenclature.garnet_broker_entitymanager}`,
+                  dnsName: `${garnet_nomenclature.garnet_broker_entitymanager}`,
                   port: 1025,
                 },
               ],
@@ -230,7 +230,7 @@ export class GarnetScorpioFargate extends Construct {
               ListenerCondition.pathPatterns([
                 "/q/*",
               ]),
-              ListenerCondition.httpHeader("container", ["entitymanager"])
+              ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_entitymanager])
             ],
             targetGroupName: "EntityManagerTargetGroupQ",
             priority: 480,
@@ -346,7 +346,7 @@ export class GarnetScorpioFargate extends Construct {
             ListenerCondition.pathPatterns([
                 "/q/*",
             ]),
-            ListenerCondition.httpHeader("container", ["querymanager"]),
+            ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_querymanager]),
             ],
             targetGroupName: "QueryManagerQ",
             priority: 500,
@@ -445,7 +445,7 @@ export class GarnetScorpioFargate extends Construct {
             ListenerCondition.pathPatterns([
                 "/q/*",
             ]),
-            ListenerCondition.httpHeader("container", ["subscriptionmanager"]),
+            ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_subscriptionmanager]),
             ],
             targetGroupName: "SubscriptionManagerQ",
             priority: 450,
@@ -540,7 +540,7 @@ export class GarnetScorpioFargate extends Construct {
                 ListenerCondition.pathPatterns([
                     "/q/*"
                 ]),
-                ListenerCondition.httpHeader("container", ["historyentitymanager"])
+                ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_historyentitymanager])
             ],
             targetGroupName: "HistoryEntityManagerQ",
             priority: 470,
@@ -631,7 +631,7 @@ export class GarnetScorpioFargate extends Construct {
             conditions: [
                 ListenerCondition.httpRequestMethods(["GET"]),
                 ListenerCondition.pathPatterns(["/q/*"]),
-                ListenerCondition.httpHeader("container", ["historyquerymanager"])
+                ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_historyquerymanager])
             ],
             targetGroupName: "HistoryQueryManagerQ",
             priority: 460,
@@ -675,7 +675,7 @@ export class GarnetScorpioFargate extends Construct {
             containerName: `${garnet_nomenclature.garnet_broker_atcontextserver}-container`,
             portMappings: [
                 {
-                name: "atcontextserver",
+                name: garnet_nomenclature.garnet_broker_atcontextserver,
                 containerPort: 2023,
                 hostPort: 2023,
                 },
@@ -701,8 +701,8 @@ export class GarnetScorpioFargate extends Construct {
                 namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
                 services: [
                     {
-                        portMappingName: "atcontextserver",
-                        dnsName: "atcontextserver",
+                        portMappingName: garnet_nomenclature.garnet_broker_atcontextserver,
+                        dnsName: garnet_nomenclature.garnet_broker_atcontextserver,
                         port: 2023
                     }
                 ]
@@ -714,7 +714,7 @@ export class GarnetScorpioFargate extends Construct {
             conditions: [
                 ListenerCondition.httpRequestMethods(["GET"]),
                 ListenerCondition.pathPatterns(["/q/*"]),
-                ListenerCondition.httpHeader("container", ["atcontextserver"])
+                ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_atcontextserver])
             ],
             targetGroupName: "AtContextServerQ",
             priority: 420,
@@ -819,7 +819,7 @@ export class GarnetScorpioFargate extends Construct {
             conditions: [
                 ListenerCondition.httpRequestMethods(["GET"]),
                 ListenerCondition.pathPatterns(["/q/*"]),
-                ListenerCondition.httpHeader("container", ["registrymanager"])
+                ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_registrymanager])
             ],
             targetGroupName: "RegistryManagerQ",
             priority: 440,
@@ -910,7 +910,7 @@ export class GarnetScorpioFargate extends Construct {
             conditions: [
                 ListenerCondition.httpRequestMethods(["GET"]),
                 ListenerCondition.pathPatterns(["/q/*"]),
-                ListenerCondition.httpHeader("container", ["registrysubscriptionmanager"]),
+                ListenerCondition.httpHeader("container", [garnet_nomenclature.garnet_broker_registrysubscriptionmanager]),
             ],
             targetGroupName: "RegistrySubManagerQ",
             priority: 430,
@@ -949,6 +949,7 @@ export class GarnetScorpioFargate extends Construct {
             memoryLimitMiB: deployment_params.all_fargate_memory_limit,
             minHealthyPercent: 50, 
             maxHealthyPercent: 400, 
+
             healthCheckGracePeriod: Duration.seconds(20),  
             publicLoadBalancer: false, 
             loadBalancerName: `${garnet_nomenclature.garnet_load_balancer}-${deployment_params.architecture}`,

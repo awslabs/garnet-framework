@@ -28,13 +28,36 @@ export class GarnetOps extends NestedStack {
          if (deployment_params.architecture == 'distributed'){
             garnet_broker_metrics = garnet_broker_metrics.concat([
                     new Metric({
-                        label: 'History Entity Manager - Memory %', 
+                        label: 'Entity Manager - Memory %', 
                         namespace: 'AWS/ECS',
                         metricName: 'MemoryUtilization', 
                         dimensionsMap: {
-                            ClusterName: garnet_nomenclature.garnet_broker_cluster
+                            ClusterName: garnet_nomenclature.garnet_broker_cluster,
+                            ServiceName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`
                         }, 
-                        statistic: 'SampleCount',
+                        statistic: 'Average',
+
+                    }),
+                    new Metric({
+                        label: 'Entity Manager - CPU %', 
+                        namespace: 'AWS/ECS',
+                        metricName: 'CPUUtilization', 
+                        dimensionsMap: {
+                            ClusterName: garnet_nomenclature.garnet_broker_cluster,
+                            ServiceName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`
+                        }, 
+                        statistic: 'Average',
+
+                    }),
+                    new Metric({
+                        label: 'Entity Manager - Processed Bytes', 
+                        namespace: 'AWS/ECS',
+                        metricName: 'ProcessedBytes', 
+                        dimensionsMap: {
+                            DiscoveryName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`,
+                            ServiceName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`
+                        }, 
+                        statistic: 'Average',
 
                     })
             ])
@@ -48,7 +71,7 @@ export class GarnetOps extends NestedStack {
             title: 'Garnet Scorpio Broker Ops',
             width: 24,
             period: Duration.seconds(60),
-            metrics: [],
+            metrics: garnet_broker_metrics,
             setPeriodToTimeRange: true
         })
 
