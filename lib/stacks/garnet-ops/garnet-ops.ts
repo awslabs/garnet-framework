@@ -54,7 +54,7 @@ export class GarnetOps extends NestedStack {
                         namespace: 'AWS/ECS',
                         metricName: 'ProcessedBytes', 
                         dimensionsMap: {
-                            DiscoveryName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`,
+                            DiscoveryName: `${garnet_nomenclature.garnet_broker_entitymanager}`,
                             ServiceName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`
                         }, 
                         statistic: 'Average',
