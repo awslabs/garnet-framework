@@ -67,7 +67,7 @@ export class GarnetOps extends NestedStack {
 
 
         // GARNET BROKER WIDGET
-        let garnet_scorpio_widget = new SingleValueWidget({
+        let garnet_broker_widget = new SingleValueWidget({
             title: 'Garnet Scorpio Broker Ops',
             width: 24,
             period: Duration.seconds(60),
@@ -136,7 +136,7 @@ export class GarnetOps extends NestedStack {
         })
 
         garnet_dashboard.addWidgets(garnet_iot_widget)
-        
+        garnet_dashboard.addWidgets(garnet_broker_widget)        
 
 
 
