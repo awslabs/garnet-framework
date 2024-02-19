@@ -132,7 +132,7 @@ export interface GarnetPrivateSubProps {
       
     // KINESIS FIREHOSE DELIVERY STREAM
     const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
-        deliveryStreamName: `garnet-sub-firehose-stream`,
+        deliveryStreamName: garnet_nomenclature.garnet_sub_firehose_stream,
         deliveryStreamType: "DirectPut",
         extendedS3DestinationConfiguration: {
           bucketArn: bucket.bucketArn,

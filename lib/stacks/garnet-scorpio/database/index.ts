@@ -42,7 +42,7 @@ export class GarnetScorpioDatabase extends Construct{
             engine: DatabaseClusterEngine.auroraPostgres({
                 version: AuroraPostgresEngineVersion.VER_15_4
             }),
-            clusterIdentifier: `garnet-aurora-cluster`, 
+            clusterIdentifier: garnet_nomenclature.garnet_db_cluster_id, 
             credentials: Credentials.fromSecret(secret), 
             vpc: props.vpc, 
             securityGroups: [sg_database],
@@ -77,7 +77,7 @@ export class GarnetScorpioDatabase extends Construct{
 
         // RDS Proxy
         const rds_proxy = new DatabaseProxy(this, 'RdsProxy', {
-            dbProxyName: `garnet-proxy-rds`,
+            dbProxyName: garnet_nomenclature.garnet_proxy_rds,
             proxyTarget: ProxyTarget.fromCluster(cluster),
             secrets: [secret],
             vpc: props.vpc, 

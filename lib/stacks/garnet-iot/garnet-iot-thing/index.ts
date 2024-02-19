@@ -32,7 +32,7 @@ export class GarnetIotThing extends Construct {
 
         // SQS ENTRY POINT CONNECTIVITY STATUS 
         const sqs_garnet_iot_presence = new Queue(this, "SqsGarnetPresenceThing", {
-          queueName: `garnet-iot-presence-queue-${Aws.REGION}`,
+          queueName: garnet_nomenclature.garnet_iot_presence_queue, 
           visibilityTimeout: Duration.seconds(55)
         })
 

@@ -5,7 +5,7 @@ import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, LogDriv
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 import {garnet_broker, garnet_constant, garnet_nomenclature, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
-import { Construct } from "constructs"
+import { Construct, Dependable } from "constructs"
 import { Parameters } from "../../../../parameters"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerCondition } from "aws-cdk-lib/aws-elasticloadbalancingv2"
@@ -79,11 +79,11 @@ export class GarnetScorpioFargate extends Construct {
         // FARGATE CLUSTER 
         const fargate_cluster = new Cluster(this, 'FargateScorpioCluster', {
             vpc: props.vpc,
-            clusterName: garnet_nomenclature.garnet_broker_cluster
-        })
-
-        fargate_cluster.addDefaultCloudMapNamespace({
-            name: "garnet.local"
+            clusterName: garnet_nomenclature.garnet_broker_cluster,
+            defaultCloudMapNamespace: {
+                name: "garnet.local",
+                useForServiceConnect: true
+            }
         })
 
         // FARGATE TASK ROLE
@@ -117,8 +117,8 @@ export class GarnetScorpioFargate extends Construct {
             DBHOST: props.db_endpoint,
             DBPORT: props.db_port,
             DBNAME: garnet_constant.dbname,
-            SCORPIO_AT_CONTEXT_SERVER: `http://atcontextserver:2023`,
-            SCORPIO_ENTITY_MANAGER_SERVER: `http://entitymanager:1025`,
+            SCORPIO_AT_CONTEXT_SERVER: `http://${garnet_nomenclature.garnet_broker_atcontextserver}:2023`,
+            SCORPIO_ENTITY_MANAGER_SERVER: `http://${garnet_nomenclature.garnet_broker_entitymanager}:1025`,
             SCORPIO_STARTUPDELAY: "5s",
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             AWS_REGION: Aws.REGION,
@@ -141,6 +141,8 @@ export class GarnetScorpioFargate extends Construct {
                 dropInvalidHeaderFields: true,
                 deletionProtection: false
             })
+
+            
     
             // LISTENER FOR APPLICATION LOAD BALANCER 
             const fargate_alb_listener = fargate_alb.addListener("ScorpioFargateAlbListener", {
@@ -188,7 +190,7 @@ export class GarnetScorpioFargate extends Construct {
             cluster: fargate_cluster,
             taskDefinition: entity_manager_task_def,
             serviceConnectConfiguration: {
-              namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+              namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName,
               services: [
                 {
                   portMappingName: `${garnet_nomenclature.garnet_broker_entitymanager}`,
@@ -204,6 +206,7 @@ export class GarnetScorpioFargate extends Construct {
             securityGroups: [sg_fargate],
           }
         )
+
    
         const entity_manager_target = fargate_alb_listener.addTargets("EntityManagerTarget", {
           targets: [entity_manager_service],
@@ -292,7 +295,7 @@ export class GarnetScorpioFargate extends Construct {
             cluster: fargate_cluster, 
             taskDefinition: query_manager_task_def,
             serviceConnectConfiguration: {
-                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName
+                namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
@@ -408,7 +411,7 @@ export class GarnetScorpioFargate extends Construct {
               cluster: fargate_cluster,
               taskDefinition: subscription_manager_task_def,
               serviceConnectConfiguration: {
-                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+                namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName,
               },
               minHealthyPercent: 50,
               maxHealthyPercent: 400,
@@ -508,7 +511,7 @@ export class GarnetScorpioFargate extends Construct {
               cluster: fargate_cluster,
               taskDefinition: history_entity_manager_task_def,
               serviceConnectConfiguration: {
-                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+                namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName,
               },
               minHealthyPercent: 50,
               maxHealthyPercent: 400,
@@ -602,7 +605,7 @@ export class GarnetScorpioFargate extends Construct {
             cluster: fargate_cluster,
             taskDefinition: history_query_manager_task_def,
             serviceConnectConfiguration: {
-                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+                namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName,
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
@@ -698,7 +701,7 @@ export class GarnetScorpioFargate extends Construct {
             assignPublicIp: false,
             securityGroups: [sg_fargate],
             serviceConnectConfiguration: {
-                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+                namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName,
                 services: [
                     {
                         portMappingName: garnet_nomenclature.garnet_broker_atcontextserver,
@@ -791,7 +794,7 @@ export class GarnetScorpioFargate extends Construct {
             cluster: fargate_cluster,
             taskDefinition: registry_manager_task_def,
             serviceConnectConfiguration: {
-                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+                namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName,
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
@@ -882,7 +885,7 @@ export class GarnetScorpioFargate extends Construct {
             cluster: fargate_cluster,
             taskDefinition: registry_subscription_manager_task_def,
             serviceConnectConfiguration: {
-                namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
+                namespace: fargate_cluster.defaultCloudMapNamespace!.namespaceName,
             },
             minHealthyPercent: 50,
             maxHealthyPercent: 400,
@@ -936,10 +939,9 @@ export class GarnetScorpioFargate extends Construct {
       
         sg_fargate.addIngressRule(sg_alb, Port.tcp(2025))
 
-} else {
+    } else {
 
-
-     const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
+        const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
             cluster: fargate_cluster,
             serviceName: `${garnet_nomenclature.garnet_broker_allinone}-service`,
             circuitBreaker: {
@@ -967,13 +969,13 @@ export class GarnetScorpioFargate extends Construct {
                 logDriver: LogDrivers.awsLogs({
                     streamPrefix: `garnet/scorpio`,
                     logGroup: new LogGroup(this, 'ScorpioAllInOneLogs', {
-                      retention: RetentionDays.ONE_MONTH, 
-                      logGroupName: `${garnet_nomenclature.garnet_broker_allinone}-logs`,
-                      removalPolicy: RemovalPolicy.DESTROY
+                        retention: RetentionDays.ONE_MONTH, 
+                        logGroupName: `${garnet_nomenclature.garnet_broker_allinone}-logs`,
+                        removalPolicy: RemovalPolicy.DESTROY
                     })
                 })
             },
- // Default is 512
+        // Default is 512
             securityGroups: [sg_fargate]
         })
 

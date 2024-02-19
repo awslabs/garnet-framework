@@ -47,7 +47,7 @@ export class GarnetIot extends Construct {
 
     // SQS ENTRY POINT
     const sqs_garnet_endpoint = new Queue(this, "SqsGarnetIot", {
-      queueName: `garnet-iot-queue-${Aws.REGION}`,
+      queueName: garnet_nomenclature.garnet_iot_queue,
       visibilityTimeout: Duration.seconds(55)
     })
     this.sqs_garnet_iot_url = sqs_garnet_endpoint.queueUrl
@@ -104,7 +104,7 @@ export class GarnetIot extends Construct {
 
     // SQS TO LAMBDA CONTEXT BROKER
     const sqs_to_context_broker = new Queue(this, "SqsToLambdaContextBroker", {
-      queueName: `garnet-iot-contextbroker-queue-${Aws.REGION}`,
+      queueName: garnet_nomenclature.garnet_iot_contextbroker_queue,
       visibilityTimeout: Duration.seconds(55)
     });
 

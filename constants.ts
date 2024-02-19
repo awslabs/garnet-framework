@@ -63,6 +63,15 @@ export const garnet_nomenclature = {
     garnet_subscriptions_rule: `garnet_subscriptions_rule`,
     garnet_iot_presence_rule: `garnet_iot_presence_rule`,
 
+
+    // GARNET IOT SQS
+    garnet_iot_queue: `garnet-iot-queue-${Aws.REGION}`,
+    garnet_iot_contextbroker_queue: `garnet-iot-contextbroker-queue-${Aws.REGION}`,
+    garnet_iot_presence_queue: `garnet-iot-presence-queue-${Aws.REGION}`,
+
+    // GARNET FIREHOSE 
+    garnet_lake_iot_firehose_stream: `garnet-lake-firehose-stream`,
+    garnet_sub_firehose_stream: `garnet-sub-firehose-stream`, 
     // GARNET BROKER CLUSTER
     garnet_broker_cluster: `garnet-broker-cluster`,
     
@@ -89,8 +98,9 @@ export const garnet_nomenclature = {
     garnet_broker_sg_alb: `garnet-broker-alb-sg`,
     garnet_broker_sg_fargate: `garnet-broker-fargate-sg`,
 
-    // LOG GROUP NAMES 
-
+  // GARNET DB 
+  garnet_proxy_rds: `garnet-proxy-rds`,
+  garnet_db_cluster_id: `garnet-aurora-cluster`
 }
 
 export const azlist: any = {

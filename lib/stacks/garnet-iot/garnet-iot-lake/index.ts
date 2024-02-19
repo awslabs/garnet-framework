@@ -12,6 +12,7 @@ import { Parameters } from "../../../../parameters"
 import { Provider } from "aws-cdk-lib/custom-resources"
 import { garnet_bucket, garnet_constant, garnet_nomenclature } from "../../../../constants"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
+import { deployment_params } from "../../../../sizing"
 
 export interface GarnetLakeProps {
     vpc: Vpc, 
@@ -69,7 +70,7 @@ export class GarnetLake extends Construct {
       
     // KINESIS FIREHOSE DELIVERY STREAM
     const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
-        deliveryStreamName: `garnet-lake-firehose-stream`,
+        deliveryStreamName: garnet_nomenclature.garnet_lake_iot_firehose_stream,
         deliveryStreamType: "DirectPut",
         extendedS3DestinationConfiguration: {
           bucketArn: bucket.bucketArn,
