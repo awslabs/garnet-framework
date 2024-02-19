@@ -135,6 +135,12 @@ export class GarnetIotThing extends Construct {
         }
        }
 
+       const garnet_iot_custom_thing_event_log = new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
+        retention: RetentionDays.ONE_MONTH,
+        logGroupName: `garnet-iot-custom-things-event-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
+        })
+
        const iot_event = new AwsCustomResource(this, 'CustomIotThingsEventGroupMembership', {
         functionName: `garnet-iot-custom-things-event`,
         onCreate: {
@@ -149,11 +155,7 @@ export class GarnetIotThing extends Construct {
             physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
             parameters: event_param
           },
-          logGroup: new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
-            retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-custom-things-event-logs`,
-            removalPolicy: RemovalPolicy.DESTROY
-        }),
+          logGroup: garnet_iot_custom_thing_event_log,
           policy: AwsCustomResourcePolicy.fromSdkCalls({resources: AwsCustomResourcePolicy.ANY_RESOURCE})
     })
 

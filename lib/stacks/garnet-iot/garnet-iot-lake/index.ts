@@ -378,14 +378,16 @@ export class GarnetLake extends Construct {
               resources: ["*"] 
               }))
     
+          const athena_provider_log = new LogGroup(this, 'LambdaAthenaProviderLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-provider-custom-athena-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
+
           const athena_provider = new Provider(this, 'AthenaProvider', {
             onEventHandler: lambda_athena,
             providerFunctionName:  `garnet-provider-custom-athena-lambda`,
-            logGroup: new LogGroup(this, 'LambdaAthenaProviderLogs', {
-              retention: RetentionDays.ONE_MONTH,
-              logGroupName: `garnet-provider-custom-athena-lambda-logs`,
-              removalPolicy: RemovalPolicy.DESTROY
-          })
+            logGroup: athena_provider_log
           }) 
     
          const athena_resource = new CustomResource(this, 'CustomBucketAthenaResource', {

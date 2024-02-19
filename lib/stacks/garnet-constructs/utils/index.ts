@@ -54,15 +54,17 @@ export class Utils extends Construct {
           ],
           resources: ['*'] 
           }))
-      
-          const get_az_provider = new Provider(this, 'getAzCleanUpprovider', {
-          onEventHandler: get_az_func,
-          providerFunctionName: `garnet-provider-utils-az-lambda`,
-          logGroup: new LogGroup(this, 'getAzCleanUpProviderLogs', {
+
+          const get_az_log = new LogGroup(this, 'getAzCleanUpProviderLogs', {
             retention: RetentionDays.ONE_MONTH,
             logGroupName: `garnet-provider-utils-az-lambda-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
+      
+          const get_az_provider = new Provider(this, 'getAzCleanUpprovider', {
+          onEventHandler: get_az_func,
+          providerFunctionName: `garnet-provider-utils-az-lambda`,
+          logGroup: get_az_log
         }) 
         
         const get_az = new CustomResource(this, 'getAzCustomResource', {
@@ -98,15 +100,17 @@ export class Utils extends Construct {
         actions: ["sqs:DeleteQueue"],
         resources: [`arn:aws:sqs:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-scorpiobroker-*`] 
         }))
-    
-        const scorpio_sqs_provider = new Provider(this, 'scorpioSqsProvider', {
-        onEventHandler: scorpio_sqs_lambda,
-        providerFunctionName: `garnet-provider-utils-scorpio-sqs-lambda`,
-        logGroup: new LogGroup(this, 'LambdaScorpioSqsProviderLogs', {
+
+        const scorpio_sqs_provider_log = new LogGroup(this, 'LambdaScorpioSqsProviderLogs', {
           retention: RetentionDays.ONE_MONTH,
           logGroupName: `garnet-provider-utils-scorpio-sqs-lambda-logs`,
           removalPolicy: RemovalPolicy.DESTROY
       })
+    
+        const scorpio_sqs_provider = new Provider(this, 'scorpioSqsProvider', {
+        onEventHandler: scorpio_sqs_lambda,
+        providerFunctionName: `garnet-provider-utils-scorpio-sqs-lambda`,
+        logGroup: scorpio_sqs_provider_log
       }) 
       
       new CustomResource(this, 'scorpioSqsCustomResource', {
@@ -148,14 +152,17 @@ export class Utils extends Construct {
         resources: [`arn:aws:ecs:${Aws.REGION}:${Aws.ACCOUNT_ID}:task-definition/Garnet*`] 
         }))
     
-        const clean_ecs_provider = new Provider(this, 'cleanEcsProvider', {
-        onEventHandler: clean_ecs_lambda,
-        providerFunctionName: `garnet-provider-utils-clean-ecs-lambda`,
-        logGroup: new LogGroup(this, 'LambdacleanEcsProviderLogs', {
+
+        const clean_ecs_logs = new LogGroup(this, 'LambdacleanEcsProviderLogs', {
           retention: RetentionDays.ONE_MONTH,
           logGroupName: `garnet-provider-utils-clean-ecs-lambda-logs`,
           removalPolicy: RemovalPolicy.DESTROY
-      }),
+      })
+
+        const clean_ecs_provider = new Provider(this, 'cleanEcsProvider', {
+        onEventHandler: clean_ecs_lambda,
+        providerFunctionName: `garnet-provider-utils-clean-ecs-lambda`,
+        logGroup: clean_ecs_logs
       }) 
       
       const scorpio_sqs_resource = new CustomResource(this, 'cleanEcsCustomResource', {

@@ -46,14 +46,17 @@ export class GarnetBucket extends Construct {
           resources: ["arn:aws:s3:::*"] 
           }))
 
+
+     const bucket_provider_log = new LogGroup(this, 'LambdaCustomBucketProviderLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `garnet-provider-custom-bucket-lambda-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+      })
+
       const bucket_provider = new Provider(this, 'CustomBucketProvider', {
         onEventHandler: lambda_bucket,
         providerFunctionName:  `garnet-provider-custom-bucket-lambda`,
-        logGroup: new LogGroup(this, 'LambdaCustomBucketProviderLogs', {
-          retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-provider-custom-bucket-lambda-logs`,
-          removalPolicy: RemovalPolicy.DESTROY
-      })
+        logGroup: bucket_provider_log
       }) 
 
      const bucket_resource = new CustomResource(this, 'CustomBucketProviderResource', {
