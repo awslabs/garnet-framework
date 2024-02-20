@@ -49,14 +49,15 @@ export interface GarnetPrivateSubProps {
         })
 
         // LAMBDA 
-        const lambda_garnet_private_sub_path = `${__dirname}/lambda/garnetSub`
-        const lambda_garnet_private_sub = new Function(this, 'LambdaGarnetSubFunction', {
-        functionName: garnet_nomenclature.garnet_private_sub_lambda, 
-        logGroup: new LogGroup(this, 'LambdaGarnetSubFunctionLogs', {
+        const lambda_garnet_private_sub_log = new LogGroup(this, 'LambdaGarnetSubFunctionLogs', {
           retention: RetentionDays.ONE_MONTH,
           logGroupName: `garnet-private-sub-lambda-logs`,
           removalPolicy: RemovalPolicy.DESTROY
-      }),
+      })
+        const lambda_garnet_private_sub_path = `${__dirname}/lambda/garnetSub`
+        const lambda_garnet_private_sub = new Function(this, 'LambdaGarnetSubFunction', {
+        functionName: garnet_nomenclature.garnet_private_sub_lambda, 
+        logGroup: lambda_garnet_private_sub_log,
         description: 'Garnet Private Sub - Function for the private subscription',
             runtime: Runtime.NODEJS_20_X,
             layers: [layer_lambda],

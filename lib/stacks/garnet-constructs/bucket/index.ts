@@ -21,7 +21,14 @@ export class GarnetBucket extends Construct {
     constructor(scope: Construct, id: string, props: GarnetBucketProps) {
         super(scope, id)
 
+
       // CUSTOM RESOURCE WITH A LAMBDA THAT WILL CREATE GARNET BUCKET AND ATHENA RESULTS BUCKET IF NOT EXISTS
+      const lambda_bucket_logs = new LogGroup(this, 'LambdaBucketHeadFunctionLogs', {
+        retention: RetentionDays.ONE_MONTH,
+        logGroupName: `garnet-utils-bucket-lambda-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
+    })
+      
       const lambda_bucket_path = `${__dirname}/lambda/bucketHead`
       const lambda_bucket = new Function(this, 'BucketHeadFunction', {
             functionName: `garnet-utils-bucket-lambda`,
@@ -30,11 +37,7 @@ export class GarnetBucket extends Construct {
             code: Code.fromAsset(lambda_bucket_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
-            logGroup: new LogGroup(this, 'LambdaBucketHeadFunctionLogs', {
-              retention: RetentionDays.ONE_MONTH,
-              logGroupName: `garnet-utils-bucket-lambda-logs`,
-              removalPolicy: RemovalPolicy.DESTROY
-          }),
+            logGroup: lambda_bucket_logs, 
             architecture: Architecture.ARM_64,
             environment: {
               BUCKET_NAME: garnet_bucket

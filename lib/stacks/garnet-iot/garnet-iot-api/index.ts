@@ -39,6 +39,11 @@ export class GarnetIotApi extends Construct {
          */
 
         // LAMBDA GARNET API VERSION
+        const lambda_garnet_version_log = new LogGroup(this, 'LambdaGarnetVersionLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-api-version-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_garnet_version_path = `${__dirname}/lambda/garnetVersion`
         const lambda_garnet_version = new Function(this, 'LambdaGarnetVersion', {
             functionName: `garnet-api-version-lambda`,
@@ -48,11 +53,7 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_garnet_version_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logGroup: new LogGroup(this, 'LambdaGarnetVersionLogs', {
-                retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-api-version-lambda-logs`,
-                removalPolicy: RemovalPolicy.DESTROY
-            }),
+            logGroup: lambda_garnet_version_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
@@ -119,6 +120,11 @@ export class GarnetIotApi extends Construct {
          */
 
         // LAMBDA THAT POSTS THING
+        const lambda_post_thing_log = new LogGroup(this, 'LambdaPostThingLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-iot-api-post-thing-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_post_thing_path = `${__dirname}/lambda/postThing`
         const lambda_post_thing = new Function(this, 'LambdaPostThing', {
             functionName: `garnet-iot-api-post-thing-lambda`,
@@ -127,17 +133,13 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_post_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logGroup: new LogGroup(this, 'LambdaPostThingLogs', {
-                retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-post-thing-lambda-logs`,
-                removalPolicy: RemovalPolicy.DESTROY
-            }),
+            logGroup: lambda_post_thing_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
                 AWSIOTREGION: Aws.REGION,
                 SHADOW_PREFIX: garnet_constant.shadow_prefix,
-                }   
+            }   
         })
 
         lambda_post_thing.addToRolePolicy(new PolicyStatement({
@@ -190,6 +192,11 @@ export class GarnetIotApi extends Construct {
         */
 
         // LAMBDA THAT DELETE THING
+        const lambda_delete_thing_log = new LogGroup(this, 'LambdaDeleteThingLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-iot-api-delete-thing-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_delete_thing_path = `${__dirname}/lambda/deleteThing`
         const lambda_delete_thing = new Function(this, 'LambdaDeleteThing', {
             functionName: `garnet-iot-api-delete-thing-lambda`,
@@ -202,11 +209,7 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_delete_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logGroup: new LogGroup(this, 'LambdaDeleteThingLogs', {
-                retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-delete-thing-lambda-logs`,
-                removalPolicy: RemovalPolicy.DESTROY
-            }),
+            logGroup: lambda_delete_thing_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
@@ -263,6 +266,11 @@ export class GarnetIotApi extends Construct {
          */
 
         // LAMBDA THAT GETS THING
+        const lambda_get_thing_log = new LogGroup(this, 'LambdaGetThingLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-iot-api-get-thing-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_get_thing_path = `${__dirname}/lambda/getThing`
         const lambda_get_thing = new Function(this, 'LambdaGetThing', {
             functionName: `garnet-iot-api-get-thing-lambda`,
@@ -271,11 +279,7 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_get_thing_path),
             handler: 'index.handler',
             timeout: Duration.seconds(30),
-            logGroup: new LogGroup(this, 'LambdaGetThingLogs', {
-                retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-get-thing-lambda-logs`,
-                removalPolicy: RemovalPolicy.DESTROY
-            }),
+            logGroup: lambda_get_thing_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
@@ -331,6 +335,11 @@ export class GarnetIotApi extends Construct {
          */
 
         // LAMBDA THAT GETS THING
+        const lambda_get_things_log = new LogGroup(this, 'LambdaGetThingsLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-iot-api-get-things-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_get_things_path = `${__dirname}/lambda/getThings`
         const lambda_get_things = new Function(this, 'LambdaGetThings', {
             functionName: `garnet-iot-api-get-things-lambda`,
@@ -339,17 +348,13 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_get_things_path),
             handler: 'index.handler',
             timeout: Duration.minutes(3),
-            logGroup: new LogGroup(this, 'LambdaGetThingsLogs', {
-                retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-get-things-lambda-logs`,
-                removalPolicy: RemovalPolicy.DESTROY
-            }),
+            logGroup: lambda_get_things_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
                 AWSIOTREGION: Aws.REGION,
                 SHADOW_PREFIX: garnet_constant.shadow_prefix,
-                }   
+            }   
         })
 
         lambda_get_things.addToRolePolicy(new PolicyStatement({
@@ -398,6 +403,11 @@ export class GarnetIotApi extends Construct {
          */
 
         // LAMBDA THAT POST SHADOWS
+        const lambda_post_shadows_log =  new LogGroup(this, 'LambdaPostShadowsLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            logGroupName: `garnet-iot-api-post-shadows-lambda-logs`,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_post_shadows_path = `${__dirname}/lambda/postShadows`
         const lambda_post_shadows = new Function(this, 'LambdaPostShadows', {
             functionName: `garnet-iot-api-post-shadows-lambda`,
@@ -406,11 +416,7 @@ export class GarnetIotApi extends Construct {
             code: Code.fromAsset(lambda_post_shadows_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
-            logGroup: new LogGroup(this, 'LambdaPostShadowsLogs', {
-                retention: RetentionDays.ONE_MONTH,
-                logGroupName: `garnet-iot-api-post-shadows-lambda-logs`,
-                removalPolicy: RemovalPolicy.DESTROY
-            }),
+            logGroup:lambda_post_shadows_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {

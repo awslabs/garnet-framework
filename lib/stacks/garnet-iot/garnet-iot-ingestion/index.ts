@@ -54,6 +54,11 @@ export class GarnetIot extends Construct {
     this.sqs_garnet_iot_arn = sqs_garnet_endpoint.queueArn
 
     // LAMBDA TO UPDATE DEVICE SHADOW
+    const lambda_update_shadow_log = new LogGroup(this, 'LambdaUpdateShadowLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `${garnet_nomenclature.garnet_iot_update_shadow_lambda}-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+    })
     const lambda_update_shadow_path = `${__dirname}/lambda/updateShadow`;
     const lambda_update_shadow = new Function(this, "LambdaUpdateShadow", {
       functionName: garnet_nomenclature.garnet_iot_update_shadow_lambda,
@@ -63,11 +68,7 @@ export class GarnetIot extends Construct {
       handler: "index.handler",
       layers: [layer_lambda],
       timeout: Duration.seconds(50),
-      logGroup: new LogGroup(this, 'LambdaUpdateShadowLogs', {
-        retention: RetentionDays.ONE_MONTH,
-        logGroupName: `${garnet_nomenclature.garnet_iot_update_shadow_lambda}-logs`,
-        removalPolicy: RemovalPolicy.DESTROY
-      }),
+      logGroup: lambda_update_shadow_log,
       architecture: Architecture.ARM_64,
       environment: {
         AWSIOTREGION: Aws.REGION,
@@ -147,6 +148,11 @@ export class GarnetIot extends Construct {
 
 
     // LAMBDA THAT GETS MESSAGES FROM THE QUEUE AND UPDATES CONTEXT BROKER
+    const lambda_to_context_broker_log = new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `${garnet_nomenclature.garnet_iot_update_broker_lambda}-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+    })
     const lambda_to_context_broker_path = `${__dirname}/lambda/updateContextBroker`;
     const lambda_to_context_broker = new Function(this,"LambdaUpdateContextBroker", {
         functionName: garnet_nomenclature.garnet_iot_update_broker_lambda,
@@ -159,11 +165,7 @@ export class GarnetIot extends Construct {
         code: Code.fromAsset(lambda_to_context_broker_path),
         handler: "index.handler",
         timeout: Duration.seconds(50),
-        logGroup: new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
-          retention: RetentionDays.ONE_MONTH,
-          logGroupName: `${garnet_nomenclature.garnet_iot_update_broker_lambda}-logs`,
-          removalPolicy: RemovalPolicy.DESTROY
-        }),
+        logGroup: lambda_to_context_broker_log,
         layers: [layer_lambda],
         architecture: Architecture.ARM_64,
         environment: {
@@ -171,7 +173,7 @@ export class GarnetIot extends Construct {
           URL_SMART_DATA_MODEL: Parameters.smart_data_model_url,
           AWSIOTREGION: Aws.REGION,
           SHADOW_PREFIX: garnet_constant.shadow_prefix
-        },
+        }
       }
     )
 

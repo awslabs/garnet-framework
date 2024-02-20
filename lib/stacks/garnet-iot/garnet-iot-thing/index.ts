@@ -38,6 +38,11 @@ export class GarnetIotThing extends Construct {
 
     
         // LAMBDA TO UPDATE DEVICE SHADOW WITH CONNECTIVITY STATUS
+        const lambda_update_shadow_presence_log = new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          logGroupName: `${garnet_nomenclature.garnet_iot_presence_shadow_lambda}-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_update_shadow_presence_path = `${__dirname}/lambda/presence`;
         const lambda_update_shadow_presence = new Function(this, "LambdaUpdatePresenceThing", {
           functionName: garnet_nomenclature.garnet_iot_presence_shadow_lambda,
@@ -47,11 +52,7 @@ export class GarnetIotThing extends Construct {
           code: Code.fromAsset(lambda_update_shadow_presence_path),
           handler: "index.handler",
           timeout: Duration.seconds(50),
-          logGroup: new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
-            retention: RetentionDays.ONE_MONTH,
-            logGroupName: `${garnet_nomenclature.garnet_iot_presence_shadow_lambda}-logs`,
-            removalPolicy: RemovalPolicy.DESTROY
-          }),
+          logGroup: lambda_update_shadow_presence_log,
           architecture: Architecture.ARM_64,
           environment: {
             AWSIOTREGION: Aws.REGION,
@@ -161,6 +162,11 @@ export class GarnetIotThing extends Construct {
 
 
     // LAMBDA TO UPDATE DEVICE SHADOW WITH GROUP MEMBERSHIP
+    const lambda_update_group_membership_log = new LogGroup(this, 'LambdaUpdateGroupThingLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `garnet-iot-group-thing-lambda-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+    })
     const lambda_update_group_membership_path = `${__dirname}/lambda/group`;
     const lambda_update_group_membership = new Function(this, "LambdaUpdateGroupThing", {
       functionName: `garnet-iot-group-thing-lambda`,
@@ -170,11 +176,7 @@ export class GarnetIotThing extends Construct {
       code: Code.fromAsset(lambda_update_group_membership_path),
       handler: "index.handler",
       timeout: Duration.seconds(50),
-      logGroup: new LogGroup(this, 'LambdaUpdateGroupThingLogs', {
-        retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-iot-group-thing-lambda-logs`,
-        removalPolicy: RemovalPolicy.DESTROY
-      }),
+      logGroup: lambda_update_group_membership_log,
       architecture: Architecture.ARM_64,
       environment: {
         AWSIOTREGION: Aws.REGION,
