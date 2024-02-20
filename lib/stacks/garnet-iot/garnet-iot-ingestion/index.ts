@@ -56,7 +56,7 @@ export class GarnetIot extends Construct {
     // LAMBDA TO UPDATE DEVICE SHADOW
     const lambda_update_shadow_log = new LogGroup(this, 'LambdaUpdateShadowLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `${garnet_nomenclature.garnet_iot_update_shadow_lambda}-logs`,
+      logGroupName: `${garnet_nomenclature.garnet_iot_update_shadow_lambda}-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
     })
     const lambda_update_shadow_path = `${__dirname}/lambda/updateShadow`;
@@ -75,7 +75,7 @@ export class GarnetIot extends Construct {
         SHADOW_PREFIX: garnet_constant.shadow_prefix
       },
     })
-
+    lambda_update_shadow.node.addDependency(lambda_update_shadow_log)
     // ADD PERMISSION FOR LAMBDA THAT UPDATES SHADOW TO ACCESS SQS ENTRY POINT
     lambda_update_shadow.addToRolePolicy(
       new PolicyStatement({
@@ -150,7 +150,7 @@ export class GarnetIot extends Construct {
     // LAMBDA THAT GETS MESSAGES FROM THE QUEUE AND UPDATES CONTEXT BROKER
     const lambda_to_context_broker_log = new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `${garnet_nomenclature.garnet_iot_update_broker_lambda}-logs`,
+      logGroupName: `${garnet_nomenclature.garnet_iot_update_broker_lambda}-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
     })
     const lambda_to_context_broker_path = `${__dirname}/lambda/updateContextBroker`;
@@ -176,7 +176,7 @@ export class GarnetIot extends Construct {
         }
       }
     )
-
+    lambda_to_context_broker.node.addDependency(lambda_to_context_broker_log)
     lambda_to_context_broker.addToRolePolicy(
       new PolicyStatement({
         actions: [

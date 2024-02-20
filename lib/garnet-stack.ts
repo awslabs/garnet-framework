@@ -5,6 +5,7 @@ import { GarnetIotStack } from './stacks/garnet-iot/garnet-iot-stack'
 import { garnet_constant } from '../constants'
 import { GarnetConstructs } from './stacks/garnet-constructs/garnet-constructs'
 import { GarnetOps } from './stacks/garnet-ops/garnet-ops'
+import { deployment_params } from '../sizing'
 
 
 
@@ -58,6 +59,11 @@ export class GarnetStack extends Stack {
     new CfnOutput(this, 'GarnetVersion', {
       value: garnet_constant.garnet_version,
       description: 'Version of Garnet Framework'
+    })
+
+    new CfnOutput(this, 'GarnetArchitecture', {
+      value: deployment_params.architecture,
+      description: 'Architecture deployed'
     })
 
 

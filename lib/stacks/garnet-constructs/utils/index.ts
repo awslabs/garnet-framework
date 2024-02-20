@@ -31,7 +31,7 @@ export class Utils extends Construct {
     
         const get_az_lambda_log = new LogGroup(this, 'LambdaAzFunctionLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-utils-az-lambda-logs`,
+          logGroupName: `garnet-utils-az-lambda-cw-logs`,
           removalPolicy: RemovalPolicy.DESTROY
         })
         const get_az_func_path = `${__dirname}/lambda/getAzs`
@@ -48,6 +48,8 @@ export class Utils extends Construct {
                 COMPATIBLE_AZS: JSON.stringify(compatible_azs)
               }
         })
+
+        get_az_func.node.addDependency(get_az_lambda_log)
         get_az_func.addToRolePolicy(new PolicyStatement({
           actions: [
             "ec2:DescribeAvailabilityZones",
@@ -58,7 +60,7 @@ export class Utils extends Construct {
 
           const get_az_log = new LogGroup(this, 'getAzCleanUpProviderLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-provider-utils-az-lambda-logs`,
+            logGroupName: `garnet-provider-utils-az-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
       
@@ -67,7 +69,7 @@ export class Utils extends Construct {
           providerFunctionName: `garnet-provider-utils-az-lambda`,
           logGroup: get_az_log
         }) 
-        
+        get_az_provider.node.addDependency(get_az_log)
         const get_az = new CustomResource(this, 'getAzCustomResource', {
           serviceToken: get_az_provider.serviceToken
         })
@@ -81,7 +83,7 @@ export class Utils extends Construct {
 
         const scorpio_sqs_lambda_log = new LogGroup(this, 'LambdaScorpioSqsFunctionLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-utils-scorpio-sqs-lambda-logs`,
+          logGroupName: `garnet-utils-scorpio-sqs-lambda-cw-logs`,
           removalPolicy: RemovalPolicy.DESTROY
         })
         const scorpio_sqs_lambda_path = `${__dirname}/lambda/scorpioSqs`
@@ -98,6 +100,7 @@ export class Utils extends Construct {
               SQS_QUEUES: JSON.stringify(sqs_urls)
             }
       })
+      scorpio_sqs_lambda.node.addDependency(scorpio_sqs_lambda_log)
       scorpio_sqs_lambda.addToRolePolicy(new PolicyStatement({
         actions: ["sqs:DeleteQueue"],
         resources: [`arn:aws:sqs:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-scorpiobroker-*`] 
@@ -105,7 +108,7 @@ export class Utils extends Construct {
 
         const scorpio_sqs_provider_log = new LogGroup(this, 'LambdaScorpioSqsProviderLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-provider-utils-scorpio-sqs-lambda-logs`,
+          logGroupName: `garnet-provider-utils-scorpio-sqs-lambda-cw-logs`,
           removalPolicy: RemovalPolicy.DESTROY
       })
     
@@ -114,7 +117,7 @@ export class Utils extends Construct {
         providerFunctionName: `garnet-provider-utils-scorpio-sqs-lambda`,
         logGroup: scorpio_sqs_provider_log
       }) 
-      
+      scorpio_sqs_provider.node.addDependency(scorpio_sqs_provider_log)
       new CustomResource(this, 'scorpioSqsCustomResource', {
         serviceToken: scorpio_sqs_provider.serviceToken
       })
@@ -123,7 +126,7 @@ export class Utils extends Construct {
       // CLEAN INACTIVE GARNET TASK DEFINITION IN ECS
         const clean_ecs_lambda_log = new LogGroup(this, 'LambdaCleanEcsFunctionLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-utils-clean-ecs-lambda-logs`,
+          logGroupName: `garnet-utils-clean-ecs-lambda-cw-logs`,
           removalPolicy: RemovalPolicy.DESTROY
         })
         const clean_ecs_lambda_path = `${__dirname}/lambda/cleanTasks`
@@ -139,6 +142,7 @@ export class Utils extends Construct {
             environment: {
             }
       })
+      clean_ecs_lambda.node.addDependency(clean_ecs_lambda_log)
       clean_ecs_lambda.addToRolePolicy(new PolicyStatement({
         actions: [
           "ecs:RegisterTaskDefinition",
@@ -158,7 +162,7 @@ export class Utils extends Construct {
 
         const clean_ecs_logs = new LogGroup(this, 'LambdacleanEcsProviderLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-provider-utils-clean-ecs-lambda-logs`,
+          logGroupName: `garnet-provider-utils-clean-ecs-lambda-cw-logs`,
           removalPolicy: RemovalPolicy.DESTROY
       })
 
@@ -167,7 +171,7 @@ export class Utils extends Construct {
         providerFunctionName: `garnet-provider-utils-clean-ecs-lambda`,
         logGroup: clean_ecs_logs
       }) 
-      
+      clean_ecs_provider.node.addDependency(clean_ecs_logs)
       const scorpio_sqs_resource = new CustomResource(this, 'cleanEcsCustomResource', {
         serviceToken: clean_ecs_provider.serviceToken
       })

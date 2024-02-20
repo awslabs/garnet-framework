@@ -41,7 +41,7 @@ export class GarnetIotApi extends Construct {
         // LAMBDA GARNET API VERSION
         const lambda_garnet_version_log = new LogGroup(this, 'LambdaGarnetVersionLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-api-version-lambda-logs`,
+            logGroupName: `garnet-api-version-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_garnet_version_path = `${__dirname}/lambda/garnetVersion`
@@ -80,7 +80,7 @@ export class GarnetIotApi extends Construct {
                                                                         ])
             }   
         })
-
+        lambda_garnet_version.node.addDependency(lambda_garnet_version_log)
         const garnet_version_integration = new CfnIntegration(this, 'GarnetVersionIntegration', {
             apiId: props.api_ref,
             integrationMethod: "GET",
@@ -122,7 +122,7 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT POSTS THING
         const lambda_post_thing_log = new LogGroup(this, 'LambdaPostThingLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-api-post-thing-lambda-logs`,
+            logGroupName: `garnet-iot-api-post-thing-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_post_thing_path = `${__dirname}/lambda/postThing`
@@ -141,7 +141,7 @@ export class GarnetIotApi extends Construct {
                 SHADOW_PREFIX: garnet_constant.shadow_prefix,
             }   
         })
-
+        lambda_post_thing.node.addDependency(lambda_post_thing_log)
         lambda_post_thing.addToRolePolicy(new PolicyStatement({
             actions: [
                 "iot:UpdateThingGroup",
@@ -194,7 +194,7 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT DELETE THING
         const lambda_delete_thing_log = new LogGroup(this, 'LambdaDeleteThingLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-api-delete-thing-lambda-logs`,
+            logGroupName: `garnet-iot-api-delete-thing-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_delete_thing_path = `${__dirname}/lambda/deleteThing`
@@ -218,7 +218,7 @@ export class GarnetIotApi extends Construct {
                 DNS_CONTEXT_BROKER: props.dns_context_broker
             }   
         })
-
+        lambda_delete_thing.node.addDependency(lambda_delete_thing_log)
         lambda_delete_thing.addToRolePolicy(new PolicyStatement({
             actions: [
                 "iot:DeleteThing",
@@ -268,7 +268,7 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT GETS THING
         const lambda_get_thing_log = new LogGroup(this, 'LambdaGetThingLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-api-get-thing-lambda-logs`,
+            logGroupName: `garnet-iot-api-get-thing-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_get_thing_path = `${__dirname}/lambda/getThing`
@@ -287,7 +287,7 @@ export class GarnetIotApi extends Construct {
                 SHADOW_PREFIX: garnet_constant.shadow_prefix,
                 }   
         })
-
+        lambda_get_thing.node.addDependency(lambda_get_thing_log)
         lambda_get_thing.addToRolePolicy(new PolicyStatement({
             actions: [
                 "iot:GetThing",
@@ -337,7 +337,7 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT GETS THING
         const lambda_get_things_log = new LogGroup(this, 'LambdaGetThingsLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-api-get-things-lambda-logs`,
+            logGroupName: `garnet-iot-api-get-things-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_get_things_path = `${__dirname}/lambda/getThings`
@@ -356,7 +356,7 @@ export class GarnetIotApi extends Construct {
                 SHADOW_PREFIX: garnet_constant.shadow_prefix,
             }   
         })
-
+        lambda_get_things.node.addDependency(lambda_get_things_log)
         lambda_get_things.addToRolePolicy(new PolicyStatement({
             actions: [
                 "iot:ListThings"
@@ -405,7 +405,7 @@ export class GarnetIotApi extends Construct {
         // LAMBDA THAT POST SHADOWS
         const lambda_post_shadows_log =  new LogGroup(this, 'LambdaPostShadowsLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-api-post-shadows-lambda-logs`,
+            logGroupName: `garnet-iot-api-post-shadows-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_post_shadows_path = `${__dirname}/lambda/postShadows`
@@ -424,7 +424,7 @@ export class GarnetIotApi extends Construct {
                 SHADOW_PREFIX: garnet_constant.shadow_prefix,
                 }   
         })
-
+        lambda_post_shadows.node.addDependency(lambda_post_shadows_log)
         lambda_post_shadows.addToRolePolicy(new PolicyStatement({
             actions: [
                 "iot:UpdateThingShadow"

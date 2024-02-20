@@ -57,7 +57,7 @@ export class GarnetLake extends Construct {
     // LAMBDA THAT EXTRACT ENTITIES FROM SUBSCRIPTION IN FIREHOSE STREAM
     const lambda_transform_logs = new LogGroup(this, 'LambdaBucketHeadFunctionLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `${garnet_nomenclature.garnet_lake_transform_lambda}-logs`,
+      logGroupName: `${garnet_nomenclature.garnet_lake_transform_lambda}-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
     })
     const lambda_transform_path = `${__dirname}/lambda/transform`
@@ -73,7 +73,8 @@ export class GarnetLake extends Construct {
         logGroup: lambda_transform_logs
     })
     
-      
+    lambda_transform.node.addDependency(lambda_transform_logs)
+
     // KINESIS FIREHOSE DELIVERY STREAM
     const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
         deliveryStreamName: garnet_nomenclature.garnet_lake_iot_firehose_stream,
@@ -202,7 +203,7 @@ export class GarnetLake extends Construct {
     // LAMBDA FUNCTION FOR AUTHORIZER 
     const lambda_garnet_authorizer_log = new LogGroup(this, 'LambdaGarnetIotAuthorizerLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `garnet-iot-authorizer-lambda-logs`,
+      logGroupName: `garnet-iot-authorizer-lambda-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
     })
     const lambda_garnet_authorizer_path = `${__dirname}/lambda/authorizer`
@@ -220,7 +221,7 @@ export class GarnetLake extends Construct {
               LAKERULENAME: iot_rule_lake_name,
           }
     })
-
+    lambda_garnet_authorizer.node.addDependency(lambda_garnet_authorizer_log)
 
     // AWS IoT AUTHORIZER
 
@@ -241,7 +242,7 @@ export class GarnetLake extends Construct {
 
     const lambda_custom_iot_domain_log = new LogGroup(this, 'LambdaGarnetVersionLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `garnet-custom-iot-domain-lambda-logs`,
+      logGroupName: `garnet-custom-iot-domain-lambda-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
     })
     const lambda_custom_iot_domain_path = `${__dirname}/lambda/domain`
@@ -259,7 +260,7 @@ export class GarnetLake extends Construct {
             AUTHORIZER_NAME: Lazy.string( { produce(): string  { return iot_authorizer.authorizerName! } })
           }
     })
-
+    lambda_custom_iot_domain.node.addDependency(lambda_custom_iot_domain_log)
     lambda_custom_iot_domain.addToRolePolicy(new PolicyStatement({
       actions: [
         "iot:CreateDomainConfiguration",
@@ -271,7 +272,7 @@ export class GarnetLake extends Construct {
   
       const custom_iot_domain_provider_log = new LogGroup(this, 'CustomIotDomainProviderLogs', {
         retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-provider-iot-domain-lambda-logs`,
+        logGroupName: `garnet-provider-iot-domain-lambda-cw-logs`,
         removalPolicy: RemovalPolicy.DESTROY
       })
       const custom_iot_domain_provider = new Provider(this, 'CustomIotDomainProvider', {
@@ -280,7 +281,7 @@ export class GarnetLake extends Construct {
       logGroup: custom_iot_domain_provider_log
 
     }) 
-    
+    custom_iot_domain_provider.node.addDependency(custom_iot_domain_provider_log)
     const custom_iot_domain_resource = new CustomResource(this, 'CustomIotDomainResource', {
       serviceToken: custom_iot_domain_provider.serviceToken
     })
@@ -313,7 +314,7 @@ export class GarnetLake extends Construct {
     // LAMBDA THAT CREATE A SUBSCRIPTION IN THE BROKER TO SUBSCRIBE TO ALL ENTITIES
     const lambda_garnet_all_sub_log = new LogGroup(this, 'LambdaGarnetSubAllFunctionLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `garnet-sub-all-lambda-logs`,
+      logGroupName: `garnet-sub-all-lambda-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
   })
     const lambda_garnet_all_sub_path = `${__dirname}/lambda/suball`
@@ -339,11 +340,11 @@ export class GarnetLake extends Construct {
           SUBNAME: garnet_constant.subAllName
         }
     })
-
+    lambda_garnet_all_sub.node.addDependency(lambda_garnet_all_sub_log)
 
     const bucket_provider_log = new LogGroup(this, 'CustomSubAllProviderLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `garnet-provider-sub-all-lambda-logs`,
+      logGroupName: `garnet-provider-sub-all-lambda-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
   })
 
@@ -351,8 +352,8 @@ export class GarnetLake extends Construct {
       onEventHandler: lambda_garnet_all_sub,
       providerFunctionName: `garnet-provider-sub-all-lambda`,
       logGroup: bucket_provider_log
-
     }) 
+    bucket_provider.node.addDependency(bucket_provider_log)
 
    new CustomResource(this, 'CustomSubAllResource', {
         serviceToken: bucket_provider.serviceToken
@@ -362,7 +363,7 @@ export class GarnetLake extends Construct {
           // CUSTOM RESOURCE WITH A LAMBDA THAT WILL CREATE ATHENA WORKGROUP AND GLUE DB
           const lambda_athena_log = new LogGroup(this, 'LambdaAthenaFunctionLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-lake-athena-lambda-logs`,
+            logGroupName: `garnet-lake-athena-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
           })
           const lambda_athena_path = `${__dirname}/lambda/athena`
@@ -381,7 +382,7 @@ export class GarnetLake extends Construct {
                   GLUEDB_NAME: garnet_constant.gluedbName
                 }
           })
-    
+          lambda_athena.node.addDependency(lambda_athena_log)
           lambda_athena.addToRolePolicy(new PolicyStatement({
               actions: [
                   "athena:CreateWorkGroup",
@@ -392,7 +393,7 @@ export class GarnetLake extends Construct {
     
           const athena_provider_log = new LogGroup(this, 'LambdaAthenaProviderLogs', {
             retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-provider-custom-athena-lambda-logs`,
+            logGroupName: `garnet-provider-custom-athena-lambda-cw-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
 
@@ -401,7 +402,7 @@ export class GarnetLake extends Construct {
             providerFunctionName:  `garnet-provider-custom-athena-lambda`,
             logGroup: athena_provider_log
           }) 
-    
+          athena_provider.node.addDependency(athena_provider_log)
          const athena_resource = new CustomResource(this, 'CustomBucketAthenaResource', {
               serviceToken: athena_provider.serviceToken,
               

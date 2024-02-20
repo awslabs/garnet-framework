@@ -25,7 +25,7 @@ export class GarnetBucket extends Construct {
       // CUSTOM RESOURCE WITH A LAMBDA THAT WILL CREATE GARNET BUCKET AND ATHENA RESULTS BUCKET IF NOT EXISTS
       const lambda_bucket_logs = new LogGroup(this, 'LambdaBucketHeadFunctionLogs', {
         retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-utils-bucket-lambda-logs`,
+        logGroupName: `garnet-utils-bucket-lambda-cw-logs`,
         removalPolicy: RemovalPolicy.DESTROY
     })
       
@@ -44,6 +44,8 @@ export class GarnetBucket extends Construct {
             }
       })
 
+      lambda_bucket.node.addDependency(lambda_bucket_logs)
+
       lambda_bucket.addToRolePolicy(new PolicyStatement({
           actions: ["s3:CreateBucket"],
           resources: ["arn:aws:s3:::*"] 
@@ -52,7 +54,7 @@ export class GarnetBucket extends Construct {
 
      const bucket_provider_log = new LogGroup(this, 'LambdaCustomBucketProviderLogs', {
       retention: RetentionDays.ONE_MONTH,
-      logGroupName: `garnet-provider-custom-bucket-lambda-logs`,
+      logGroupName: `garnet-provider-custom-bucket-lambda-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
       })
 
@@ -62,6 +64,8 @@ export class GarnetBucket extends Construct {
         logGroup: bucket_provider_log
       }) 
 
+    bucket_provider.node.addDependency(bucket_provider_log)
+    
      const bucket_resource = new CustomResource(this, 'CustomBucketProviderResource', {
           serviceToken: bucket_provider.serviceToken,
           

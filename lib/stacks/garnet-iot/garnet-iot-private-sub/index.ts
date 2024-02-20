@@ -51,7 +51,7 @@ export interface GarnetPrivateSubProps {
         // LAMBDA 
         const lambda_garnet_private_sub_log = new LogGroup(this, 'LambdaGarnetSubFunctionLogs', {
           retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-private-sub-lambda-logs`,
+          logGroupName: `garnet-private-sub-lambda-cw-logs`,
           removalPolicy: RemovalPolicy.DESTROY
       })
         const lambda_garnet_private_sub_path = `${__dirname}/lambda/garnetSub`
@@ -69,7 +69,7 @@ export interface GarnetPrivateSubProps {
             AWSIOTREGION: Aws.REGION
             }
         })
-
+        lambda_garnet_private_sub.node.addDependency(lambda_garnet_private_sub_log)
         lambda_garnet_private_sub.addToRolePolicy(new PolicyStatement({
             actions: ["iot:Publish"],
             resources: [
