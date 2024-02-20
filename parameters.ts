@@ -6,7 +6,7 @@ export const Parameters = {
      * See regions in which you can deploy Garnet: 
      * https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability
     */
-    aws_region: "eu-west-2",  
+    aws_region: "eu-west-1",  
 
     /**
      * The description above is for reference only. You can fine tune your deployment in the file sizing.ts. 
