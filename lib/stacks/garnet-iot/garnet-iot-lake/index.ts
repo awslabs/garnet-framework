@@ -55,6 +55,11 @@ export class GarnetLake extends Construct {
 
 
     // LAMBDA THAT EXTRACT ENTITIES FROM SUBSCRIPTION IN FIREHOSE STREAM
+    const lambda_transform_logs = new LogGroup(this, 'LambdaBucketHeadFunctionLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `${garnet_nomenclature.garnet_lake_transform_lambda}-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+    })
     const lambda_transform_path = `${__dirname}/lambda/transform`
     const lambda_transform = new Function(this, 'LakeTransformLambda', {
     functionName: garnet_nomenclature.garnet_lake_transform_lambda, 
@@ -64,7 +69,8 @@ export class GarnetLake extends Construct {
         code: Code.fromAsset(lambda_transform_path),
         handler: 'index.handler',
         timeout: Duration.minutes(1),
-        architecture: Architecture.ARM_64
+        architecture: Architecture.ARM_64,
+        logGroup: lambda_transform_logs
     })
     
       
