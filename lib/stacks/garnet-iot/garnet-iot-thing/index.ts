@@ -136,11 +136,11 @@ export class GarnetIotThing extends Construct {
         }
        }
 
-       const garnet_iot_custom_thing_event_log = new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
-        retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-iot-custom-things-event-cw-logs`,
-        removalPolicy: RemovalPolicy.DESTROY
-        })
+      //  const garnet_iot_custom_thing_event_log = new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
+      //   retention: RetentionDays.ONE_MONTH,
+      //   logGroupName: `garnet-iot-custom-things-event-cw-logs`,
+      //   removalPolicy: RemovalPolicy.DESTROY
+      //   })
 
       const iot_event = new AwsCustomResource(this, 'CustomIotThingsEventGroupMembership', {
       functionName: `garnet-iot-custom-things-event`,
@@ -156,11 +156,12 @@ export class GarnetIotThing extends Construct {
           physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
           parameters: event_param
         },
-        logGroup: garnet_iot_custom_thing_event_log,
+       // logGroup: garnet_iot_custom_thing_event_log,
         policy: AwsCustomResourcePolicy.fromSdkCalls({resources: AwsCustomResourcePolicy.ANY_RESOURCE})
       })
 
-      iot_event.node.addDependency(garnet_iot_custom_thing_event_log)
+      //iot_event.node.addDependency(garnet_iot_custom_thing_event_log)
+
 
     // LAMBDA TO UPDATE DEVICE SHADOW WITH GROUP MEMBERSHIP
     const lambda_update_group_membership_log = new LogGroup(this, 'LambdaUpdateGroupThingLogs', {

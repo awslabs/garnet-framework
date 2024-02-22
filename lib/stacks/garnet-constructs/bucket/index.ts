@@ -25,6 +25,7 @@ export class GarnetBucket extends Construct {
       // CUSTOM RESOURCE WITH A LAMBDA THAT WILL CREATE GARNET BUCKET AND ATHENA RESULTS BUCKET IF NOT EXISTS
       const lambda_bucket_logs = new LogGroup(this, 'LambdaBucketHeadFunctionLogs', {
         retention: RetentionDays.ONE_MONTH,
+      
         logGroupName: `garnet-utils-bucket-lambda-cw-logs`,
         removalPolicy: RemovalPolicy.DESTROY
     })
