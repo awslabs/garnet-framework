@@ -74,7 +74,7 @@ switch (true) {
     case sizing < 3:
         deployment_params = {
             architecture: ARCHITECTURE.Concentrated,
-            autoscale_requests_number: 20, 
+            autoscale_requests_number: 15, 
 
             lambda_broker_batch_window: 1,
             lambda_broker_batch_size: 10, 
@@ -96,7 +96,7 @@ switch (true) {
             architecture: ARCHITECTURE.Distributed,
             aurora_min_capacity: 2, 
             aurora_max_capacity: 5,
-            autoscale_requests_number: 20, 
+            autoscale_requests_number: 15, 
 
             lambda_broker_batch_window: 1,
             lambda_broker_batch_size: 20, 

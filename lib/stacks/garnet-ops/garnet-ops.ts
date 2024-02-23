@@ -1,7 +1,7 @@
 import { Aws, Duration, NestedStack, NestedStackProps } from "aws-cdk-lib";
 import { Dashboard,  Metric, Row, SingleValueWidget } from "aws-cdk-lib/aws-cloudwatch";
 import { Construct } from "constructs";
-import { garnet_bucket, garnet_nomenclature } from "../../../constants";
+import { garnet_bucket, garnet_nomenclature, scorpiobroker_sqs_object } from "../../../constants";
 import { deployment_params } from "../../../sizing";
 
 
@@ -455,7 +455,7 @@ export class GarnetOps extends NestedStack {
             {
                 Name: `Registry Subscription Manager`,
                 DiscoveryName: garnet_nomenclature.garnet_broker_registrysubscriptionmanager
-            }]
+        }]
   
         } else {
             service_widget = [{
@@ -465,6 +465,7 @@ export class GarnetOps extends NestedStack {
         }
 
 
+
         service_widget.forEach( 
             (service:any) => { 
                 set_service_widgets(garnet_dashboard, 
@@ -472,8 +473,19 @@ export class GarnetOps extends NestedStack {
                                 garnet_nomenclature.garnet_broker_cluster, 
                                 `${service.DiscoveryName}-service`, 
                                 service.DiscoveryName)
+
+                                
             }
         )
+
+        
+        let service_sqs_widget: any = []
+        Object.entries(scorpiobroker_sqs_object).forEach(([key, value]) => {
+            let sqs_service_widget = set_sqs_widgets(`${key} SQS`, value)
+            garnet_dashboard.addWidgets(sqs_service_widget)
+        })
+
+
 
 
 

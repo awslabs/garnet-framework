@@ -48,9 +48,14 @@ export class GarnetBucket extends Construct {
       lambda_bucket.node.addDependency(lambda_bucket_logs)
 
       lambda_bucket.addToRolePolicy(new PolicyStatement({
-          actions: ["s3:CreateBucket"],
+          actions: [
+            "s3:CreateBucket",
+            "s3:PutMetricsConfiguration"
+            ],
           resources: ["arn:aws:s3:::*"] 
-          }))
+      }))
+
+      
 
 
      const bucket_provider_log = new LogGroup(this, 'LambdaCustomBucketProviderLogs', {
