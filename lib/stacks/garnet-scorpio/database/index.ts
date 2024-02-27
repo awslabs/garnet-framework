@@ -4,8 +4,9 @@ import { AuroraPostgresEngineVersion, CaCertificate, ClusterInstance, Credential
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 
 import { Construct } from "constructs"
-import { Parameters } from "../../../../parameters"
+import { deployment_params } from "../../../../sizing"
 import { Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
+import { garnet_broker, garnet_constant, garnet_nomenclature } from "../../../../constants"
 
 export interface GarnetScorpioDatabaseProps {
     vpc: Vpc
@@ -32,7 +33,7 @@ export class GarnetScorpioDatabase extends Construct{
         const secret = Secret.fromSecretCompleteArn(this, 'Secret', props.secret_arn)
         const sg_database = new SecurityGroup(this, 'SecurityGroupDatabase', {
             vpc: props.vpc,
-            securityGroupName: `garnet-${Parameters.garnet_broker.toLowerCase()}-database-sg`
+            securityGroupName: garnet_nomenclature.garnet_broker_sg_database
         })
 
 
@@ -41,20 +42,20 @@ export class GarnetScorpioDatabase extends Construct{
             engine: DatabaseClusterEngine.auroraPostgres({
                 version: AuroraPostgresEngineVersion.VER_15_4
             }),
-            clusterIdentifier: `garnet-aurora-cluster`, 
+            clusterIdentifier: garnet_nomenclature.garnet_db_cluster_id, 
             credentials: Credentials.fromSecret(secret), 
             vpc: props.vpc, 
             securityGroups: [sg_database],
-            defaultDatabaseName: Parameters.garnet_scorpio.dbname,
+            defaultDatabaseName: garnet_constant.dbname,
             vpcSubnets:{
                 subnetType: SubnetType.PRIVATE_ISOLATED
             },
             writer: ClusterInstance.serverlessV2('writer', {
                 caCertificate: CaCertificate.RDS_CA_RDS2048_G1
             }), 
-            serverlessV2MinCapacity: Parameters.garnet_scorpio.aurora_min_capacity,
-            serverlessV2MaxCapacity: Parameters.garnet_scorpio.aurora_max_capacity,
-            storageType: Parameters.garnet_scorpio.storage_type
+            serverlessV2MinCapacity: deployment_params.aurora_min_capacity!,
+            serverlessV2MaxCapacity: deployment_params.aurora_max_capacity!,
+            storageType: deployment_params.aurora_storage_type!
         })
 
         // ROLE FOR PROXY
@@ -67,7 +68,7 @@ export class GarnetScorpioDatabase extends Construct{
         // SECURITY GROUP FOR PROXY 
         const sg_proxy = new SecurityGroup(this, 'SecurityGroupProxyDatabase', {
             vpc: props.vpc,
-            securityGroupName: `garnet-${Parameters.garnet_broker.toLowerCase()}-rds-proxy-sg`,
+            securityGroupName: garnet_nomenclature.garnet_broker_sg_rds,
             allowAllOutbound: true
         })
 
@@ -76,7 +77,7 @@ export class GarnetScorpioDatabase extends Construct{
 
         // RDS Proxy
         const rds_proxy = new DatabaseProxy(this, 'RdsProxy', {
-            dbProxyName: `garnet-proxy-rds`,
+            dbProxyName: garnet_nomenclature.garnet_proxy_rds,
             proxyTarget: ProxyTarget.fromCluster(cluster),
             secrets: [secret],
             vpc: props.vpc, 

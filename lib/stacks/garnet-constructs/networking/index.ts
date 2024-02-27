@@ -1,6 +1,7 @@
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
 import { Construct } from "constructs"
-import { Parameters } from "../../../../parameters"
+import { garnet_broker } from "../../../../constants"
+
 
 export interface GarnetNetworkingProps {
   az1: string,
@@ -12,7 +13,7 @@ export class GarnetNetworking extends Construct {
   constructor(scope: Construct, id: string, props: GarnetNetworkingProps) {
     super(scope, id)
 
-    let broker_id = Parameters.garnet_broker
+    let broker_id = garnet_broker
 
     // VPC
     const vpc = new Vpc(this, `VpcGarnet${broker_id}`, {

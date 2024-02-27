@@ -9,7 +9,8 @@ import { Topic } from "aws-cdk-lib/aws-sns";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs";
 import { Parameters } from "../../../../parameters"
-import { garnet_constant } from "../../garnet-constructs/constants";
+import { garnet_constant, garnet_nomenclature } from "../../../../constants";
+import { deployment_params } from "../../../../sizing";
 
 export interface GarnetIotprops {
   dns_context_broker: string
@@ -46,33 +47,35 @@ export class GarnetIot extends Construct {
 
     // SQS ENTRY POINT
     const sqs_garnet_endpoint = new Queue(this, "SqsGarnetIot", {
-      queueName: `garnet-iot-queue-${Aws.REGION}`,
+      queueName: garnet_nomenclature.garnet_iot_queue,
       visibilityTimeout: Duration.seconds(55)
     })
     this.sqs_garnet_iot_url = sqs_garnet_endpoint.queueUrl
     this.sqs_garnet_iot_arn = sqs_garnet_endpoint.queueArn
 
     // LAMBDA TO UPDATE DEVICE SHADOW
+    const lambda_update_shadow_log = new LogGroup(this, 'LambdaUpdateShadowLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `${garnet_nomenclature.garnet_iot_update_shadow_lambda}-cw-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+    })
     const lambda_update_shadow_path = `${__dirname}/lambda/updateShadow`;
     const lambda_update_shadow = new Function(this, "LambdaUpdateShadow", {
-      functionName: `garnet-iot-update-shadow-lambda`,
+      functionName: garnet_nomenclature.garnet_iot_update_shadow_lambda,
       description: 'Garnet IoT - Function that updates shadows',
       runtime: Runtime.NODEJS_20_X,
       code: Code.fromAsset(lambda_update_shadow_path),
       handler: "index.handler",
       layers: [layer_lambda],
       timeout: Duration.seconds(50),
-      logGroup: new LogGroup(this, 'LambdaUpdateShadowLogs', {
-        retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-iot-update-shadow-lambda-logs`
-      }),
+      logGroup: lambda_update_shadow_log,
       architecture: Architecture.ARM_64,
       environment: {
         AWSIOTREGION: Aws.REGION,
         SHADOW_PREFIX: garnet_constant.shadow_prefix
       },
     })
-
+    lambda_update_shadow.node.addDependency(lambda_update_shadow_log)
     // ADD PERMISSION FOR LAMBDA THAT UPDATES SHADOW TO ACCESS SQS ENTRY POINT
     lambda_update_shadow.addToRolePolicy(
       new PolicyStatement({
@@ -102,7 +105,7 @@ export class GarnetIot extends Construct {
 
     // SQS TO LAMBDA CONTEXT BROKER
     const sqs_to_context_broker = new Queue(this, "SqsToLambdaContextBroker", {
-      queueName: `garnet-iot-contextbroker-queue-${Aws.REGION}`,
+      queueName: garnet_nomenclature.garnet_iot_contextbroker_queue,
       visibilityTimeout: Duration.seconds(55)
     });
 
@@ -124,7 +127,7 @@ export class GarnetIot extends Construct {
 
     // IOT RULE THAT LISTENS TO CHANGES IN GARNET SHADOWS AND PUSH TO SQS
     const iot_rule = new CfnTopicRule(this, "IoTRuleShadows", {
-      ruleName: `garnet_iot_rule`,
+      ruleName: garnet_nomenclature.garnet_iot_rule,
       topicRulePayload: {
         awsIotSqlVersion: "2016-03-23",
         ruleDisabled: false,
@@ -145,9 +148,14 @@ export class GarnetIot extends Construct {
 
 
     // LAMBDA THAT GETS MESSAGES FROM THE QUEUE AND UPDATES CONTEXT BROKER
+    const lambda_to_context_broker_log = new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `${garnet_nomenclature.garnet_iot_update_broker_lambda}-cw-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+    })
     const lambda_to_context_broker_path = `${__dirname}/lambda/updateContextBroker`;
     const lambda_to_context_broker = new Function(this,"LambdaUpdateContextBroker", {
-        functionName: `garnet-iot-update-broker-lambda`,
+        functionName: garnet_nomenclature.garnet_iot_update_broker_lambda,
         description: 'Garnet IoT - Function that updates the context broker',
         vpc: props.vpc,
         vpcSubnets: {
@@ -157,10 +165,7 @@ export class GarnetIot extends Construct {
         code: Code.fromAsset(lambda_to_context_broker_path),
         handler: "index.handler",
         timeout: Duration.seconds(50),
-        logGroup: new LogGroup(this, 'LambdaUpdateContextBrokerLogs', {
-          retention: RetentionDays.ONE_MONTH,
-          logGroupName: `garnet-iot-update-broker-lambda-logs`
-        }),
+        logGroup: lambda_to_context_broker_log,
         layers: [layer_lambda],
         architecture: Architecture.ARM_64,
         environment: {
@@ -168,10 +173,10 @@ export class GarnetIot extends Construct {
           URL_SMART_DATA_MODEL: Parameters.smart_data_model_url,
           AWSIOTREGION: Aws.REGION,
           SHADOW_PREFIX: garnet_constant.shadow_prefix
-        },
+        }
       }
     )
-
+    lambda_to_context_broker.node.addDependency(lambda_to_context_broker_log)
     lambda_to_context_broker.addToRolePolicy(
       new PolicyStatement({
         actions: [
@@ -211,9 +216,10 @@ export class GarnetIot extends Construct {
 
     lambda_to_context_broker.addEventSource(
       new SqsEventSource(sqs_to_context_broker, { 
-        batchSize: Parameters.garnet_iot.lambda_broker_batch_size, 
-        maxBatchingWindow: Duration.seconds(Parameters.garnet_iot.lambda_broker_batch_window), 
-        maxConcurrency: Parameters.garnet_iot.lambda_broker_concurent_sqs })
-    );
+        batchSize: deployment_params.lambda_broker_batch_size, 
+        maxBatchingWindow: Duration.seconds(deployment_params.lambda_broker_batch_window), 
+        maxConcurrency: deployment_params.lambda_broker_concurent_sqs
+      })
+    )
   }
 }

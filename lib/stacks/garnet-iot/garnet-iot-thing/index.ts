@@ -1,9 +1,9 @@
-import { Aws, Duration, Names } from "aws-cdk-lib";
+import { Aws, Duration, Names, RemovalPolicy } from "aws-cdk-lib";
 import { Runtime, Function, Code, Architecture, LayerVersion, CfnPermission } from "aws-cdk-lib/aws-lambda";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs"
-import { garnet_constant } from "../../garnet-constructs/constants";
+import { garnet_constant, garnet_nomenclature } from "../../../../constants";
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
@@ -32,32 +32,34 @@ export class GarnetIotThing extends Construct {
 
         // SQS ENTRY POINT CONNECTIVITY STATUS 
         const sqs_garnet_iot_presence = new Queue(this, "SqsGarnetPresenceThing", {
-          queueName: `garnet-iot-presence-queue-${Aws.REGION}`,
+          queueName: garnet_nomenclature.garnet_iot_presence_queue, 
           visibilityTimeout: Duration.seconds(55)
         })
 
     
         // LAMBDA TO UPDATE DEVICE SHADOW WITH CONNECTIVITY STATUS
+        const lambda_update_shadow_presence_log = new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          logGroupName: `${garnet_nomenclature.garnet_iot_presence_shadow_lambda}-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+        })
         const lambda_update_shadow_presence_path = `${__dirname}/lambda/presence`;
         const lambda_update_shadow_presence = new Function(this, "LambdaUpdatePresenceThing", {
-          functionName: `garnet-iot-presence-shadow-lambda`,
+          functionName: garnet_nomenclature.garnet_iot_presence_shadow_lambda,
           description: 'Garnet IoT Things Presence- Function that updates presence for Iot MQTT connected things',
           runtime: Runtime.NODEJS_20_X,
           layers: [layer_lambda],
           code: Code.fromAsset(lambda_update_shadow_presence_path),
           handler: "index.handler",
           timeout: Duration.seconds(50),
-          logGroup: new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
-            retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-presence-shadow-lambda-logs`
-          }),
+          logGroup: lambda_update_shadow_presence_log,
           architecture: Architecture.ARM_64,
           environment: {
             AWSIOTREGION: Aws.REGION,
             SHADOW_PREFIX: garnet_constant.shadow_prefix
           }
         })
-    
+        lambda_update_shadow_presence.node.addDependency(lambda_update_shadow_presence_log)
         // ADD PERMISSION FOR LAMBDA THAT UPDATES SHADOW TO ACCESS SQS ENTRY POINT
         lambda_update_shadow_presence.addToRolePolicy(
           new PolicyStatement({
@@ -104,7 +106,7 @@ export class GarnetIotThing extends Construct {
 
       // IOT RULE THAT LISTENS TO CHANGES IN IoT PRESENCE AND PUSH TO SQS
       const iot_rule = new CfnTopicRule(this, "IoTRulePresence", {
-        ruleName: `garnet_iot_presence_rule`,
+        ruleName: garnet_nomenclature.garnet_iot_presence_rule,
         topicRulePayload: {
           awsIotSqlVersion: "2016-03-23",
           ruleDisabled: false,
@@ -134,29 +136,39 @@ export class GarnetIotThing extends Construct {
         }
        }
 
-       const iot_event = new AwsCustomResource(this, 'CustomIotThingsEventGroupMembership', {
-        functionName: `garnet-iot-custom-things-event`,
+      //  const garnet_iot_custom_thing_event_log = new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
+      //   retention: RetentionDays.ONE_MONTH,
+      //   logGroupName: `garnet-iot-custom-things-event-cw-logs`,
+      //   removalPolicy: RemovalPolicy.DESTROY
+      //   })
+
+      const iot_event = new AwsCustomResource(this, 'CustomIotThingsEventGroupMembership', {
+      functionName: `garnet-iot-custom-things-event`,
         onCreate: {
-            service: 'Iot',
-            action: 'UpdateEventConfigurations',
-            physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
-            parameters: event_param
-          },
-          onUpdate: {
-            service: 'Iot',
-            action: 'UpdateEventConfigurations',
-            physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
-            parameters: event_param
-          },
-          logGroup: new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
-            retention: RetentionDays.ONE_MONTH,
-            logGroupName: `garnet-iot-custom-things-event-logs`
-        }),
-          policy: AwsCustomResourcePolicy.fromSdkCalls({resources: AwsCustomResourcePolicy.ANY_RESOURCE})
-    })
+          service: 'Iot',
+          action: 'UpdateEventConfigurations',
+          physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
+          parameters: event_param
+        },
+        onUpdate: {
+          service: 'Iot',
+          action: 'UpdateEventConfigurations',
+          physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
+          parameters: event_param
+        },
+       // logGroup: garnet_iot_custom_thing_event_log,
+        policy: AwsCustomResourcePolicy.fromSdkCalls({resources: AwsCustomResourcePolicy.ANY_RESOURCE})
+      })
+
+      //iot_event.node.addDependency(garnet_iot_custom_thing_event_log)
 
 
     // LAMBDA TO UPDATE DEVICE SHADOW WITH GROUP MEMBERSHIP
+    const lambda_update_group_membership_log = new LogGroup(this, 'LambdaUpdateGroupThingLogs', {
+      retention: RetentionDays.ONE_MONTH,
+      logGroupName: `garnet-iot-group-thing-lambda-cw-logs`,
+      removalPolicy: RemovalPolicy.DESTROY
+    })
     const lambda_update_group_membership_path = `${__dirname}/lambda/group`;
     const lambda_update_group_membership = new Function(this, "LambdaUpdateGroupThing", {
       functionName: `garnet-iot-group-thing-lambda`,
@@ -166,17 +178,14 @@ export class GarnetIotThing extends Construct {
       code: Code.fromAsset(lambda_update_group_membership_path),
       handler: "index.handler",
       timeout: Duration.seconds(50),
-      logGroup: new LogGroup(this, 'LambdaUpdateGroupThingLogs', {
-        retention: RetentionDays.ONE_MONTH,
-        logGroupName: `garnet-iot-group-thing-lambda-logs`
-      }),
+      logGroup: lambda_update_group_membership_log,
       architecture: Architecture.ARM_64,
       environment: {
         AWSIOTREGION: Aws.REGION,
         SHADOW_PREFIX: garnet_constant.shadow_prefix
       }
     })
-
+    lambda_update_group_membership.node.addDependency(lambda_update_group_membership_log)
     // ADD PERMISSION TO ACCESS AWS IoT DEVICE SHADOW
     lambda_update_group_membership.addToRolePolicy(
       new PolicyStatement({

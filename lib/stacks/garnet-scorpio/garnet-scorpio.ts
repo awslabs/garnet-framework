@@ -8,6 +8,7 @@ import { GarnetScorpioFargate } from "./fargate";
 import { GarnetNetworking } from "../garnet-constructs/networking";
 import { GarnetSecret } from "../garnet-constructs/secret";
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
+import { garnet_scorpio_images } from "../../../constants";
 
 
 export interface GarnetScorpioProps extends NestedStackProps{
@@ -35,9 +36,9 @@ export class GarnetScorpio extends NestedStack {
         secret_arn: props.secret.secretArn,
         db_endpoint: database_construct.database_endpoint,
         db_port: database_construct.database_port,
-        image_context_broker: Parameters.garnet_scorpio.image_context_broker,
+        image_context_broker: garnet_scorpio_images.allInOne,
       }
-    );
+    )
 
     fargate_construct.node.addDependency(database_construct)
 
@@ -51,13 +52,12 @@ export class GarnetScorpio extends NestedStack {
     });
 
     this.broker_api_endpoint = `https://${api_stack.api_ref}.execute-api.${Aws.REGION}.amazonaws.com`;
-    this.dns_context_broker =
-      fargate_construct.fargate_alb.loadBalancer.loadBalancerDnsName;
+    this.dns_context_broker = fargate_construct.fargate_alb.loadBalancerDnsName;
     this.vpc = props.vpc;
     this.api_ref = api_stack.api_ref;
 
     new CfnOutput(this, "fargate_alb", {
-      value: fargate_construct.fargate_alb.loadBalancer.loadBalancerDnsName,
-    });
+      value: fargate_construct.fargate_alb.loadBalancerDnsName,
+    })
   }
 }

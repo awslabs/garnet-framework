@@ -1,13 +1,14 @@
-import { Aws, CfnOutput, Duration, Names } from "aws-cdk-lib"
+import { Aws, CfnOutput, Duration, Names, RemovalPolicy } from "aws-cdk-lib"
 import { EndpointType, LambdaRestApi } from "aws-cdk-lib/aws-apigateway"
 import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
 import { AnyPrincipal, Effect, Policy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { Architecture, Code, Function, LayerVersion, Runtime } from "aws-cdk-lib/aws-lambda"
 import { Construct } from "constructs"
-import { garnet_constant } from "../../garnet-constructs/constants"
+import { garnet_constant, garnet_nomenclature } from "../../../../constants"
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { Bucket } from "aws-cdk-lib/aws-s3"
+import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 
 export interface GarnetPrivateSubProps {
     vpc: Vpc, 
@@ -48,9 +49,15 @@ export interface GarnetPrivateSubProps {
         })
 
         // LAMBDA 
+        const lambda_garnet_private_sub_log = new LogGroup(this, 'LambdaGarnetSubFunctionLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          logGroupName: `garnet-private-sub-lambda-cw-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+      })
         const lambda_garnet_private_sub_path = `${__dirname}/lambda/garnetSub`
-        const lambda_garnet_private_sub = new Function(this, 'GarnetSubFunction', {
-        functionName: `garnet-private-sub-lambda`, 
+        const lambda_garnet_private_sub = new Function(this, 'LambdaGarnetSubFunction', {
+        functionName: garnet_nomenclature.garnet_private_sub_lambda, 
+        logGroup: lambda_garnet_private_sub_log,
         description: 'Garnet Private Sub - Function for the private subscription',
             runtime: Runtime.NODEJS_20_X,
             layers: [layer_lambda],
@@ -62,7 +69,7 @@ export interface GarnetPrivateSubProps {
             AWSIOTREGION: Aws.REGION
             }
         })
-
+        lambda_garnet_private_sub.node.addDependency(lambda_garnet_private_sub_log)
         lambda_garnet_private_sub.addToRolePolicy(new PolicyStatement({
             actions: ["iot:Publish"],
             resources: [
@@ -126,7 +133,7 @@ export interface GarnetPrivateSubProps {
       
     // KINESIS FIREHOSE DELIVERY STREAM
     const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
-        deliveryStreamName: `garnet-sub-firehose-stream`,
+        deliveryStreamName: garnet_nomenclature.garnet_sub_firehose_stream,
         deliveryStreamType: "DirectPut",
         extendedS3DestinationConfiguration: {
           bucketArn: bucket.bucketArn,
@@ -163,7 +170,7 @@ export interface GarnetPrivateSubProps {
     )
 
         // IOT RULE THAT LISTENS TO SUBSCRIPTIONS AND PUSH TO FIREHOSE
-        const iot_rule_sub_name = `garnet_subscriptions_rule`
+        const iot_rule_sub_name = garnet_nomenclature.garnet_subscriptions_rule
   
         const iot_rule_sub_role = new Role(this, "RoleGarnetIotRuleIngestion", {
           assumedBy: new ServicePrincipal("iot.amazonaws.com"),
