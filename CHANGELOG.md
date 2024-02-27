@@ -1,7 +1,19 @@
 # Change Log
 
-
 All notable changes to the Garnet Framework will be documented in this file. 
+
+## [1.2.0] - 2024-02-23 
+
+This new version fixes some bugs, introduces new features and potential breaking changes. 
+
+### [1.2.0] - Added 
+
+- Distributed architecture. You can now deploy Garnet using the microservice version of Scorpio Broker. 
+- T-shirt Sizing for deployment. You can now choose the size of the deployment between Small and Xlarge depending on your workload. 
+
+### [1.2.0] - Changed
+
+- Renames resources (logs, functions)
 
 ## [1.1.0] - 2024-02-06
 
