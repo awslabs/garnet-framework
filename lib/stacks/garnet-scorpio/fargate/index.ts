@@ -103,11 +103,23 @@ export class GarnetScorpioFargate extends Construct {
         fargate_task_role.addToPolicy(
             new PolicyStatement({
                 resources: [
+                    `arn:aws:sns:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-scorpiobroker-*`
+                ],
+                actions: [
+                    "sns:*"
+                ]
+            })
+        )
+        fargate_task_role.addToPolicy(
+            new PolicyStatement({
+                resources: [
                     `*`
                 ],
                 actions: [
                     "sqs:ListQueues",
-                    "sqs:CreateQueue"
+                    "sqs:CreateQueue",
+                    "sns:ListTopics",
+                    "sns:CreateTopic"
                 ]
             })
         )
