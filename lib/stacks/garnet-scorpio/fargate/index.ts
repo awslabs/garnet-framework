@@ -680,7 +680,10 @@ export class GarnetScorpioFargate extends Construct {
         at_context_server_task_def.addContainer("atContextServer", {
             essential: true,
             image: ContainerImage.fromRegistry(garnet_scorpio_images.at_context_server),
-            environment: scorpio_task_env,
+            environment: {
+                ...scorpio_task_env,
+                ATCONTEXT_CACHE_DURATION: "5m"
+            },
             secrets: {
                 DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
                 DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
