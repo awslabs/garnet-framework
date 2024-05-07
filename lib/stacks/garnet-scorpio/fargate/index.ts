@@ -134,6 +134,7 @@ export class GarnetScorpioFargate extends Construct {
             SCORPIO_STARTUPDELAY: "5s",
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             SCORPIO_MESSAGING_MAX_SIZE: "100",
+            ATCONTEXT_CACHE_DURATION: "5m",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
             MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=250&greedy=true",
