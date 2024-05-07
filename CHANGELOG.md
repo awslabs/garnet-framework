@@ -2,6 +2,21 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+
+## [1.3.0] - 2024-05-07 
+
+This new version fixes a [bug](https://github.com/ScorpioBroker/ScorpioBroker/issues/556) we had due to the use of SQS in Scorpio Broker for fanning out messages. This led to missing messages in the datalake, the temporal storage and the subscriptions. 
+
+### [1.3.0] - Added 
+
+- SNS for fanning out messages to dedicated SQS queues per service.
+- VPC endpoints for SNS and SQS 
+
+### [1.3.0] - Changed 
+
+- Updated Aurora serverless v2 engine version to Postgresql v16.1
+
+
 ## [1.2.0] - 2024-02-23 
 
 This new version fixes some bugs, introduces new features and potential breaking changes. 
