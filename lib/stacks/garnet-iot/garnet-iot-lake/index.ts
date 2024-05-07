@@ -104,6 +104,15 @@ export class GarnetLake extends Construct {
                         parameterName: 'LambdaArn',
                         parameterValue: lambda_transform.functionArn
                     }]
+                },
+                {
+                  type: 'AppendDelimiterToRecord',
+                  parameters: [
+                    {
+                      parameterName: 'Delimiter',
+                      parameterValue: '\\n',
+                    },
+                  ],
                 }
               // ,{
               //   type: "MetadataExtraction",

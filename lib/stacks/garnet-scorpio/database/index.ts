@@ -40,7 +40,7 @@ export class GarnetScorpioDatabase extends Construct{
         // Aurora Cluster
         const cluster = new DatabaseCluster(this, 'DatabaseAurora', {
             engine: DatabaseClusterEngine.auroraPostgres({
-                version: AuroraPostgresEngineVersion.VER_15_4
+                version: AuroraPostgresEngineVersion.VER_16_1
             }),
             clusterIdentifier: garnet_nomenclature.garnet_db_cluster_id, 
             credentials: Credentials.fromSecret(secret), 

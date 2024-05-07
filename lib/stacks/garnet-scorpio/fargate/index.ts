@@ -1,5 +1,5 @@
 import { Aws, Duration,  RemovalPolicy, SecretValue } from "aws-cdk-lib"
-import { Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
+import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
 import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
 
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
@@ -103,11 +103,23 @@ export class GarnetScorpioFargate extends Construct {
         fargate_task_role.addToPolicy(
             new PolicyStatement({
                 resources: [
+                    `arn:aws:sns:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-scorpiobroker-*`
+                ],
+                actions: [
+                    "sns:*"
+                ]
+            })
+        )
+        fargate_task_role.addToPolicy(
+            new PolicyStatement({
+                resources: [
                     `*`
                 ],
                 actions: [
                     "sqs:ListQueues",
-                    "sqs:CreateQueue"
+                    "sqs:CreateQueue",
+                    "sns:CreateTopic",
+                    "sns:ListTopics"
                 ]
             })
         )
@@ -121,13 +133,55 @@ export class GarnetScorpioFargate extends Construct {
             SCORPIO_ENTITY_MANAGER_SERVER: `http://${garnet_nomenclature.garnet_broker_entitymanager}:1025`,
             SCORPIO_STARTUPDELAY: "5s",
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
+            SCORPIO_MESSAGING_MAX_SIZE: "100",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
-            MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?greedy=true&delay=200",
-            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "15",
+            MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=250&greedy=true",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "30",
             ...scorpiobroker_sqs_object 
         }
 
+        // SECURITY GROUP FOR SQS VPC ENDPOINT 
+        const sg_garnet_vpc_endpoint = new SecurityGroup(this, 'SqsVpcEndpointSecurityGroup', {
+            securityGroupName: `garnet-sqs-endpoint-sg`,
+            vpc: props.vpc,
+            allowAllOutbound: true
+        })
+        sg_garnet_vpc_endpoint.addIngressRule(Peer.anyIpv4(), Port.tcp(443))
+
+
+
+        // VPC ENDPOINT FOR SQS
+        const vpc_endpoint = new InterfaceVpcEndpoint(this, 'VpcEndpointSqs', {
+            vpc: props.vpc,
+            service: {
+            name: `com.amazonaws.${Aws.REGION}.sqs`,
+            port: 443
+            },
+            privateDnsEnabled: false,
+            securityGroups: [sg_garnet_vpc_endpoint]
+        })
+
+        // SECURITY GROUP FOR SNS VPC ENDPOINT 
+        const sg_garnet_sns_vpc_endpoint = new SecurityGroup(this, 'SnsVpcEndpointSecurityGroup', {
+            securityGroupName: `garnet-sns-endpoint-sg`,
+            vpc: props.vpc,
+            allowAllOutbound: true
+        })
+        sg_garnet_sns_vpc_endpoint.addIngressRule(Peer.anyIpv4(), Port.tcp(443))
+
+
+
+        // VPC ENDPOINT FOR SNS
+        const vpc_sns_endpoint = new InterfaceVpcEndpoint(this, 'VpcEndpointSns', {
+            vpc: props.vpc,
+            service: {
+            name: `com.amazonaws.${Aws.REGION}.sns`,
+            port: 443
+            },
+            privateDnsEnabled: false,
+            securityGroups: [sg_garnet_sns_vpc_endpoint]
+        })
         
   if (deployment_params.architecture == 'distributed') {
 
