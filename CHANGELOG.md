@@ -14,7 +14,7 @@ This new version fixes a [bug](https://github.com/ScorpioBroker/ScorpioBroker/is
 
 ### [1.3.0] - Changed 
 
-- Updated Aurora serverless v2 engine version to Postgresql v16.1
+- Updated Aurora serverless v2 engine version to Postgresql v15.5
 
 
 ## [1.2.0] - 2024-02-23 
