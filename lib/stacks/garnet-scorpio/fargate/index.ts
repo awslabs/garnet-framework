@@ -131,14 +131,14 @@ export class GarnetScorpioFargate extends Construct {
             DBNAME: garnet_constant.dbname,
             SCORPIO_AT_CONTEXT_SERVER: `http://${garnet_nomenclature.garnet_broker_atcontextserver}:2023`,
             SCORPIO_ENTITY_MANAGER_SERVER: `http://${garnet_nomenclature.garnet_broker_entitymanager}:1025`,
-            SCORPIO_STARTUPDELAY: "15s",
+            SCORPIO_STARTUPDELAY: "5s",
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             SCORPIO_MESSAGING_MAX_SIZE: "100",
-            ATCONTEXT_CACHE_DURATION: "5m",
+            ATCONTEXT_CACHE_DURATION: "10m",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
             MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=250&greedy=true",
-            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "30",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "20",
             ...scorpiobroker_sqs_object 
         }
 
