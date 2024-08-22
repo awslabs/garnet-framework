@@ -1002,14 +1002,14 @@ export class GarnetScorpioFargate extends Construct {
       
         sg_fargate.addIngressRule(sg_alb, Port.tcp(2025))
 
-        entity_manager_service.node.addDependency(at_context_server_service)
-        query_manager_service.node.addDependency(entity_manager_service)
-        registry_manager_service.node.addDependency(entity_manager_service)
-        subscription_manager_service.node.addDependency(entity_manager_service)
-        history_query_manager_service.node.addDependency(entity_manager_service)
-        history_entity_manager_service.node.addDependency(entity_manager_service)
-        registry_subscription_manager_service.node.addDependency(entity_manager_service)
-        at_context_server_service.node.addDependency(fargate_cluster)
+        // entity_manager_service.node.addDependency(at_context_server_service)
+        // query_manager_service.node.addDependency(entity_manager_service)
+        // registry_manager_service.node.addDependency(entity_manager_service)
+        // subscription_manager_service.node.addDependency(entity_manager_service)
+        // history_query_manager_service.node.addDependency(entity_manager_service)
+        // history_entity_manager_service.node.addDependency(entity_manager_service)
+        // registry_subscription_manager_service.node.addDependency(entity_manager_service)
+        // at_context_server_service.node.addDependency(fargate_cluster)
 
     } else {
 
