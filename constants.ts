@@ -5,7 +5,7 @@
 import { Aws } from "aws-cdk-lib"
 const {version} = require('./package.json')
 
-const garnet_scorpio_version = "4.1.152"
+const garnet_scorpio_version = "5.0.20"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
 export const garnet_broker = "Scorpio" 
