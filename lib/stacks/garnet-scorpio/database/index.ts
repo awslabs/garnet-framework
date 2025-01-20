@@ -36,12 +36,16 @@ export class GarnetScorpioDatabase extends Construct{
             securityGroupName: garnet_nomenclature.garnet_broker_sg_database
         })
 
+        const engine = DatabaseClusterEngine.auroraPostgres({ version: AuroraPostgresEngineVersion.VER_16_6 })
+
+        // Parameter Group
+
+        const parameterGroup = new ParameterGroup(this, 'ParameterGroup', { engine })
 
         // Aurora Cluster
         const cluster = new DatabaseCluster(this, 'DatabaseAurora', {
-            engine: DatabaseClusterEngine.auroraPostgres({
-                version: AuroraPostgresEngineVersion.VER_15_5
-            }),
+            engine,
+            parameterGroup,
             clusterIdentifier: garnet_nomenclature.garnet_db_cluster_id, 
             credentials: Credentials.fromSecret(secret), 
             vpc: props.vpc, 
@@ -51,8 +55,12 @@ export class GarnetScorpioDatabase extends Construct{
                 subnetType: SubnetType.PRIVATE_ISOLATED
             },
             writer: ClusterInstance.serverlessV2('writer', {
-                caCertificate: CaCertificate.RDS_CA_RDS2048_G1
+                caCertificate: CaCertificate.RDS_CA_RSA4096_G1
             }), 
+            readers: [ClusterInstance.serverlessV2('reader', {
+                scaleWithWriter: true,
+                caCertificate: CaCertificate.RDS_CA_RSA4096_G1
+            })], 
             serverlessV2MinCapacity: deployment_params.aurora_min_capacity!,
             serverlessV2MaxCapacity: deployment_params.aurora_max_capacity!,
             storageType: deployment_params.aurora_storage_type!

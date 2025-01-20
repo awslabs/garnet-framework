@@ -5,7 +5,7 @@
 import { Aws } from "aws-cdk-lib"
 const {version} = require('./package.json')
 
-const garnet_scorpio_version = "5.0.20"
+const garnet_scorpio_version = "5.0.60"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
 export const garnet_broker = "Scorpio" 
@@ -43,7 +43,6 @@ export const garnet_scorpio_images = {
 
 export const scorpiobroker_sqs_object = {
     "SCORPIO_TOPICS_ENTITY": `garnet-scorpiobroker-entity`, 
-    "SCORPIO_TOPICS_ENTITYBATCH": `garnet-scorpiobroker-entitybatch`,
     "SCORPIO_TOPICS_REGISTRY": `garnet-scorpiobroker-registry`,
     "SCORPIO_TOPICS_TEMPORAL": `garnet-scorpiobroker-temporal`,
     "SCORPIO_TOPICS_INTERNALNOTIFICATION": `garnet-scorpiobroker-internalnotification`,
@@ -51,27 +50,39 @@ export const scorpiobroker_sqs_object = {
 }
 
 export const garnet_nomenclature = {
-    //GARNET IOT LAMBDA
+    // DEPRECATED 
+    garnet_iot_rule: `garnet_iot_rule`, 
     garnet_iot_update_shadow_lambda: `garnet-iot-update-shadow-lambda`, 
     garnet_iot_update_broker_lambda: `garnet-iot-update-broker-lambda`,
+
+
+    // GARNET MODEL 
+
+    aws_iot_thing: "AwsIotThing",
+    aws_iot_lorawan_thing: "AwsIotLorawanThing",
+    aws_iot_lorawan_gateway: "AwsIotLorawanGateway", 
+    
+    //GARNET INGESTION LAMBDA
+    garnet_ingestion_update_broker_lambda: `garnet-ingestion-update-broker-lambda`,
     garnet_lake_transform_lambda: `garnet-lake-transform-lambda`, 
     garnet_iot_presence_shadow_lambda: `garnet-iot-presence-shadow-lambda`,
     garnet_iot_authorizer_lambda: `garnet-iot-authorizer-lambda`,
     garnet_private_sub_lambda: `garnet-private-sub-lambda`, 
-    garnet_iot_rule: `garnet_iot_rule`, 
     garnet_lake_rule:`garnet_lake_rule`,
     garnet_subscriptions_rule: `garnet_subscriptions_rule`,
     garnet_iot_presence_rule: `garnet_iot_presence_rule`,
-
+    
 
     // GARNET IOT SQS
-    garnet_iot_queue: `garnet-iot-queue-${Aws.REGION}`,
+    garnet_iot_queue: `garnet-iot-queue-${Aws.REGION}`, // DEPRECATED 
+    garnet_ingestion_queue: `garnet-ingestion-queue-${Aws.REGION}`, // DEPRECATED 
     garnet_iot_contextbroker_queue: `garnet-iot-contextbroker-queue-${Aws.REGION}`,
     garnet_iot_presence_queue: `garnet-iot-presence-queue-${Aws.REGION}`,
 
     // GARNET FIREHOSE 
     garnet_lake_iot_firehose_stream: `garnet-lake-firehose-stream`,
     garnet_sub_firehose_stream: `garnet-sub-firehose-stream`, 
+
     // GARNET BROKER CLUSTER
     garnet_broker_cluster: `garnet-broker-cluster`,
     
@@ -102,6 +113,8 @@ export const garnet_nomenclature = {
   garnet_proxy_rds: `garnet-proxy-rds`,
   garnet_db_cluster_id: `garnet-aurora-cluster`
 }
+
+
 
 export const azlist: any = {
     "us-east-2": ["use2-az1", "use2-az2", "use2-az3"], 
