@@ -1,7 +1,7 @@
 import { Aws, CfnOutput, NestedStack, NestedStackProps } from "aws-cdk-lib";
 import { Vpc } from "aws-cdk-lib/aws-ec2";
 import { Construct } from "constructs";
-import { GarnetApiGateway } from "../garnet-common/apigateway";
+import { GarnetApiGateway } from "../garnet-api/apigateway";
 import { GarnetScorpioDatabase } from "./database";
 import { GarnetScorpioFargate } from "./fargate";
 

@@ -1,8 +1,8 @@
 import { Aws, CfnOutput, NestedStack, NestedStackProps} from "aws-cdk-lib"
 import { Construct } from "constructs"
-import { GarnetApiCommon } from "./api-common"
+import { GarnetApiCommon } from "./apibroker"
 import { Vpc } from "aws-cdk-lib/aws-ec2"
-import { GarnetApiGateway } from "../garnet-common/apigateway"
+import { GarnetApiGateway } from "./apigateway"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 
 
