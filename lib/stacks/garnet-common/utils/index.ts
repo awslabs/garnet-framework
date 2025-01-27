@@ -1,5 +1,5 @@
 import { Construct } from "constructs";
-import { azlist, scorpiobroker_sqs_object } from "../../../../constants"
+import { azlist, garnet_constant, garnet_nomenclature, scorpiobroker_sqs_object } from "../../../../constants"
 import { Aws, CustomResource, Duration, RemovalPolicy, Stack } from "aws-cdk-lib";
 import { Code, Runtime, Function, Architecture } from "aws-cdk-lib/aws-lambda";
 import { PolicyStatement } from "aws-cdk-lib/aws-iam";
@@ -35,7 +35,7 @@ export class Utils extends Construct {
         })
         const get_az_func_path = `${__dirname}/lambda/getAzs`
         const get_az_func = new Function(this, 'AzFunction', {
-            functionName: `garnet-utils-az-lambda`,
+            functionName: garnet_nomenclature.garnet_utils_az_lambda,
               description: 'Garnet Utils - Function that checks if which AZs the stack can be deployed for HTTP VPC Link and IoT VPC Endpoint service availability', 
               runtime: Runtime.NODEJS_20_X,
               logGroup: get_az_lambda_log,
@@ -65,7 +65,7 @@ export class Utils extends Construct {
       
           const get_az_provider = new Provider(this, 'getAzCleanUpprovider', {
           onEventHandler: get_az_func,
-          providerFunctionName: `garnet-provider-utils-az-lambda`,
+          providerFunctionName: `${garnet_nomenclature.garnet_utils_az_lambda}-provider`,
           logGroup: get_az_log
         }) 
         get_az_provider.node.addDependency(get_az_log)
@@ -86,8 +86,8 @@ export class Utils extends Construct {
           removalPolicy: RemovalPolicy.DESTROY
         })
         const scorpio_sqs_lambda_path = `${__dirname}/lambda/scorpioSqs`
-        const scorpio_sqs_lambda = new Function(this, 'ScorpioSqsFunction', {
-          functionName: `garnet-utils-scorpio-sqs-lambda`,
+        const scorpio_sqs_lambda = new Function(this, 'ScorpioCleanSqsFunction', {
+          functionName: garnet_nomenclature.garnet_utils_scorpio_sqs_lambda,
           description: 'Garnet Utils - Function that deletes the SQS Queue created by the Scorpio Context Broker', 
             runtime: Runtime.NODEJS_20_X,
             logGroup: scorpio_sqs_lambda_log, 
@@ -113,7 +113,7 @@ export class Utils extends Construct {
     
         const scorpio_sqs_provider = new Provider(this, 'scorpioSqsProvider', {
         onEventHandler: scorpio_sqs_lambda,
-        providerFunctionName: `garnet-provider-utils-scorpio-sqs-lambda`,
+        providerFunctionName: `${garnet_nomenclature.garnet_utils_scorpio_sqs_lambda}-provider`,
         logGroup: scorpio_sqs_provider_log
       }) 
       scorpio_sqs_provider.node.addDependency(scorpio_sqs_provider_log)
@@ -130,7 +130,7 @@ export class Utils extends Construct {
         })
         const clean_ecs_lambda_path = `${__dirname}/lambda/cleanTasks`
         const clean_ecs_lambda = new Function(this, 'CleanEcsFunction', {
-          functionName: `garnet-utils-clean-ecs-lambda`,
+          functionName: garnet_nomenclature.garnet_utils_clean_ecs_taks_lambda,
             description: 'Garnet Utils - Function that removes unactive ECS task definitions',
             runtime: Runtime.NODEJS_20_X,
             logGroup: clean_ecs_lambda_log,
@@ -167,7 +167,7 @@ export class Utils extends Construct {
 
         const clean_ecs_provider = new Provider(this, 'cleanEcsProvider', {
         onEventHandler: clean_ecs_lambda,
-        providerFunctionName: `garnet-provider-utils-clean-ecs-lambda`,
+        providerFunctionName: `${garnet_nomenclature.garnet_utils_clean_ecs_taks_lambda}-provider`,
         logGroup: clean_ecs_logs
       }) 
       clean_ecs_provider.node.addDependency(clean_ecs_logs)

@@ -57,10 +57,10 @@ export class GarnetScorpioDatabase extends Construct{
             writer: ClusterInstance.serverlessV2('writer', {
                 caCertificate: CaCertificate.RDS_CA_RSA4096_G1
             }), 
-            readers: [ClusterInstance.serverlessV2('reader', {
-                scaleWithWriter: true,
-                caCertificate: CaCertificate.RDS_CA_RSA4096_G1
-            })], 
+            // readers: [ClusterInstance.serverlessV2('reader', {
+            //     scaleWithWriter: true,
+            //     caCertificate: CaCertificate.RDS_CA_RSA4096_G1
+            // })], 
             serverlessV2MinCapacity: deployment_params.aurora_min_capacity!,
             serverlessV2MaxCapacity: deployment_params.aurora_max_capacity!,
             storageType: deployment_params.aurora_storage_type!

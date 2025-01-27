@@ -135,10 +135,11 @@ export class GarnetScorpioFargate extends Construct {
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             SCORPIO_MESSAGING_MAX_SIZE: "100",
             ATCONTEXT_CACHE_DURATION: "10m",
+            QUARKUS_EUREKA_SERVICE_URL_DEFAULT: "http://eureka:8761/eureka",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
-            MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=250&greedy=true",
-            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "20",
+            MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=200&greedy=true",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "30s",
             ...scorpiobroker_sqs_object 
         }
 

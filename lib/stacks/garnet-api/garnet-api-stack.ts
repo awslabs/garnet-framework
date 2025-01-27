@@ -13,13 +13,15 @@ export interface GarnetApiProps extends NestedStackProps {
      readonly garnet_ingestion_sqs_arn: string, 
      readonly garnet_private_endpoint: string
      readonly fargate_alb: ApplicationLoadBalancer
+     
 }
 
 export class GarnetApi extends NestedStack {
 
     public readonly private_sub_endpoint: string
     public readonly api_ref: string
-  
+    public readonly broker_api_endpoint: string
+
     constructor(scope: Construct, id: string, props: GarnetApiProps) {
       super(scope, id, props)
 
@@ -38,7 +40,8 @@ export class GarnetApi extends NestedStack {
 
 
       this.api_ref = api_stack.api_ref
-
+      this.broker_api_endpoint = `https://${api_stack.api_ref}.execute-api.${Aws.REGION}.amazonaws.com`
+      
     new CfnOutput(this, "garnet_endpoint", {
       value: `https://${api_stack.api_ref}.execute-api.${Aws.REGION}.amazonaws.com`,
     })

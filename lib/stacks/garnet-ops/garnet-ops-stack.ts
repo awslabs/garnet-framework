@@ -195,12 +195,19 @@ export class GarnetOps extends NestedStack {
         }
 
 
-        // // GARNET IOT LAMBDA UPDATE SHADOW 
-        let garnet_iot_lambda_update_shadow_widget = set_lambda_widgets('Update Shadow', garnet_nomenclature.garnet_iot_update_shadow_lambda)
+
+        
+
+        // GARNET INGESTION LAMBDA UPDATE BROKER
+        
+        let garnet_ingestion_lambda_update_broker_widget = set_lambda_widgets('Update Shadow', garnet_nomenclature.garnet_ingestion_update_broker_lambda)
+
+        // GARNET IOT LAMBDA UPDATE SHADOW 
+        //let garnet_iot_lambda_update_shadow_widget = set_lambda_widgets('Update Shadow', garnet_nomenclature.garnet_iot_update_shadow_lambda)
 
         // GARNET IOT LAMBDA UPDATE BROKER 
 
-        let garnet_iot_lambda_update_broker_widget = set_lambda_widgets('Update Broker', garnet_nomenclature.garnet_iot_update_broker_lambda)
+        //let garnet_iot_lambda_update_broker_widget = set_lambda_widgets('Update Broker', garnet_nomenclature.garnet_iot_update_broker_lambda)
 
 
 
@@ -260,10 +267,10 @@ export class GarnetOps extends NestedStack {
 
     
         // GARNET IOT SQS INGESTION 
-        let garnet_iot_sqs_widget = set_sqs_widgets('Garnet IoT - SQS IoT', garnet_nomenclature.garnet_iot_queue)
+        let garnet_ingestion_sqs_broker_widget = set_sqs_widgets('Garnet IoT - SQS IoT', garnet_nomenclature.garnet_ingestion_queue)
 
         // GARNET IOT SQS UPDATE BROKER  
-        let garnet_iot_sqs_broker_widget = set_sqs_widgets('Garnet IoT - SQS Update Broker', garnet_nomenclature.garnet_iot_contextbroker_queue)
+        //let garnet_iot_sqs_broker_widget = set_sqs_widgets('Garnet IoT - SQS Update Broker', garnet_nomenclature.garnet_iot_contextbroker_queue)
 
 
         // GARNET DATALAKE 
@@ -311,10 +318,8 @@ export class GarnetOps extends NestedStack {
 
 
         let garnet_iot_ingestion = new Row(
-            garnet_iot_lambda_update_shadow_widget,
-            garnet_iot_lambda_update_broker_widget,
-            garnet_iot_sqs_widget, 
-            garnet_iot_sqs_broker_widget,
+            garnet_ingestion_lambda_update_broker_widget,
+            garnet_ingestion_sqs_broker_widget,
             garnet_iot_rule_widget,
             garnet_iot_datalake_widget)
 

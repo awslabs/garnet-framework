@@ -74,14 +74,14 @@ export const garnet_nomenclature = {
     
 
     // GARNET IOT SQS
-    garnet_iot_queue: `garnet-iot-queue-${Aws.REGION}`, // DEPRECATED 
-    garnet_ingestion_queue: `garnet-ingestion-queue-${Aws.REGION}`, // DEPRECATED 
-    garnet_iot_contextbroker_queue: `garnet-iot-contextbroker-queue-${Aws.REGION}`,
-    garnet_iot_presence_queue: `garnet-iot-presence-queue-${Aws.REGION}`,
+    garnet_iot_queue: `garnet-iot-sqs-${Aws.REGION}`, // DEPRECATED 
+    garnet_ingestion_queue: `garnet-ingestion-sqs-${Aws.REGION}`, // DEPRECATED 
+    garnet_iot_contextbroker_queue: `garnet-iot-sqs-contextbroker-${Aws.REGION}`,
+    garnet_iot_presence_queue: `garnet-iot-sqs-presence-${Aws.REGION}`,
 
     // GARNET FIREHOSE 
-    garnet_lake_iot_firehose_stream: `garnet-lake-firehose-stream`,
-    garnet_sub_firehose_stream: `garnet-sub-firehose-stream`, 
+    garnet_lake_iot_firehose_stream: `garnet-datalake-firehose-stream`,
+    garnet_sub_firehose_stream: `garnet-subs-firehose-stream`, 
 
     // GARNET BROKER CLUSTER
     garnet_broker_cluster: `garnet-broker-cluster`,
@@ -101,7 +101,7 @@ export const garnet_nomenclature = {
     garnet_load_balancer: `garnet-broker-alb`, 
 
     // SECRET 
-    garnet_secret: `garnet/secret/broker`,
+    garnet_secret: `garnet/secret/brokerdb`,
 
     // SECURITY GROUPS
     garnet_broker_sg_database: `garnet-broker-database-sg`,
@@ -111,7 +111,14 @@ export const garnet_nomenclature = {
 
   // GARNET DB 
   garnet_proxy_rds: `garnet-proxy-rds`,
-  garnet_db_cluster_id: `garnet-aurora-cluster`
+  garnet_db_cluster_id: `garnet-aurora-cluster`,
+
+
+  // GARNET UTILS 
+
+  garnet_utils_clean_ecs_taks_lambda :`garnet-utils-clean-ecstasks-lambda`,
+  garnet_utils_scorpio_sqs_lambda :`garnet-utils-scorpio-cleansqs-lambda`,
+  garnet_utils_az_lambda :`garnet-utils-getaz-lambda`
 }
 
 

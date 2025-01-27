@@ -19,7 +19,6 @@ export class GarnetScorpio extends NestedStack {
   
   public readonly dns_context_broker: string;
   public readonly vpc: Vpc;
-  public readonly broker_api_endpoint: string;
   public readonly fargate_alb: ApplicationLoadBalancer;
 
 
@@ -43,6 +42,7 @@ export class GarnetScorpio extends NestedStack {
 
     fargate_construct.node.addDependency(database_construct)
 
+    this.fargate_alb = fargate_construct.fargate_alb
     this.dns_context_broker = fargate_construct.fargate_alb.loadBalancerDnsName
     this.vpc = props.vpc
   

@@ -66,7 +66,7 @@ export class GarnetStack extends Stack {
     const garnet_ops_stack = new GarnetOps(this, 'GarnetOps', {})
 
     new CfnOutput(this, 'GarnetEndpoint', {
-      value: garnet_broker_stack.broker_api_endpoint,
+      value: garnet_api.broker_api_endpoint,
       description: 'Garnet Unified API'
     })
 
