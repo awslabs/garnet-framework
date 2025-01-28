@@ -12,6 +12,7 @@ import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerC
 
 import { deployment_params } from "../../../../sizing"
 import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
+import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 
 export interface GarnetScorpioFargateProps {
     vpc: Vpc
@@ -19,7 +20,8 @@ export interface GarnetScorpioFargateProps {
     db_endpoint: string,
     db_port: string,
     secret_arn: string,
-    image_context_broker: string
+    image_context_broker: string,
+    delivery_stream: CfnDeliveryStream
 }
 
 export class GarnetScorpioFargate extends Construct {
@@ -124,6 +126,18 @@ export class GarnetScorpioFargate extends Construct {
             })
         )
 
+        fargate_task_role.addToPolicy(
+            new PolicyStatement({
+                resources: [
+                    `arn:aws:firehose:${Aws.REGION}:${Aws.ACCOUNT_ID}:deliverystream/${props.delivery_stream.deliveryStreamName!}`
+                ],
+                actions: [
+                   'firehose:PutRecord',
+                   'firehose:PutRecordBatch'
+                ]
+            })
+        )
+
         // SCORPIO TASK ENV
         let scorpio_task_env = {
             DBHOST: props.db_endpoint,
@@ -135,10 +149,12 @@ export class GarnetScorpioFargate extends Construct {
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             SCORPIO_MESSAGING_MAX_SIZE: "100",
             ATCONTEXT_CACHE_DURATION: "10m",
+            QUARKUS_EUREKA_SERVICE_URL_DEFAULT: "http://eureka:8761/eureka",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
-            MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=250&greedy=true",
-            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "20",
+            MYSETTINGS_SUBSCRIPTION_DELIVERY_STREAM: props.delivery_stream.deliveryStreamName!, 
+            MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=200&greedy=true",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "30s",
             ...scorpiobroker_sqs_object 
         }
 
@@ -212,7 +228,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO ENTITY MANAGER 
         const entity_manager_log = new LogGroup(this, 'ScorpioEntityManagerLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_entitymanager}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_entitymanager}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
           })
         const entity_manager_task_def = new FargateTaskDefinition( this,"ScorpioEntityManagerFargateDefinition", {
@@ -263,7 +279,6 @@ export class GarnetScorpioFargate extends Construct {
           }
         )
 
-   
         const entity_manager_target = fargate_alb_listener.addTargets("EntityManagerTarget", {
           targets: [entity_manager_service],
           conditions: [
@@ -318,7 +333,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO QUERY MANAGER 
         const query_manager_log = new LogGroup(this, 'ScorpioQueryManagerLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_querymanager}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_querymanager}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
           })
         const query_manager_task_def = new FargateTaskDefinition( this, "ScorpioQueryManagerFargateDefinition", {
@@ -436,7 +451,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO SUBSCRIPTION MANAGER   
         const subscription_manager_log =  new LogGroup(this, 'ScorpioSubscriptionManagerLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_subscriptionmanager}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_subscriptionmanager}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
           })
         const subscription_manager_task_def = new FargateTaskDefinition( this, "ScorpioSubscriptionManagerFargateDefinition",{
@@ -535,7 +550,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO HISTORY ENTITY MANAGER 
         const history_entity_manager_log = new LogGroup(this, 'ScorpioHistoryEntityManagerLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_historyentitymanager}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_historyentitymanager}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
           })
         const history_entity_manager_task_def = new FargateTaskDefinition( this, "ScorpioHistoryEntityManagerFargateDefinition", {
@@ -632,7 +647,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO HISTORY QUERY MANAGER 
         const history_query_manager_log = new LogGroup(this, 'ScorpioHistoryQueryManagerLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_historyquerymanager}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_historyquerymanager}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const history_query_manager_task_def = new FargateTaskDefinition( this, "ScorpioHistoryQueryManagerFargateDefinition", {
@@ -723,7 +738,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO AT CONTEXT SERVER 
         const at_context_server_log = new LogGroup(this, 'ScorpioAtContextServerLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_atcontextserver}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_atcontextserver}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const at_context_server_task_def = new FargateTaskDefinition( this, "ScorpioAtContextServerFargateDefinition", {
@@ -823,7 +838,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO REGISTRY MANAGER
         const registry_manager_log = new LogGroup(this, 'ScorpioRegistryManagerLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_registrymanager}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_registrymanager}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })            
         const registry_manager_task_def = new FargateTaskDefinition( this, "ScorpioRegistryManagerFargateDefinition",{
@@ -913,7 +928,7 @@ export class GarnetScorpioFargate extends Construct {
         // SCORPIO REGISTRY SUBSCRIPTION MANAGER 
         const registry_subscription_manager_log = new LogGroup(this, 'ScorpioRegistrySubscriptionManagerFargateLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
             })
         const registry_subscription_manager_task_def = new FargateTaskDefinition(this, "ScorpioRegistrySubscriptionManagerFargateDefinition", {
@@ -1002,20 +1017,20 @@ export class GarnetScorpioFargate extends Construct {
       
         sg_fargate.addIngressRule(sg_alb, Port.tcp(2025))
 
-        entity_manager_service.node.addDependency(at_context_server_service)
-        query_manager_service.node.addDependency(entity_manager_service)
-        registry_manager_service.node.addDependency(entity_manager_service)
-        subscription_manager_service.node.addDependency(entity_manager_service)
-        history_query_manager_service.node.addDependency(entity_manager_service)
-        history_entity_manager_service.node.addDependency(entity_manager_service)
-        registry_subscription_manager_service.node.addDependency(entity_manager_service)
-        at_context_server_service.node.addDependency(fargate_cluster)
+        // entity_manager_service.node.addDependency(at_context_server_service)
+        // query_manager_service.node.addDependency(entity_manager_service)
+        // registry_manager_service.node.addDependency(entity_manager_service)
+        // subscription_manager_service.node.addDependency(entity_manager_service)
+        // history_query_manager_service.node.addDependency(entity_manager_service)
+        // history_entity_manager_service.node.addDependency(entity_manager_service)
+        // registry_subscription_manager_service.node.addDependency(entity_manager_service)
+        // at_context_server_service.node.addDependency(fargate_cluster)
 
     } else {
 
         const all_in_one_log = new LogGroup(this, 'ScorpioAllInOneLogs', {
             retention: RetentionDays.ONE_MONTH, 
-            logGroupName: `${garnet_nomenclature.garnet_broker_allinone}-logs`,
+            // logGroupName: `${garnet_nomenclature.garnet_broker_allinone}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
         const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
