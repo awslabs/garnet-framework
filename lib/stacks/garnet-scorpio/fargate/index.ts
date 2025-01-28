@@ -12,6 +12,7 @@ import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerC
 
 import { deployment_params } from "../../../../sizing"
 import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
+import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 
 export interface GarnetScorpioFargateProps {
     vpc: Vpc
@@ -19,7 +20,8 @@ export interface GarnetScorpioFargateProps {
     db_endpoint: string,
     db_port: string,
     secret_arn: string,
-    image_context_broker: string
+    image_context_broker: string,
+    delivery_stream: CfnDeliveryStream
 }
 
 export class GarnetScorpioFargate extends Construct {
@@ -124,6 +126,18 @@ export class GarnetScorpioFargate extends Construct {
             })
         )
 
+        fargate_task_role.addToPolicy(
+            new PolicyStatement({
+                resources: [
+                    `arn:aws:firehose:${Aws.REGION}:${Aws.ACCOUNT_ID}:deliverystream/${props.delivery_stream.deliveryStreamName!}`
+                ],
+                actions: [
+                   'firehose:PutRecord',
+                   'firehose:PutRecordBatch'
+                ]
+            })
+        )
+
         // SCORPIO TASK ENV
         let scorpio_task_env = {
             DBHOST: props.db_endpoint,
@@ -138,6 +152,7 @@ export class GarnetScorpioFargate extends Construct {
             QUARKUS_EUREKA_SERVICE_URL_DEFAULT: "http://eureka:8761/eureka",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
+            MYSETTINGS_SUBSCRIPTION_DELIVERY_STREAM: props.delivery_stream.deliveryStreamName!, 
             MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=200&greedy=true",
             QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "30s",
             ...scorpiobroker_sqs_object 

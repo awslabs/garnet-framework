@@ -14,10 +14,7 @@ export interface GarnetBucketProps {
 
 
 export class GarnetBucket extends Construct {
-
     public readonly bucket_name: string
-    public readonly kinesis_firehose: CfnDeliveryStream
-
     constructor(scope: Construct, id: string, props: GarnetBucketProps) {
         super(scope, id)
 

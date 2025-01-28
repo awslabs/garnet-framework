@@ -28,10 +28,12 @@ export class GarnetStack extends Stack {
     super(scope, id, props)
 
     const garnet_common = new GarnetCommon(this, 'CommonContructs', {})
+    const garnet_datalake = new GarnetLake(this, 'GarnetLake', {}) 
 
     const garnet_broker_stack = new GarnetScorpio(this, 'ScorpioBroker', {
         vpc: garnet_common.vpc, 
-        secret: garnet_common.secret
+        secret: garnet_common.secret,
+        delivery_stream: garnet_datalake.delivery_stream
       })
     
     const garnet_ingestion_stack = new GarnetIngestionStack(this, 'GarnetIngestion', {
@@ -40,19 +42,13 @@ export class GarnetStack extends Stack {
 
     })
 
-    const garnet_datalake = new GarnetLake(this, 'GarnetLake', {
-      dns_context_broker: garnet_broker_stack.dns_context_broker, 
-      vpc: garnet_common.vpc, 
-      bucket_name: garnet_common.bucket_name,
-      az1: garnet_common.az1,
-      az2: garnet_common.az2
-    }) 
+
 
     const garnet_iot_stack = new GarnetIot(this, 'GarnetIoT')
 
     const garnet_privatesub = new GarnetPrivateSub(this, 'GarnetPrivateSub', {
       vpc: garnet_common.vpc, 
-      bucket_name: garnet_common.bucket_name
+      bucket_name: garnet_datalake.bucket_name
     })
 
     const garnet_api = new GarnetApi(this, 'GarnetApi', {
@@ -90,6 +86,10 @@ export class GarnetStack extends Stack {
       description: 'Architecture deployed'
     })
 
+    new CfnOutput(this, 'BucketDatalakeName', {
+      value: garnet_datalake.bucket_name,
+      description: 'Name of the S3 Bucket for the datalake'
+    })
 
   }
 }

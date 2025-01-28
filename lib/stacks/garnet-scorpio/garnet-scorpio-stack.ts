@@ -8,11 +8,13 @@ import { GarnetScorpioFargate } from "./fargate";
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import { garnet_scorpio_images } from "../../../constants";
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose";
 
 
 export interface GarnetScorpioProps extends NestedStackProps{
   vpc: Vpc,
-  secret: Secret
+  secret: Secret,
+  delivery_stream: CfnDeliveryStream
 }
 
 export class GarnetScorpio extends NestedStack {
@@ -37,6 +39,7 @@ export class GarnetScorpio extends NestedStack {
         db_endpoint: database_construct.database_endpoint,
         db_port: database_construct.database_port,
         image_context_broker: garnet_scorpio_images.allInOne,
+        delivery_stream: props.delivery_stream
       }
     )
 
