@@ -1,14 +1,17 @@
-import { CfnOutput, Names} from "aws-cdk-lib"
-import { CfnApi, CfnIntegration, CfnRoute, CfnStage, CfnVpcLink } from "aws-cdk-lib/aws-apigatewayv2"
+
+import { CfnAuthorizer as CfnAuthorizerV2, CfnIntegration, CfnRoute, CfnStage, CfnVpcLink, CorsHttpMethod, HttpApi } from "aws-cdk-lib/aws-apigatewayv2"
 import { SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
-import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
 import { Construct } from "constructs"
-import { Parameters } from "../../../../parameters"
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda'
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
+import { HttpLambdaAuthorizer, HttpLambdaResponseType } from "aws-cdk-lib/aws-apigatewayv2-authorizers"
+import { Aws, Duration } from "aws-cdk-lib"
+import { AuthorizationType, CfnAuthorizer } from "aws-cdk-lib/aws-apigateway"
 
 export interface GarnetApiGatewayProps {
     readonly vpc: Vpc,
     readonly fargate_alb: ApplicationLoadBalancer
+    readonly lambda_authorizer_arn: string
 }
 
 export class GarnetApiGateway extends Construct{
@@ -17,10 +20,13 @@ export class GarnetApiGateway extends Construct{
         super(scope, id)
         // Check props
         if (!props.vpc){
-            throw new Error('The property vpc is required to create an instance of GarnetApiGateway Construct')
+            throw new Error('The property vpc is required')
         }
         if (!props.fargate_alb){
-            throw new Error('The property fargate_alb is required to create an instance of GarnetApiGateway Construct')
+            throw new Error('The property fargate_alb is required')
+        }
+        if (!props.lambda_authorizer_arn) {
+            throw new Error('The property lambda_authorizer_arn is required')
         }
 
         const sg_vpc_link = new SecurityGroup(this, 'SgVpcLink', {
@@ -36,26 +42,33 @@ export class GarnetApiGateway extends Construct{
             securityGroupIds: [sg_vpc_link.securityGroupId]
         })
 
-        const api = new CfnApi(this, 'HttpApi', {
-            name: `garnet-api`, 
-            protocolType: 'HTTP',
-            corsConfiguration: {
+            // Create HTTP API with CORS and default authorizer
+            const api = new HttpApi(this, 'HttpApi', {
+                apiName: 'garnet-api',
+                corsPreflight: {
                 allowHeaders: ['*'],
-                allowMethods: ['*'],
+                allowMethods: [CorsHttpMethod.ANY],
                 allowOrigins: ['*']
-            },
-            
+                },
+                createDefaultStage: true
+                })
 
+        const lambda_authorizer = LambdaFunction.fromFunctionArn(this, 'LambdaAuthorizer', props.lambda_authorizer_arn)
+
+        const authorizer = new CfnAuthorizerV2(this, 'JwtAuthorizer', {
+            apiId: api.apiId,
+            authorizerType: 'REQUEST',
+            authorizerPayloadFormatVersion: '2.0',
+            authorizerResultTtlInSeconds: 600,
+            authorizerUri: `arn:aws:apigateway:${Aws.REGION}:lambda:path/2015-03-31/functions/${props.lambda_authorizer_arn}/invocations`,
+            enableSimpleResponses: true,
+            identitySource: ['$request.header.Authorization'],
+            name: 'jwt-authorizer'
         })
 
-        const stage = new CfnStage(this, 'StageApi', {
-            apiId: api.ref,
-            stageName: '$default',
-            autoDeploy: true
-        })
 
         const integration = new CfnIntegration(this, 'HttpApiIntegration', {
-            apiId: api.ref,
+            apiId: api.apiId,
             integrationMethod: "ANY",
             integrationType: "HTTP_PROXY",
             connectionType: "VPC_LINK",
@@ -66,12 +79,14 @@ export class GarnetApiGateway extends Construct{
         })
 
         const route = new CfnRoute(this, 'Route', {
-            apiId: api.ref,
+            apiId: api.apiId,
             routeKey: "ANY /{proxy+}",
-            target: `integrations/${integration.ref}`
+            target: `integrations/${integration.ref}`,
+            authorizationType: 'CUSTOM',
+            authorizerId: authorizer.ref
         })
 
-        this.api_ref = api.ref
+        this.api_ref = api.apiId
 
     }
 }

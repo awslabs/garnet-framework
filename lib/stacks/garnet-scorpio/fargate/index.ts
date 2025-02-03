@@ -1,12 +1,11 @@
 import { Aws, Duration,  RemovalPolicy, SecretValue } from "aws-cdk-lib"
 import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
-import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
+import { Cluster, ContainerImage, ContainerInsights, FargateService, FargateTaskDefinition, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
 
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
-import {garnet_broker, garnet_constant, garnet_nomenclature, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
-import { Construct, Dependable } from "constructs"
-import { Parameters } from "../../../../parameters"
+import {garnet_constant, garnet_nomenclature, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
+import { Construct } from "constructs"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerCondition } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 
@@ -81,6 +80,7 @@ export class GarnetScorpioFargate extends Construct {
         // FARGATE CLUSTER 
         const fargate_cluster = new Cluster(this, 'FargateScorpioCluster', {
             vpc: props.vpc,
+            containerInsightsV2: ContainerInsights.ENHANCED,
             clusterName: garnet_nomenclature.garnet_broker_cluster,
             defaultCloudMapNamespace: {
                 name: 'garnet.local'
@@ -148,7 +148,7 @@ export class GarnetScorpioFargate extends Construct {
             SCORPIO_STARTUPDELAY: "5s",
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             SCORPIO_MESSAGING_MAX_SIZE: "100",
-            ATCONTEXT_CACHE_DURATION: "10m",
+            ATCONTEXT_CACHE_DURATION: "15m",
             QUARKUS_EUREKA_SERVICE_URL_DEFAULT: "http://eureka:8761/eureka",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
@@ -213,8 +213,6 @@ export class GarnetScorpioFargate extends Construct {
                 deletionProtection: false
             })
 
-
-    
             // LISTENER FOR APPLICATION LOAD BALANCER 
             const fargate_alb_listener = fargate_alb.addListener("ScorpioFargateAlbListener", {
                 defaultAction: ListenerAction.fixedResponse(404, {
@@ -1017,14 +1015,14 @@ export class GarnetScorpioFargate extends Construct {
       
         sg_fargate.addIngressRule(sg_alb, Port.tcp(2025))
 
-        // entity_manager_service.node.addDependency(at_context_server_service)
-        // query_manager_service.node.addDependency(entity_manager_service)
-        // registry_manager_service.node.addDependency(entity_manager_service)
-        // subscription_manager_service.node.addDependency(entity_manager_service)
-        // history_query_manager_service.node.addDependency(entity_manager_service)
-        // history_entity_manager_service.node.addDependency(entity_manager_service)
-        // registry_subscription_manager_service.node.addDependency(entity_manager_service)
-        // at_context_server_service.node.addDependency(fargate_cluster)
+        entity_manager_service.node.addDependency(at_context_server_service)
+        query_manager_service.node.addDependency(at_context_server_service)
+        registry_manager_service.node.addDependency(at_context_server_service)
+        subscription_manager_service.node.addDependency(at_context_server_service)
+        history_query_manager_service.node.addDependency(at_context_server_service)
+        history_entity_manager_service.node.addDependency(at_context_server_service)
+        registry_subscription_manager_service.node.addDependency(at_context_server_service)
+        at_context_server_service.node.addDependency(fargate_cluster)
 
     } else {
 

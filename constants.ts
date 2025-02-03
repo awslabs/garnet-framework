@@ -8,7 +8,7 @@ const {version} = require('./package.json')
 const garnet_scorpio_version = "5.0.71"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
-export const garnet_bucket_athena = `${garnet_bucket}-athena-results/`
+export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
 export const garnet_broker = "Scorpio" 
 
 
@@ -73,10 +73,17 @@ export const garnet_nomenclature = {
     garnet_subscriptions_rule: `garnet_subscriptions_rule`,
     garnet_iot_presence_rule: `garnet_iot_presence_rule`,
     
+    // GARNET API AUTH
+    garnet_api_auth_jwt_lambda: `garnet-api-auth-jwt-lambda`,
+    garnet_api_authorizer_lambda: `garnet-api-authorizer-lambda`,
+    
+    garnet_api_auth_audience: `garnet-api`, 
+    garnet_api_auth_issuer: `garnet-framework`, 
+    garnet_api_auth_sub: `garnet:default-user`, 
 
     // GARNET IOT SQS
     garnet_iot_queue: `garnet-iot-sqs-${Aws.REGION}`, // DEPRECATED 
-    garnet_ingestion_queue: `garnet-ingestion-sqs-${Aws.REGION}`, // DEPRECATED 
+    garnet_ingestion_queue: `garnet-ingestion-queue-${Aws.REGION}`, // DEPRECATED 
     garnet_iot_contextbroker_queue: `garnet-iot-sqs-contextbroker-${Aws.REGION}`,
     garnet_iot_presence_queue: `garnet-iot-sqs-presence-${Aws.REGION}`,
 
@@ -103,6 +110,7 @@ export const garnet_nomenclature = {
 
     // SECRET 
     garnet_secret: `garnet/secret/brokerdb`,
+    garnet_api_jwt_secret: `garnet/secret/api`,
 
     // SECURITY GROUPS
     garnet_broker_sg_database: `garnet-broker-database-sg`,
@@ -119,7 +127,10 @@ export const garnet_nomenclature = {
 
   garnet_utils_clean_ecs_taks_lambda :`garnet-utils-clean-ecstasks-lambda`,
   garnet_utils_scorpio_sqs_lambda :`garnet-utils-scorpio-cleansqs-lambda`,
-  garnet_utils_az_lambda :`garnet-utils-getaz-lambda`
+  garnet_utils_az_lambda :`garnet-utils-getaz-lambda`,
+  garnet_utils_bucket_create_lambda: `garnet-utils-bucket-create-lambda`,
+  garnet_utils_bucket_check_lambda: `garnet-utils-bucket-check-lambda`,
+  garnet_utils_bucket_provider: `garnet-utils-bucket-provider-lambda`
 }
 
 

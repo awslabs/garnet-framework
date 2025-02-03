@@ -13,7 +13,7 @@ export const Parameters = {
      * Small is suitable for developing and testing the capabilities of the framework (< 1000 events per minute). 
      * Medium and above deployments are using the distributed architecture (8 microservices) and increasing the capacity of the database, the number of containers, their CPU and memory. 
     */
-    sizing: SIZING.Medium,
+    sizing: SIZING.Xlarge,
 
     // SMART DATA MODEL
     smart_data_model_url : 'https://raw.githubusercontent.com/awslabs/garnet-framework/main/context.jsonld', 

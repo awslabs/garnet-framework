@@ -199,8 +199,8 @@ switch (true) {
         deployment_params = {
             architecture: ARCHITECTURE.Distributed,
             aurora_min_capacity: 10, 
-            aurora_max_capacity: 80,
-            autoscale_requests_number: 20, 
+            aurora_max_capacity: 256,
+            autoscale_requests_number: 100, 
 
             lambda_broker_batch_window: 1,
             lambda_broker_batch_size: 20, 
@@ -209,42 +209,42 @@ switch (true) {
             entitymanager_fargate_cpu: 4096, 
             entitymanager_fargate_memory_limit: 30720,
             entitymanager_autoscale_min_capacity: 10, 
-            entitymanager_autoscale_max_capacity: 60,
+            entitymanager_autoscale_max_capacity: 100,
 
             subscriptionmanager_fargate_cpu: 4096, 
             subscriptionmanager_fargate_memory_limit: 30720,
             subscriptionmanager_autoscale_min_capacity: 10, 
-            subscriptionmanager_autoscale_max_capacity: 50,
+            subscriptionmanager_autoscale_max_capacity: 100,
 
             registrymanager_fargate_cpu: 1024, 
             registrymanager_fargate_memory_limit: 4096,
             registrymanager_autoscale_min_capacity: 2, 
-            registrymanager_autoscale_max_capacity: 30,
+            registrymanager_autoscale_max_capacity: 100,
 
             querymanager_fargate_cpu: 1024, 
             querymanager_fargate_memory_limit: 4096,
             querymanager_autoscale_min_capacity: 2, 
-            querymanager_autoscale_max_capacity: 30,
+            querymanager_autoscale_max_capacity: 100,
 
             registrysubscriptionmanager_fargate_cpu: 1024, 
             registrysubscriptionmanager_fargate_memory_limit: 4096,
             registrysubscriptionmanager_autoscale_min_capacity: 2, 
-            registrysubscriptionmanager_autoscale_max_capacity: 30,
+            registrysubscriptionmanager_autoscale_max_capacity: 100,
 
             historyentitymanager_fargate_cpu: 1024, 
             historyentitymanager_fargate_memory_limit: 4096,
             historyentitymanager_autoscale_min_capacity: 2, 
-            historyentitymanager_autoscale_max_capacity: 30,
+            historyentitymanager_autoscale_max_capacity: 100,
 
             historyquerymanager_fargate_cpu: 1024, 
             historyquerymanager_fargate_memory_limit: 4096,
             historyquerymanager_autoscale_min_capacity: 2, 
-            historyquerymanager_autoscale_max_capacity: 30,
+            historyquerymanager_autoscale_max_capacity: 100,
 
             atcontextserver_fargate_cpu: 1024, 
             atcontextserver_fargate_memory_limit: 4096,
             atcontextserver_autoscale_min_capacity: 2, 
-            atcontextserver_autoscale_max_capacity: 30
+            atcontextserver_autoscale_max_capacity: 100
         }
         break;
     default:

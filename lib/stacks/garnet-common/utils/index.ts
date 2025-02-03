@@ -69,6 +69,7 @@ export class Utils extends Construct {
           logGroup: get_az_log
         }) 
         get_az_provider.node.addDependency(get_az_log)
+        
         const get_az = new CustomResource(this, 'getAzCustomResource', {
           serviceToken: get_az_provider.serviceToken
         })
