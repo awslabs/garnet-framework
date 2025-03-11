@@ -23,7 +23,7 @@ export class GarnetDataLakeStream extends Construct {
     const layer_lambda_path = `./lib/layers`;
     const layer_lambda = new LayerVersion(this, "LayerLambda", {
       code: Code.fromAsset(layer_lambda_path),
-      compatibleRuntimes: [Runtime.NODEJS_20_X],
+      compatibleRuntimes: [Runtime.NODEJS_22_X],
     })
 
     // KINESIS FIREHOSE TO DATALAKE BUCKET 
@@ -48,7 +48,7 @@ export class GarnetDataLakeStream extends Construct {
     const lambda_transform = new Function(this, 'LakeTransformLambda', {
     functionName: garnet_nomenclature.garnet_lake_transform_lambda, 
         description: 'Garnet Lake - Function that transforms the Kinesis Firehose records to extract entities from notifications',
-        runtime: Runtime.NODEJS_20_X,
+        runtime: Runtime.NODEJS_22_X,
         layers: [layer_lambda],
         code: Code.fromAsset(lambda_transform_path),
         handler: 'index.handler',

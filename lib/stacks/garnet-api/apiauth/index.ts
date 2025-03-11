@@ -25,7 +25,7 @@ export class GarnetApiAuthJwt extends Construct {
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_20_X],
+          compatibleRuntimes: [Runtime.NODEJS_22_X],
         })
 
 
@@ -39,7 +39,7 @@ export class GarnetApiAuthJwt extends Construct {
         const api_auth_jwt_generator_lambda = new Function(this, 'ApiAuthJwtGeneratorLambda', {
             functionName: garnet_nomenclature.garnet_api_auth_jwt_lambda,
             description: 'Garnet API - Function that generates a JWT token',
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             logGroup: api_auth_jwt_generator_logs,
             layers: [layer_lambda], 
             code: Code.fromAsset(api_auth_jwt_generator_lambda_path),
@@ -87,7 +87,7 @@ export class GarnetApiAuthJwt extends Construct {
         const api_authorizer_lambda = new Function(this, 'ApiAuthorizerLambda', {
             functionName: garnet_nomenclature.garnet_api_authorizer_lambda,
             description: 'Garnet API - Lambda Authorizer for the Garnet API',
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             logGroup: api_authorizer_logs,
             layers: [layer_lambda], 
             code: Code.fromAsset(api_authorizer_lambda_path),

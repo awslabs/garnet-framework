@@ -37,7 +37,7 @@ export class Utils extends Construct {
         const get_az_func = new Function(this, 'AzFunction', {
             functionName: garnet_nomenclature.garnet_utils_az_lambda,
               description: 'Garnet Utils - Function that checks if which AZs the stack can be deployed for HTTP VPC Link and IoT VPC Endpoint service availability', 
-              runtime: Runtime.NODEJS_20_X,
+              runtime: Runtime.NODEJS_22_X,
               logGroup: get_az_lambda_log,
               code: Code.fromAsset(get_az_func_path),
               handler: 'index.handler',
@@ -90,7 +90,7 @@ export class Utils extends Construct {
         const scorpio_sqs_lambda = new Function(this, 'ScorpioCleanSqsFunction', {
           functionName: garnet_nomenclature.garnet_utils_scorpio_sqs_lambda,
           description: 'Garnet Utils - Function that deletes the SQS Queue created by the Scorpio Context Broker', 
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             logGroup: scorpio_sqs_lambda_log, 
             code: Code.fromAsset(scorpio_sqs_lambda_path),
             handler: 'index.handler',
@@ -133,7 +133,7 @@ export class Utils extends Construct {
         const clean_ecs_lambda = new Function(this, 'CleanEcsFunction', {
           functionName: garnet_nomenclature.garnet_utils_clean_ecs_taks_lambda,
             description: 'Garnet Utils - Function that removes unactive ECS task definitions',
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             logGroup: clean_ecs_lambda_log,
             code: Code.fromAsset(clean_ecs_lambda_path),
             handler: 'index.handler',

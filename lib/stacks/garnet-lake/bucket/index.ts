@@ -29,7 +29,7 @@ export class GarnetBucket extends Construct {
       const lambda_bucket = new Function(this, 'BucketCreateFunction', {
             functionName: garnet_nomenclature.garnet_utils_bucket_create_lambda,
             description: 'Garnet Utils - Function that creates Garnet Bucket if it does not exist',
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             code: Code.fromAsset(lambda_bucket_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
@@ -63,7 +63,7 @@ export class GarnetBucket extends Construct {
       const lambda_bucket_check = new Function(this, 'BucketCheckFunction', {
             functionName: `garnet-utils-bucket-check-lambda`,
             description: 'Garnet Utils - Function that check if Garnet Bucket exists',
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             code: Code.fromAsset(lambda_bucket_check_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),

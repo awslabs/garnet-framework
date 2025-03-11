@@ -5,7 +5,7 @@
 import { Aws } from "aws-cdk-lib"
 const {version} = require('./package.json')
 
-const garnet_scorpio_version = "5.0.71"
+const garnet_scorpio_version = "5.0.72"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
@@ -58,7 +58,6 @@ export const garnet_nomenclature = {
 
 
     // GARNET MODEL 
-
     aws_iot_thing: "AwsIotThing",
     aws_iot_lorawan_thing: "AwsIotLorawanThing",
     aws_iot_lorawan_gateway: "AwsIotLorawanGateway", 
@@ -66,7 +65,8 @@ export const garnet_nomenclature = {
     //GARNET INGESTION LAMBDA
     garnet_ingestion_update_broker_lambda: `garnet-ingestion-update-broker-lambda`,
     garnet_lake_transform_lambda: `garnet-lake-transform-lambda`, 
-    garnet_iot_presence_shadow_lambda: `garnet-iot-presence-shadow-lambda`,
+    garnet_iot_presence_lambda: `garnet-iot-presence-lambda`,
+    garnet_iot_group_lambda: `garnet-iot-group-lambda`,
     garnet_iot_authorizer_lambda: `garnet-iot-authorizer-lambda`,
     garnet_private_sub_lambda: `garnet-private-sub-lambda`, 
     garnet_lake_rule:`garnet_lake_rule`,
@@ -85,7 +85,8 @@ export const garnet_nomenclature = {
     garnet_iot_queue: `garnet-iot-sqs-${Aws.REGION}`, // DEPRECATED 
     garnet_ingestion_queue: `garnet-ingestion-queue-${Aws.REGION}`, // DEPRECATED 
     garnet_iot_contextbroker_queue: `garnet-iot-sqs-contextbroker-${Aws.REGION}`,
-    garnet_iot_presence_queue: `garnet-iot-sqs-presence-${Aws.REGION}`,
+    garnet_iot_presence_queue: `garnet-iot-presence-${Aws.REGION}`,
+    garnet_iot_group_queue: `garnet-iot-presence-${Aws.REGION}`,
 
     // GARNET FIREHOSE 
     garnet_lake_iot_firehose_stream: `garnet-datalake-firehose-stream`,

@@ -8,16 +8,19 @@ import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
 import { garnet_constant, garnet_nomenclature } from "../../../../constants";
+import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2";
+import { Parameters } from "../../../../parameters";
 
 export interface GarnetIotThingProps {
-  sqs_ingestion_endpoint: string
+    vpc: Vpc, 
+    dns_context_broker: string
 }
 
 export class GarnetIotThing extends Construct {
   
     public readonly private_sub_endpoint: string
   
-    constructor(scope: Construct, id: string, props?: GarnetIotThingProps) {
+    constructor(scope: Construct, id: string, props: GarnetIotThingProps) {
       super(scope, id)
 
 
@@ -25,7 +28,7 @@ export class GarnetIotThing extends Construct {
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_20_X],
+          compatibleRuntimes: [Runtime.NODEJS_22_X],
         })
     
 
@@ -40,53 +43,47 @@ export class GarnetIotThing extends Construct {
 
     
         // LAMBDA TO PUSH IN QUEUE WITH CONNECTIVITY STATUS
-        const lambda_update_shadow_presence_log = new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
+        const lambda_update_presence_log = new LogGroup(this, 'LambdaUpdatePresenceThingLogs', {
           retention: RetentionDays.ONE_MONTH,
           // logGroupName: `${garnet_nomenclature.garnet_iot_presence_shadow_lambda}-logs`,
           removalPolicy: RemovalPolicy.DESTROY
         })
-        const lambda_update_shadow_presence_path = `${__dirname}/lambda/presence`;
-        const lambda_update_shadow_presence = new Function(this, "LambdaUpdatePresenceThing", {
-          functionName: garnet_nomenclature.garnet_iot_presence_shadow_lambda,
+        const lambda_update_presence_path = `${__dirname}/lambda/presence`;
+        const lambda_update_presence = new Function(this, "LambdaUpdatePresenceThing", {
+          functionName: garnet_nomenclature.garnet_iot_presence_lambda,
           description: 'Garnet IoT Things Presence- Function that updates presence for Iot MQTT connected things',
-          runtime: Runtime.NODEJS_20_X,
+                vpc: props.vpc,
+                vpcSubnets: {
+                  subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+                },
+          runtime: Runtime.NODEJS_22_X,
           layers: [layer_lambda],
-          code: Code.fromAsset(lambda_update_shadow_presence_path),
+          code: Code.fromAsset(lambda_update_presence_path),
           handler: "index.handler",
           timeout: Duration.seconds(50),
-          logGroup: lambda_update_shadow_presence_log,
+          logGroup: lambda_update_presence_log,
           architecture: Architecture.ARM_64,
           environment: {
-            AWSIOTREGION: Aws.REGION,
-            SHADOW_PREFIX: garnet_constant.shadow_prefix,
-            AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
+             DNS_CONTEXT_BROKER: props.dns_context_broker,
+             URL_SMART_DATA_MODEL: Parameters.smart_data_model_url,
+             AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
           }
         })
-        lambda_update_shadow_presence.node.addDependency(lambda_update_shadow_presence_log)
+        lambda_update_presence.node.addDependency(lambda_update_presence_log)
         // ADD PERMISSION FOR LAMBDA THAT UPDATES SHADOW TO ACCESS SQS ENTRY POINT
-        lambda_update_shadow_presence.addToRolePolicy(
+        lambda_update_presence.addToRolePolicy(
           new PolicyStatement({
             actions: [
               "sqs:ReceiveMessage",
               "sqs:DeleteMessage",
-              "sqs:GetQueueAttributes",
+              "sqs:GetQueueAttributes"
             ],
             resources: [`${sqs_garnet_iot_presence.queueArn}`],
           })
         )
 
-        // ADD PERMISSION TO ACCESS AWS IoT DEVICE SHADOW
-        lambda_update_shadow_presence.addToRolePolicy(
-          new PolicyStatement({
-            actions: ["iot:UpdateThingShadow"],
-            resources: [
-              `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:thing/*/${garnet_constant.shadow_prefix}-*`,
-            ],
-          })
-        )
-
-        // ADD THE SQS  AS EVENT SOURCE FOR LAMBDA
-        lambda_update_shadow_presence.addEventSource(
+        // ADD THE SQS AS EVENT SOURCE FOR LAMBDA
+        lambda_update_presence.addEventSource(
           new SqsEventSource(sqs_garnet_iot_presence, { batchSize: 10 })
         )
     

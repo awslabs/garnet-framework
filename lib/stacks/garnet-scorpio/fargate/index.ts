@@ -17,6 +17,7 @@ export interface GarnetScorpioFargateProps {
     vpc: Vpc
     sg_proxy: SecurityGroup,
     db_endpoint: string,
+    // db_reader_endpoint: string,
     db_port: string,
     secret_arn: string,
     image_context_broker: string,
@@ -25,6 +26,7 @@ export interface GarnetScorpioFargateProps {
 
 export class GarnetScorpioFargate extends Construct {
     public readonly fargate_alb : ApplicationLoadBalancer
+    public readonly sg_broker: SecurityGroup
 
     constructor(scope: Construct, id: string, props: GarnetScorpioFargateProps) {
         super(scope, id)
@@ -70,6 +72,8 @@ export class GarnetScorpioFargate extends Construct {
             vpc: props.vpc,
             securityGroupName: garnet_nomenclature.garnet_broker_sg_fargate
         })
+
+        this.sg_broker = sg_fargate
 
         // SECURITY GROUP FOR RDS PROXY
         const sg_proxy = SecurityGroup.fromSecurityGroupId(this, 'sgDb', props.sg_proxy.securityGroupId)
@@ -154,7 +158,44 @@ export class GarnetScorpioFargate extends Construct {
             QUARKUS_LOG_LEVEL: "INFO",
             MYSETTINGS_SUBSCRIPTION_DELIVERY_STREAM: props.delivery_stream.deliveryStreamName!, 
             MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=200&greedy=true",
-            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "30s",
+            // Core Connection Pool Settings
+            QUARKUS_DATASOURCE_REACTIVE_MAX_SIZE: "100",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "300s",
+            QUARKUS_DATASOURCE_REACTIVE_ACQUISITION_TIMEOUT: "5s",
+            QUARKUS_DATASOURCE_REACTIVE_INITIAL_SIZE: "50",
+            QUARKUS_DATASOURCE_REACTIVE_MAX_LIFETIME: "1800s",
+            QUARKUS_DATASOURCE_REACTIVE_BACKGROUND_VALIDATION_INTERVAL: "30s",
+            // PostgreSQL Specific Settings
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_PIPELINING_LIMIT: "256",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_STATEMENT_CACHE_SIZE: "1000",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_ATTEMPTS: "5",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_INTERVAL: "PT2S",
+            // Health Check Settings
+            QUARKUS_HEALTH_CHECK_TIMEOUT: "3s",
+            QUARKUS_HEALTH_CHECK_PERIOD: "20s",
+            QUARKUS_HEALTH_CHECK_FAILURE_THRESHOLD: "3",
+            //Vert.x Settings
+            QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: "16",
+            QUARKUS_VERTX_WORKER_POOL_SIZE: "50",
+            QUARKUS_VERTX_MAX_EVENT_LOOP_EXECUTE_TIME: "5S",
+            // Transaction Settings
+            QUARKUS_TRANSACTION_MANAGER_DEFAULT_TRANSACTION_TIMEOUT: "120",
+            QUARKUS_HTTP_IO_THREADS: "32",
+            QUARKUS_HTTP_LIMITS_MAX_BODY_SIZE: "20M",
+            QUARKUS_RESTEASY_REACTIVE_INPUT_BUFFER_SIZE: "20480",
+            QUARKUS_DATASOURCE_METRICS_ENABLED: "true",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_CACHE_PREPARED_STATEMENTS: "true",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_PIPELINE_DEPTH: "64",
+            // Background task executor
+            QUARKUS_THREAD_POOL_CORE_THREADS: "50",
+            QUARKUS_THREAD_POOL_MAX_THREADS: "100",
+            QUARKUS_THREAD_POOL_QUEUE_SIZE: "1000",
+            QUARKUS_THREAD_POOL_KEEP_ALIVE_TIME: "60S",
+            // New optimization settings
+            QUARKUS_HIBERNATE_ORM_JDBC_STATEMENT_BATCH_SIZE: "50",
+            QUARKUS_HIBERNATE_ORM_QUERY_QUERY_PLAN_CACHE_MAX_SIZE: "2048",
+            QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_MAXIMUM_SIZE: "10000",
+            QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_EXPIRE_AFTER_WRITE: "300S",
             ...scorpiobroker_sqs_object 
         }
 
@@ -1064,6 +1105,7 @@ export class GarnetScorpioFargate extends Construct {
         // Default is 512
             securityGroups: [sg_fargate]
         })
+
 
 
         fargate_alb.service.autoScaleTaskCount({  

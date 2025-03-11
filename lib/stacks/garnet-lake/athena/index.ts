@@ -28,7 +28,7 @@ export class GarnetDataLakeAthena extends Construct {
         functionName: `garnet-lake-athena-lambda`,
         description: 'Garnet Lake  - Function that creates Athena resources',
         logGroup: lambda_athena_log,
-        runtime: Runtime.NODEJS_20_X,
+        runtime: Runtime.NODEJS_22_X,
         code: Code.fromAsset(lambda_athena_path),
         handler: 'index.handler',
         timeout: Duration.seconds(50),

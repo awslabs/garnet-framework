@@ -16,8 +16,7 @@ export interface GarnetIngestionStackProps extends NestedStackProps {
 
 export class GarnetIngestionStack extends NestedStack {
 
-  public readonly sqs_garnet_ingestion_url: string;
-  public readonly sqs_garnet_ingestion_arn: string;
+  public readonly sqs_garnet_ingestion: Queue
 
   constructor(scope: Stack, id: string, props: GarnetIngestionStackProps) {
     super(scope, id, props)
@@ -38,7 +37,7 @@ export class GarnetIngestionStack extends NestedStack {
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_20_X],
+          compatibleRuntimes: [Runtime.NODEJS_22_X],
         })
     
         // SQS ENTRY POINT
@@ -61,7 +60,7 @@ export class GarnetIngestionStack extends NestedStack {
             vpcSubnets: {
               subnetType: SubnetType.PRIVATE_WITH_EGRESS,
             },
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             code: Code.fromAsset(lambda_to_context_broker_path),
             handler: "index.handler",
             timeout: Duration.seconds(50),
@@ -71,6 +70,7 @@ export class GarnetIngestionStack extends NestedStack {
             environment: {
               DNS_CONTEXT_BROKER: props.dns_context_broker,
               URL_SMART_DATA_MODEL: Parameters.smart_data_model_url,
+              AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
             }
           }
         )
@@ -111,8 +111,7 @@ export class GarnetIngestionStack extends NestedStack {
           })
         )
       
-        this.sqs_garnet_ingestion_url = sqs_garnet_endpoint.queueUrl
-        this.sqs_garnet_ingestion_arn = sqs_garnet_endpoint.queueArn
+        this.sqs_garnet_ingestion = sqs_garnet_endpoint
       
       
       }
