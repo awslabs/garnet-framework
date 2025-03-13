@@ -31,6 +31,7 @@ The documentation has been updated to reflect these changes and provides detaile
 
 - API and Data Model Changes
     - Deprecation of IoT API
+    - Authorization now enforced with a token (provided as output of CloudFormation stack)
     - JSON-LD context change: AWS IoT thing is now referenced as AwsIotThing
 
 
