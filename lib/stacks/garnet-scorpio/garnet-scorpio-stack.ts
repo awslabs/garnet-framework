@@ -1,5 +1,5 @@
 import { Aws, CfnOutput, NestedStack, NestedStackProps } from "aws-cdk-lib";
-import { Vpc } from "aws-cdk-lib/aws-ec2";
+import { SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2";
 import { Construct } from "constructs";
 import { GarnetApiGateway } from "../garnet-api/apigateway";
 import { GarnetScorpioDatabase } from "./database";
@@ -23,6 +23,8 @@ export class GarnetScorpio extends NestedStack {
   public readonly vpc: Vpc;
   public readonly fargate_alb: ApplicationLoadBalancer;
 
+  public readonly sg_broker: SecurityGroup
+
 
   constructor(scope: Construct, id: string, props: GarnetScorpioProps) {
     super(scope, id, props);
@@ -37,6 +39,7 @@ export class GarnetScorpio extends NestedStack {
         sg_proxy: database_construct.sg_proxy,
         secret_arn: props.secret.secretArn,
         db_endpoint: database_construct.database_endpoint,
+        // db_reader_endpoint: database_construct.database_reader_endpoint,
         db_port: database_construct.database_port,
         image_context_broker: garnet_scorpio_images.allInOne,
         delivery_stream: props.delivery_stream
@@ -49,6 +52,7 @@ export class GarnetScorpio extends NestedStack {
     this.dns_context_broker = fargate_construct.fargate_alb.loadBalancerDnsName
     this.vpc = props.vpc
   
+    this.sg_broker = fargate_construct.sg_broker
 
     new CfnOutput(this, "fargate_alb", {
       value: fargate_construct.fargate_alb.loadBalancerDnsName,

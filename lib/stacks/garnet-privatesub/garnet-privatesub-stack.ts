@@ -26,7 +26,7 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_20_X],
+          compatibleRuntimes: [Runtime.NODEJS_22_X],
         })
 
         // SECURITY GROUP
@@ -59,7 +59,7 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
         functionName: garnet_nomenclature.garnet_private_sub_lambda, 
         logGroup: lambda_garnet_private_sub_log,
         description: 'Garnet Private Sub - Function for the private subscription',
-            runtime: Runtime.NODEJS_20_X,
+            runtime: Runtime.NODEJS_22_X,
             layers: [layer_lambda],
             code: Code.fromAsset(lambda_garnet_private_sub_path),
             handler: 'index.handler',

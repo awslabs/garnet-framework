@@ -1,12 +1,11 @@
 import { Aws, Duration,  RemovalPolicy, SecretValue } from "aws-cdk-lib"
 import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
-import { Cluster, ContainerImage, FargateService, FargateTaskDefinition, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
+import { Cluster, ContainerImage, ContainerInsights, FargateService, FargateTaskDefinition, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
 
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
-import {garnet_broker, garnet_constant, garnet_nomenclature, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
-import { Construct, Dependable } from "constructs"
-import { Parameters } from "../../../../parameters"
+import {garnet_constant, garnet_nomenclature, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
+import { Construct } from "constructs"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerCondition } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 
@@ -18,6 +17,7 @@ export interface GarnetScorpioFargateProps {
     vpc: Vpc
     sg_proxy: SecurityGroup,
     db_endpoint: string,
+    // db_reader_endpoint: string,
     db_port: string,
     secret_arn: string,
     image_context_broker: string,
@@ -26,6 +26,7 @@ export interface GarnetScorpioFargateProps {
 
 export class GarnetScorpioFargate extends Construct {
     public readonly fargate_alb : ApplicationLoadBalancer
+    public readonly sg_broker: SecurityGroup
 
     constructor(scope: Construct, id: string, props: GarnetScorpioFargateProps) {
         super(scope, id)
@@ -72,6 +73,8 @@ export class GarnetScorpioFargate extends Construct {
             securityGroupName: garnet_nomenclature.garnet_broker_sg_fargate
         })
 
+        this.sg_broker = sg_fargate
+
         // SECURITY GROUP FOR RDS PROXY
         const sg_proxy = SecurityGroup.fromSecurityGroupId(this, 'sgDb', props.sg_proxy.securityGroupId)
 
@@ -81,6 +84,7 @@ export class GarnetScorpioFargate extends Construct {
         // FARGATE CLUSTER 
         const fargate_cluster = new Cluster(this, 'FargateScorpioCluster', {
             vpc: props.vpc,
+            containerInsightsV2: ContainerInsights.ENHANCED,
             clusterName: garnet_nomenclature.garnet_broker_cluster,
             defaultCloudMapNamespace: {
                 name: 'garnet.local'
@@ -148,13 +152,50 @@ export class GarnetScorpioFargate extends Construct {
             SCORPIO_STARTUPDELAY: "5s",
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             SCORPIO_MESSAGING_MAX_SIZE: "100",
-            ATCONTEXT_CACHE_DURATION: "10m",
+            ATCONTEXT_CACHE_DURATION: "15m",
             QUARKUS_EUREKA_SERVICE_URL_DEFAULT: "http://eureka:8761/eureka",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
             MYSETTINGS_SUBSCRIPTION_DELIVERY_STREAM: props.delivery_stream.deliveryStreamName!, 
             MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=200&greedy=true",
-            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "30s",
+            // Core Connection Pool Settings
+            QUARKUS_DATASOURCE_REACTIVE_MAX_SIZE: "100",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "300s",
+            QUARKUS_DATASOURCE_REACTIVE_ACQUISITION_TIMEOUT: "5s",
+            QUARKUS_DATASOURCE_REACTIVE_INITIAL_SIZE: "50",
+            QUARKUS_DATASOURCE_REACTIVE_MAX_LIFETIME: "1800s",
+            QUARKUS_DATASOURCE_REACTIVE_BACKGROUND_VALIDATION_INTERVAL: "30s",
+            // PostgreSQL Specific Settings
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_PIPELINING_LIMIT: "256",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_STATEMENT_CACHE_SIZE: "1000",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_ATTEMPTS: "5",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_INTERVAL: "PT2S",
+            // Health Check Settings
+            QUARKUS_HEALTH_CHECK_TIMEOUT: "3s",
+            QUARKUS_HEALTH_CHECK_PERIOD: "20s",
+            QUARKUS_HEALTH_CHECK_FAILURE_THRESHOLD: "3",
+            //Vert.x Settings
+            QUARKUS_VERTX_EVENT_LOOPS_POOL_SIZE: "16",
+            QUARKUS_VERTX_WORKER_POOL_SIZE: "50",
+            QUARKUS_VERTX_MAX_EVENT_LOOP_EXECUTE_TIME: "5S",
+            // Transaction Settings
+            QUARKUS_TRANSACTION_MANAGER_DEFAULT_TRANSACTION_TIMEOUT: "120",
+            QUARKUS_HTTP_IO_THREADS: "32",
+            QUARKUS_HTTP_LIMITS_MAX_BODY_SIZE: "20M",
+            QUARKUS_RESTEASY_REACTIVE_INPUT_BUFFER_SIZE: "20480",
+            QUARKUS_DATASOURCE_METRICS_ENABLED: "true",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_CACHE_PREPARED_STATEMENTS: "true",
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_PIPELINE_DEPTH: "64",
+            // Background task executor
+            QUARKUS_THREAD_POOL_CORE_THREADS: "50",
+            QUARKUS_THREAD_POOL_MAX_THREADS: "100",
+            QUARKUS_THREAD_POOL_QUEUE_SIZE: "1000",
+            QUARKUS_THREAD_POOL_KEEP_ALIVE_TIME: "60S",
+            // New optimization settings
+            QUARKUS_HIBERNATE_ORM_JDBC_STATEMENT_BATCH_SIZE: "50",
+            QUARKUS_HIBERNATE_ORM_QUERY_QUERY_PLAN_CACHE_MAX_SIZE: "2048",
+            QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_MAXIMUM_SIZE: "10000",
+            QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_EXPIRE_AFTER_WRITE: "300S",
             ...scorpiobroker_sqs_object 
         }
 
@@ -213,8 +254,6 @@ export class GarnetScorpioFargate extends Construct {
                 deletionProtection: false
             })
 
-
-    
             // LISTENER FOR APPLICATION LOAD BALANCER 
             const fargate_alb_listener = fargate_alb.addListener("ScorpioFargateAlbListener", {
                 defaultAction: ListenerAction.fixedResponse(404, {
@@ -1017,14 +1056,14 @@ export class GarnetScorpioFargate extends Construct {
       
         sg_fargate.addIngressRule(sg_alb, Port.tcp(2025))
 
-        // entity_manager_service.node.addDependency(at_context_server_service)
-        // query_manager_service.node.addDependency(entity_manager_service)
-        // registry_manager_service.node.addDependency(entity_manager_service)
-        // subscription_manager_service.node.addDependency(entity_manager_service)
-        // history_query_manager_service.node.addDependency(entity_manager_service)
-        // history_entity_manager_service.node.addDependency(entity_manager_service)
-        // registry_subscription_manager_service.node.addDependency(entity_manager_service)
-        // at_context_server_service.node.addDependency(fargate_cluster)
+        entity_manager_service.node.addDependency(at_context_server_service)
+        query_manager_service.node.addDependency(at_context_server_service)
+        registry_manager_service.node.addDependency(at_context_server_service)
+        subscription_manager_service.node.addDependency(at_context_server_service)
+        history_query_manager_service.node.addDependency(at_context_server_service)
+        history_entity_manager_service.node.addDependency(at_context_server_service)
+        registry_subscription_manager_service.node.addDependency(at_context_server_service)
+        at_context_server_service.node.addDependency(fargate_cluster)
 
     } else {
 
@@ -1066,6 +1105,7 @@ export class GarnetScorpioFargate extends Construct {
         // Default is 512
             securityGroups: [sg_fargate]
         })
+
 
 
         fargate_alb.service.autoScaleTaskCount({  

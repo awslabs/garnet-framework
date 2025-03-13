@@ -9,6 +9,7 @@ export interface GarnetSecretProps {
 
 export class GarnetSecret extends Construct {
     public readonly secret: Secret
+    public readonly secret_api_jwt : Secret
 
     constructor(scope: Construct, id: string, props: GarnetSecretProps) {
         super(scope, id)
@@ -23,6 +24,15 @@ export class GarnetSecret extends Construct {
                 excludeCharacters: "/¥'%:;{}",
                 includeSpace: false,
                 generateStringKey: 'password'
+              }
+        })
+        
+        this.secret_api_jwt = new Secret(this, 'SecretApiJwt', {
+            secretName: garnet_nomenclature.garnet_api_jwt_secret,
+            generateSecretString: {
+                excludePunctuation: true,
+                excludeCharacters: "/¥'%:;{}",
+                includeSpace: false,
               }
         })
     
