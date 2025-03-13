@@ -10,9 +10,6 @@ import { GarnetLake } from './stacks/garnet-lake/garnet-lake-stack'
 import { GarnetIot } from './stacks/garnet-iot/garnet-iot-stack'
 import { GarnetPrivateSub } from './stacks/garnet-privatesub/garnet-privatesub-stack'
 import { GarnetApi } from './stacks/garnet-api/garnet-api-stack'
-import { GarnetLoadTestStack } from './stacks/garnet-load-test/garnet-load-test-stack'
-
-
 
 export class GarnetStack extends Stack {
 
@@ -64,12 +61,6 @@ export class GarnetStack extends Stack {
   })
 
     const garnet_ops_stack = new GarnetOps(this, 'GarnetOps', {})
-
-    // const garnet_load_test = new GarnetLoadTestStack(this, 'GarnetLoadTest', {
-    //   vpc: garnet_common.vpc,
-    //   garnetEndpoint: garnet_broker_stack.dns_context_broker,
-    //   garnetSecurityGroup: garnet_broker_stack.sg_broker
-    // })
 
     new CfnOutput(this, 'GarnetVersion', {
       value: garnet_constant.garnet_version,

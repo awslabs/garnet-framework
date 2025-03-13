@@ -2,7 +2,6 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
-
 ## [1.4.0] - 2025-02-19 
 
 We've implemented significant architectural changes in this release to improve cost efficiency and scalability. 
@@ -10,7 +9,7 @@ The documentation has been updated to reflect these changes and provides detaile
 
 ### Major Changes
 
-- New Architecture and Stack Design
+- Redesigned Architecture and Stack
     - Complete architectural overhaul
     - New stack implementation
 
@@ -18,28 +17,30 @@ The documentation has been updated to reflect these changes and provides detaile
     - Upgraded Scorpio Broker to version ([5.0.71](https://gallery.ecr.aws/garnet/))
 
 - Improved Ingestion Process
-    - Removed AWS IoT Device Shadow
-    - New Implementation: Direct ingestion through deployment-provided queue
-    - Automatic context broker updates using batch operation upsert
-    - More cost-efficient and scalable solution
+    - Eliminated AWS IoT Device Shadow dependency
+    - Implemented direct ingestion via deployment-provided queue
+    - Added automatic context broker updates using batch operation upsert
+    - Delivered more cost-effective and scalable solution
 
 - Database Engine Update
     - Aurora Serverless v2 upgraded to PostgreSQL v16.6
 
 - Streamlined Data Lake Integration
     - Direct Kinesis Firehose integration for data lake delivery
-    - More efficient data pipeline with removed IoT rule dependency
+    - Created more efficient data pipeline by removing IoT rule dependency
 
-- Data model for Thing changed. Now AWS Iot thing are AwsIotThing and ...
+- API and Data Model Changes
+    - Deprecation of IoT API
+    - JSON-LD context change: AWS IoT thing is now referenced as AwsIotThing
+
+
+- Data model for Things changed. Now AWS IoT thing is AwsIotThing. 
 
 ### Required Actions
 
 Users will need to:
 -   Update their ingestion workflows to use the new queue for ingesting
 -   Migrate any AWS IoT Device Shadow dependencies
-
-
-
 
 ## [1.3.0] - 2024-05-07 
 
