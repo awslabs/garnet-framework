@@ -16,7 +16,7 @@ import {
   garnet_constant,
   garnet_nomenclature,
 } from "../../../../constants";
-import { deployment_params } from "../../../../sizing";
+import { deployment_params } from "../../../../architecture";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 
 export interface GarnetApiCommonProps {

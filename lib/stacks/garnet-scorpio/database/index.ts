@@ -4,7 +4,7 @@ import { AuroraPostgresEngineVersion, CaCertificate, CfnDBProxyEndpoint, Cluster
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 
 import { Construct } from "constructs"
-import { deployment_params } from "../../../../sizing"
+import { deployment_params } from "../../../../architecture"
 import { Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { garnet_broker, garnet_constant, garnet_nomenclature } from "../../../../constants"
 import { Alarm } from "aws-cdk-lib/aws-cloudwatch"

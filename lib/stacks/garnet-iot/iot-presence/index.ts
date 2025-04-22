@@ -9,7 +9,7 @@ import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
 import { garnet_constant, garnet_nomenclature } from "../../../../constants";
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2";
-import { Parameters } from "../../../../parameters";
+import { Parameters } from "../../../../configuration";
 
 export interface GarnetIotThingProps {
     vpc: Vpc, 

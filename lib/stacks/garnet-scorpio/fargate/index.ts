@@ -9,7 +9,7 @@ import { Construct } from "constructs"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerCondition } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 
-import { deployment_params } from "../../../../sizing"
+import { deployment_params } from "../../../../architecture"
 import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 

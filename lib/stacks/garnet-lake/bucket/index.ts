@@ -1,7 +1,7 @@
 import { CustomResource, Duration, Names, RemovalPolicy } from "aws-cdk-lib";
 import { Runtime, Function, Code, Architecture } from "aws-cdk-lib/aws-lambda";
 import { Construct } from "constructs";
-import { Parameters } from "../../../../parameters";
+import { Parameters } from "../../../../configuration";
 import { PolicyStatement} from "aws-cdk-lib/aws-iam";
 import { Provider } from "aws-cdk-lib/custom-resources";
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose";

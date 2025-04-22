@@ -12,9 +12,13 @@ The documentation has been updated to reflect these changes and provides detaile
 - Redesigned Architecture and Stack
     - Complete architectural overhaul
     - New stack implementation
+    
+- Simplified Architecture Configuration
+    - Replaced sizing options with direct choice between Concentrated and Distributed architectures
+    - Moved detailed configuration parameters to architecture.ts for better clarity and control
 
 - Context Broker Update
-    - Upgraded Scorpio Broker to version ([5.0.71](https://gallery.ecr.aws/garnet/))
+    - Upgraded Scorpio Broker to version ([5.0.90](https://gallery.ecr.aws/garnet/))
 
 - Improved Ingestion Process
     - Eliminated AWS IoT Device Shadow dependency
@@ -35,7 +39,7 @@ The documentation has been updated to reflect these changes and provides detaile
     - JSON-LD context change: AWS IoT thing is now referenced as AwsIotThing
 
 
-- Data model for Things changed. Now AWS IoT thing is AwsIotThing. 
+- NGSI-LD Type for Things changed. Now AWS IoT thing is AwsIotThing. 
 
 ### Required Actions
 

@@ -5,7 +5,7 @@ import { GarnetIngestionStack} from './stacks/garnet-ingestion/garnet-ingestion-
 import { garnet_constant } from '../constants'
 import { GarnetCommon } from './stacks/garnet-common/garnet-common-stack'
 import { GarnetOps } from './stacks/garnet-ops/garnet-ops-stack'
-import { deployment_params } from '../sizing'
+import { deployment_params } from '../architecture'
 import { GarnetLake } from './stacks/garnet-lake/garnet-lake-stack'
 import { GarnetIot } from './stacks/garnet-iot/garnet-iot-stack'
 import { GarnetPrivateSub } from './stacks/garnet-privatesub/garnet-privatesub-stack'

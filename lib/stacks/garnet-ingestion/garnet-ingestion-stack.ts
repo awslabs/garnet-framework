@@ -4,9 +4,9 @@ import { Code, LayerVersion, Runtime, Function,Architecture} from "aws-cdk-lib/a
 import { Queue } from "aws-cdk-lib/aws-sqs"
 import { garnet_nomenclature } from '../../../constants'
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs'
-import { Parameters } from '../../../parameters'
+import { Parameters } from '../../../configuration'
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
-import { deployment_params } from '../../../sizing'
+import { deployment_params } from '../../../architecture'
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources'
 
 export interface GarnetIngestionStackProps extends NestedStackProps {

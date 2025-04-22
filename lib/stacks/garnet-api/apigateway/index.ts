@@ -7,6 +7,7 @@ import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { HttpLambdaAuthorizer, HttpLambdaResponseType } from "aws-cdk-lib/aws-apigatewayv2-authorizers"
 import { Aws, Duration } from "aws-cdk-lib"
 import { AuthorizationType, CfnAuthorizer } from "aws-cdk-lib/aws-apigateway"
+import { Parameters } from "../../../../configuration"
 
 export interface GarnetApiGatewayProps {
     readonly vpc: Vpc,
@@ -54,19 +55,6 @@ export class GarnetApiGateway extends Construct{
                 })
 
         const lambda_authorizer = LambdaFunction.fromFunctionArn(this, 'LambdaAuthorizer', props.lambda_authorizer_arn)
-
-        const authorizer = new CfnAuthorizerV2(this, 'JwtAuthorizer', {
-            apiId: api.apiId,
-            authorizerType: 'REQUEST',
-            authorizerPayloadFormatVersion: '2.0',
-            authorizerResultTtlInSeconds: 600,
-            authorizerUri: `arn:aws:apigateway:${Aws.REGION}:lambda:path/2015-03-31/functions/${props.lambda_authorizer_arn}/invocations`,
-            enableSimpleResponses: true,
-            identitySource: ['$request.header.Authorization'],
-            name: 'jwt-authorizer'
-        })
-
-
         const integration = new CfnIntegration(this, 'HttpApiIntegration', {
             apiId: api.apiId,
             integrationMethod: "ANY",
@@ -78,13 +66,34 @@ export class GarnetApiGateway extends Construct{
             payloadFormatVersion: "1.0",
         })
 
-        const route = new CfnRoute(this, 'Route', {
-            apiId: api.apiId,
-            routeKey: "ANY /{proxy+}",
-            target: `integrations/${integration.ref}`,
-            authorizationType: 'CUSTOM',
-            authorizerId: authorizer.ref
-        })
+
+
+
+            const authorizer = new CfnAuthorizerV2(this, 'JwtAuthorizer', {
+                apiId: api.apiId,
+                authorizerType: 'REQUEST',
+                authorizerPayloadFormatVersion: '2.0',
+                authorizerResultTtlInSeconds: 600,
+                authorizerUri: `arn:aws:apigateway:${Aws.REGION}:lambda:path/2015-03-31/functions/${props.lambda_authorizer_arn}/invocations`,
+                enableSimpleResponses: true,
+                identitySource: ['$request.header.Authorization'],
+                name: 'jwt-authorizer'
+            })
+
+            const route = new CfnRoute(this, 'AuthRoute', {
+                apiId: api.apiId,
+                routeKey: "ANY /{proxy+}",
+                target: `integrations/${integration.ref}`,
+                authorizationType: Parameters.authorization ? 'CUSTOM' : 'NONE',
+                ...(Parameters.authorization ? {
+                    authorizerId: authorizer.ref,
+                  } : {})
+            })
+            
+            if (Parameters.authorization) {
+                route.node.addDependency(authorizer)
+            }
+
 
         this.api_ref = api.apiId
 

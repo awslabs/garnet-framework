@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { App } from 'aws-cdk-lib';
 import { GarnetStack } from '../lib/garnet-stack';
-import { Parameters } from '../parameters';
+import { Parameters } from '../configuration';
 
 const app = new App();
 

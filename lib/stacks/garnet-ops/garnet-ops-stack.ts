@@ -2,7 +2,7 @@ import { Aws, Duration, NestedStack, NestedStackProps } from "aws-cdk-lib";
 import { Dashboard,  Metric, Row, SingleValueWidget } from "aws-cdk-lib/aws-cloudwatch";
 import { Construct } from "constructs";
 import { garnet_bucket, garnet_nomenclature, scorpiobroker_sqs_object } from "../../../constants";
-import { deployment_params } from "../../../sizing";
+import { deployment_params } from "../../../architecture";
 
 
 export interface GarnetOpsProps extends NestedStackProps{
@@ -200,78 +200,11 @@ export class GarnetOps extends NestedStack {
 
         // GARNET INGESTION LAMBDA UPDATE BROKER
         
-        let garnet_ingestion_lambda_update_broker_widget = set_lambda_widgets('Update Shadow', garnet_nomenclature.garnet_ingestion_update_broker_lambda)
-
-        // GARNET IOT LAMBDA UPDATE SHADOW 
-        //let garnet_iot_lambda_update_shadow_widget = set_lambda_widgets('Update Shadow', garnet_nomenclature.garnet_iot_update_shadow_lambda)
-
-        // GARNET IOT LAMBDA UPDATE BROKER 
-
-        //let garnet_iot_lambda_update_broker_widget = set_lambda_widgets('Update Broker', garnet_nomenclature.garnet_iot_update_broker_lambda)
-
-
-
-        // GARNET IOT RULE INGESTION 
-        let garnet_iot_rule_metrics = [
-            new Metric({
-                label: 'Garnet IoT - Ingestion Rule - Success',
-                namespace: 'AWS/IoT',
-                metricName: 'Success', 
-                dimensionsMap: {
-                    ActionType: "SQS",
-                    RuleName: garnet_nomenclature.garnet_iot_rule
-                }, 
-                statistic: 'Sum',
-
-            }), 
-            new Metric({
-                label: 'Garnet IoT - Ingestion Rule - Failure',
-                namespace: 'AWS/IoT',
-                metricName: 'Failure', 
-                dimensionsMap: {
-                    ActionType: "SQS",
-                    RuleName: garnet_nomenclature.garnet_iot_rule
-                }, 
-                statistic: 'Sum',
-            }), 
-            new Metric({
-                label: 'Garnet IoT - Data Lake Rule - Success',
-                namespace: 'AWS/IoT',
-                metricName: 'Success', 
-                dimensionsMap: {
-                    ActionType: "Firehose",
-                    RuleName: garnet_nomenclature.garnet_lake_rule
-                }, 
-                statistic: 'Sum',
-
-            }), 
-            new Metric({
-                label: 'Garnet IoT - Data Lake Rule - Failure',
-                namespace: 'AWS/IoT',
-                metricName: 'Failure', 
-                dimensionsMap: {
-                    ActionType: "Firehose",
-                    RuleName: garnet_nomenclature.garnet_lake_rule
-                }, 
-                statistic: 'Sum',
-            })
-        ]
-        
-        let garnet_iot_rule_widget = new SingleValueWidget({
-            title: 'Garnet IoT - IoT Rules',
-            width: 24,
-            period: Duration.seconds(60),
-            metrics: garnet_iot_rule_metrics,
-            setPeriodToTimeRange: true
-        })
+        let garnet_ingestion_lambda_update_broker_widget = set_lambda_widgets('Ingestion Lambda', garnet_nomenclature.garnet_ingestion_update_broker_lambda)
 
     
         // GARNET IOT SQS INGESTION 
-        let garnet_ingestion_sqs_broker_widget = set_sqs_widgets('Garnet IoT - SQS IoT', garnet_nomenclature.garnet_ingestion_queue)
-
-        // GARNET IOT SQS UPDATE BROKER  
-        //let garnet_iot_sqs_broker_widget = set_sqs_widgets('Garnet IoT - SQS Update Broker', garnet_nomenclature.garnet_iot_contextbroker_queue)
-
+        let garnet_ingestion_sqs_broker_widget = set_sqs_widgets('Garnet SQS Ingestion', garnet_nomenclature.garnet_ingestion_queue)
 
         // GARNET DATALAKE 
         let garnet_iot_datalake_metrics = [
@@ -320,14 +253,13 @@ export class GarnetOps extends NestedStack {
         let garnet_iot_ingestion = new Row(
             garnet_ingestion_lambda_update_broker_widget,
             garnet_ingestion_sqs_broker_widget,
-            garnet_iot_rule_widget,
             garnet_iot_datalake_widget)
 
 
         garnet_dashboard.addWidgets(garnet_iot_ingestion)
 
 
-        // GARNET IOT RULE INGESTION 
+     
         let garnet_broker_db_metrics = [
             new Metric({
                 label: 'Garnet Broker Aurora - DataBase Connections',
