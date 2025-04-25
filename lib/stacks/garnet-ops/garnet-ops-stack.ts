@@ -33,6 +33,7 @@ export class GarnetOps extends NestedStack {
                         ServiceName: ServiceName
                     }, 
                     statistic: 'Average',
+                    period: Duration.minutes(30)
         
                 }),
                 new Metric({
@@ -44,6 +45,7 @@ export class GarnetOps extends NestedStack {
                         ServiceName: ServiceName
                     }, 
                     statistic: 'Average',
+                    period: Duration.minutes(30)
         
                 }),
                 new Metric({
@@ -55,7 +57,8 @@ export class GarnetOps extends NestedStack {
                         ServiceName: ServiceName, 
                         DiscoveryName: DiscoveryName
                     }, 
-                    statistic: 'Average'
+                    statistic: 'Average',
+                    period: Duration.minutes(30)
         
                 }), 
                 new Metric({
@@ -67,7 +70,8 @@ export class GarnetOps extends NestedStack {
                         ServiceName: ServiceName, 
                         DiscoveryName: DiscoveryName
                     },  
-                    statistic: 'IQM'
+                    statistic: 'IQM',
+                    period: Duration.minutes(30)
                 }), 
             ]
         
@@ -92,6 +96,7 @@ export class GarnetOps extends NestedStack {
                         FunctionName: functionName
                     }, 
                     statistic: 'Sum',
+                    period: Duration.minutes(30)
     
                 }), 
                 new Metric({
@@ -102,6 +107,7 @@ export class GarnetOps extends NestedStack {
                         FunctionName: functionName
                     }, 
                     statistic: 'Sum',
+                    period: Duration.minutes(30)
     
                 }), 
                 new Metric({
@@ -112,6 +118,7 @@ export class GarnetOps extends NestedStack {
                         FunctionName: functionName
                     }, 
                     statistic: 'IQM',
+                    period: Duration.minutes(30)
     
                 }), 
                 new Metric({
@@ -121,7 +128,8 @@ export class GarnetOps extends NestedStack {
                     dimensionsMap: {
                         FunctionName: functionName
                     }, 
-                    statistic: 'IQM'
+                    statistic: 'IQM',
+                    period: Duration.minutes(30)
                 }),
                 new Metric({
                     label: `${label} - Throttles`,
@@ -130,11 +138,13 @@ export class GarnetOps extends NestedStack {
                     dimensionsMap: {
                         FunctionName: functionName
                     }, 
-                    statistic: 'Sum'
+                    statistic: 'Sum',
+                    period: Duration.minutes(30)
+
                 })
             ]
             return new SingleValueWidget({
-                title: `Garnet IoT - Lambda ${label}`,
+                title: `Garnet Ingestion- Lambda ${label}`,
                 width: 24,
                 period: Duration.seconds(60),
                 metrics: garnet_lambda_metrics, 
@@ -152,7 +162,7 @@ export class GarnetOps extends NestedStack {
                         QueueName: queueName
                     }, 
                     statistic: 'Sum',
-
+                    period: Duration.minutes(30)
                 }),
                 new Metric({
                     label: `${label}- Sent Message Size`,
@@ -162,7 +172,7 @@ export class GarnetOps extends NestedStack {
                         QueueName:  queueName
                     }, 
                     statistic: 'IQM',
-
+                    period: Duration.minutes(30)
                 }), 
                 new Metric({
                     label: `${label} - Nb Message Received`,
@@ -172,7 +182,7 @@ export class GarnetOps extends NestedStack {
                         QueueName:  queueName
                     }, 
                     statistic: 'Sum',
-
+                    period: Duration.minutes(30)
                 }),
                 new Metric({
                     label: `${label} - Approx Age Oldest Message`,
@@ -182,7 +192,7 @@ export class GarnetOps extends NestedStack {
                         QueueName:  queueName
                     }, 
                     statistic: 'IQM',
-
+                    period: Duration.minutes(30)
                 })
             ]
             return new SingleValueWidget({
@@ -203,11 +213,11 @@ export class GarnetOps extends NestedStack {
         let garnet_ingestion_lambda_update_broker_widget = set_lambda_widgets('Ingestion Lambda', garnet_nomenclature.garnet_ingestion_update_broker_lambda)
 
     
-        // GARNET IOT SQS INGESTION 
+        // GARNET SQS INGESTION 
         let garnet_ingestion_sqs_broker_widget = set_sqs_widgets('Garnet SQS Ingestion', garnet_nomenclature.garnet_ingestion_queue)
 
         // GARNET DATALAKE 
-        let garnet_iot_datalake_metrics = [
+        let garnet_datalake_metrics = [
             new Metric({
                 label: 'Garnet Lake - Number of Objects Stored',
                 namespace: 'AWS/S3',
@@ -217,7 +227,7 @@ export class GarnetOps extends NestedStack {
                     StorageType: "AllStorageTypes"
                 }, 
                 statistic: 'Sum',
-
+                period: Duration.minutes(30)
             }),
             new Metric({
                 label: 'Garnet Lake - Bytes Stored',
@@ -228,7 +238,7 @@ export class GarnetOps extends NestedStack {
                     StorageType: "StandardStorage"
                 }, 
                 statistic: 'Sum',
-
+                period: Duration.minutes(30)
             }), 
             new Metric({
                 label: 'Garnet Lake - Firehose',
@@ -237,26 +247,27 @@ export class GarnetOps extends NestedStack {
                 dimensionsMap: {
                     DeliveryStreamName: garnet_nomenclature.garnet_lake_iot_firehose_stream,
                 }, 
-                statistic: 'Sum'
+                statistic: 'Sum',
+                period: Duration.minutes(30)
             })
         ]
 
-        let garnet_iot_datalake_widget = new SingleValueWidget({
+        let garnet_datalake_widget = new SingleValueWidget({
             title: 'Garnet Data Lake',
             width: 24,
             period: Duration.seconds(60),
-            metrics: garnet_iot_datalake_metrics,
+            metrics: garnet_datalake_metrics,
             setPeriodToTimeRange: true
         })
 
 
-        let garnet_iot_ingestion = new Row(
+        let garnet_ingestion = new Row(
             garnet_ingestion_lambda_update_broker_widget,
             garnet_ingestion_sqs_broker_widget,
-            garnet_iot_datalake_widget)
+            garnet_datalake_widget)
 
 
-        garnet_dashboard.addWidgets(garnet_iot_ingestion)
+        garnet_dashboard.addWidgets(garnet_ingestion)
 
 
      
@@ -268,7 +279,8 @@ export class GarnetOps extends NestedStack {
                 dimensionsMap: {
                     DBClusterIdentifier: garnet_nomenclature.garnet_db_cluster_id
                 }, 
-                statistic: 'IQM'
+                statistic: 'IQM',
+                period: Duration.minutes(30)
             }),
             new Metric({
                 label: 'Garnet Broker Aurora - ACU Utilization',
@@ -286,7 +298,8 @@ export class GarnetOps extends NestedStack {
                 dimensionsMap: {
                     DBClusterIdentifier: garnet_nomenclature.garnet_db_cluster_id
                 }, 
-                statistic: 'IQM'
+                statistic: 'IQM',
+                period: Duration.minutes(30)
             }),
             new Metric({
                 label: 'Garnet Broker Aurora - CPU Utilization',
@@ -313,7 +326,8 @@ export class GarnetOps extends NestedStack {
                 dimensionsMap: {
                     DBClusterIdentifier: garnet_nomenclature.garnet_db_cluster_id
                 }, 
-                statistic: 'IQM'
+                statistic: 'IQM',
+                period: Duration.minutes(30)
             }),
             new Metric({
                 label: 'Garnet Broker Aurora - Read Ops',
@@ -322,7 +336,8 @@ export class GarnetOps extends NestedStack {
                 dimensionsMap: {
                     DBClusterIdentifier: garnet_nomenclature.garnet_db_cluster_id
                 }, 
-                statistic: 'IQM'
+                statistic: 'IQM',
+                period: Duration.minutes(30)
             }),
             new Metric({
                 label: 'Garnet Broker Aurora - Read Latency',
@@ -340,7 +355,8 @@ export class GarnetOps extends NestedStack {
                 dimensionsMap: {
                     DBClusterIdentifier: garnet_nomenclature.garnet_db_cluster_id
                 }, 
-                statistic: 'IQM'
+                statistic: 'IQM',
+                period: Duration.minutes(30)
             }),
         ]
         

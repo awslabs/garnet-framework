@@ -65,7 +65,6 @@ export class GarnetIotThing extends Construct {
           architecture: Architecture.ARM_64,
           environment: {
              DNS_CONTEXT_BROKER: props.dns_context_broker,
-             URL_SMART_DATA_MODEL: Parameters.smart_data_model_url,
              AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
           }
         })

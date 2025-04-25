@@ -34,6 +34,7 @@ The documentation has been updated to reflect these changes and provides detaile
     - Created more efficient data pipeline by removing IoT rule dependency
 
 - API and Data Model Changes
+    - Removing the Garnet JSON-LD context
     - Deprecation of IoT API
     - Authorization now enforced with a token (provided as output of CloudFormation stack)
     - JSON-LD context change: AWS IoT thing is now referenced as AwsIotThing

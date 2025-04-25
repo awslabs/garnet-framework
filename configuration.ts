@@ -1,4 +1,3 @@
-import { SIZING } from "./constants"
 import { ARCHITECTURE } from "./architecture"
 
 // GARNET PARAMETERS
@@ -16,9 +15,6 @@ export const Parameters = {
      * - Distributed: 8 specialized microservices, recommended for production deployments
     */
     architecture: ARCHITECTURE.Distributed,
-
-    // SMART DATA MODEL
-    smart_data_model_url : 'https://raw.githubusercontent.com/awslabs/garnet-framework/main/context.jsonld', 
 
 
     // API Authorization
