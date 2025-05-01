@@ -8,6 +8,7 @@ import { deployment_params } from "../../../../architecture"
 import { Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { garnet_broker, garnet_constant, garnet_nomenclature } from "../../../../constants"
 import { Alarm } from "aws-cdk-lib/aws-cloudwatch"
+import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources"
 
 export interface GarnetScorpioDatabaseProps {
     vpc: Vpc
@@ -79,10 +80,10 @@ export class GarnetScorpioDatabase extends Construct{
             writer: ClusterInstance.serverlessV2('writer', {
                 caCertificate: CaCertificate.RDS_CA_RSA4096_G1
             }), 
-            readers: [ClusterInstance.serverlessV2('reader', {
-                scaleWithWriter: true,
-                caCertificate: CaCertificate.RDS_CA_RSA4096_G1
-            })], 
+            // readers: [ClusterInstance.serverlessV2('reader', {
+            //     scaleWithWriter: true,
+            //     caCertificate: CaCertificate.RDS_CA_RSA4096_G1
+            // })], 
             serverlessV2MinCapacity: deployment_params.aurora_min_capacity!,
             serverlessV2MaxCapacity: deployment_params.aurora_max_capacity!,
             storageType: deployment_params.aurora_storage_type!
@@ -118,6 +119,8 @@ export class GarnetScorpioDatabase extends Construct{
             role: role_proxy,
             securityGroups: [sg_proxy]
         })
+
+        rds_proxy.node.addDependency(cluster)
 
         // // RDS Read OnlyProxy
         // const readOnlyEndpoint = new CfnDBProxyEndpoint(this, 'RdsProxyReadOnlyEndpoint', {

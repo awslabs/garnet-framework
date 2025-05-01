@@ -11,26 +11,10 @@ export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` 
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
 export const garnet_broker = "Scorpio" 
 
-
-export enum SIZING {
-    Small = 2, 
-    Medium = 3, 
-    Large = 4, 
-    Xlarge = 5
-}
-
-// export enum ARCHITECTURE {
-//     concentrated = 1,
-//     distributed= 2
-// }
-
-
-
 export const garnet_constant = {
     garnet_version: version,
     shadow_prefix: "Garnet",
     dbname: 'scorpio',
-    subAllName: 'GarnetDataLakeSub-DoNotDelete',
     iotDomainName: 'garnet-iot-domain', 
     gluedbName: 'garnetdb'
 }

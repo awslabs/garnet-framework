@@ -68,8 +68,7 @@ export class GarnetIngestionStack extends NestedStack {
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
             environment: {
-              DNS_CONTEXT_BROKER: props.dns_context_broker,
-              AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
+              DNS_CONTEXT_BROKER: props.dns_context_broker
             }
           }
         )
