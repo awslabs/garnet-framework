@@ -5,9 +5,9 @@ import { Aws, CustomResource, Duration,NestedStack, NestedStackProps, RemovalPol
 
 import { Provider } from "aws-cdk-lib/custom-resources"
 import { garnet_bucket, garnet_constant, garnet_nomenclature } from "../../../constants"
-import { GarnetBucket } from "./bucket"
-import { GarnetDataLakeAthena } from "./athena"
-import { GarnetDataLakeStream } from "./stream"
+import { GarnetBucket } from "./bucket/bucket-construct"
+import { GarnetDataLakeAthena } from "./athena/athena-construct"
+import { GarnetDataLakeStream } from "./stream/firehose-stream-construct"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 
 

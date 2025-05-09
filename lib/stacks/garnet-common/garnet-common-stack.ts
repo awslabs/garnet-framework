@@ -1,8 +1,8 @@
 import { NestedStack, NestedStackProps } from "aws-cdk-lib";
 import { Construct } from "constructs";
-import { GarnetSecret } from "./secret";
-import { GarnetNetworking } from "./networking";
-import { Utils } from "./utils";
+import { GarnetSecret } from "./secret/secret-construct";
+import { GarnetNetworking } from "./networking/networking-construct";
+import { Utils } from "./utils/utils-construct";
 import { Vpc } from "aws-cdk-lib/aws-ec2";
 import { Secret } from "aws-cdk-lib/aws-secretsmanager";
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose";

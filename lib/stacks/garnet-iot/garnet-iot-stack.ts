@@ -1,7 +1,7 @@
 import { NestedStack, NestedStackProps} from "aws-cdk-lib";
 import { Construct } from "constructs"
-import { GarnetIotGroup } from "./iot-group";
-import { GarnetIotThing } from "./iot-presence";
+import { GarnetIotGroup } from "./iot-group/iot-group-construct";
+import { GarnetIotThing } from "./iot-presence/iot-presence-construct";
 import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Vpc } from "aws-cdk-lib/aws-ec2";
 
