@@ -1,10 +1,10 @@
 import { Aws, CfnOutput, NestedStack, NestedStackProps} from "aws-cdk-lib"
 import { Construct } from "constructs"
-import { GarnetApiCommon } from "./apicommon"
+import { GarnetApiCommon } from "./apicommon/api-common-construct"
 import { Vpc } from "aws-cdk-lib/aws-ec2"
-import { GarnetApiGateway } from "./apigateway"
+import { GarnetApiGateway } from "./apigateway/api-gateway-construct"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
-import { GarnetApiAuthJwt } from "./apiauth"
+import { GarnetApiAuthJwt } from "./apiauth/api-auth-construct"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Queue } from "aws-cdk-lib/aws-sqs"
 

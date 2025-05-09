@@ -50,18 +50,23 @@ export class GarnetIotGroup extends Construct {
         eventConfigurations: { 
           "THING_GROUP_MEMBERSHIP": { 
             Enabled: true 
+          },
+          "THING_GROUP": {
+            "Enabled": true
+          },
+          "THING_GROUP_HIERARCHY": {
+            "Enabled": true
           }
         }
        }
 
-       const garnet_iot_custom_thing_event_log = new LogGroup(this, 'CustomIotThingsEventGroupMembershipLogs', {
+       const garnet_iot_custom_thing_event_log = new LogGroup(this, 'CustomIotUpdateGroupMembershipLogs', {
         retention: RetentionDays.ONE_MONTH,
-        // logGroupName: `garnet-iot-custom-things-event-cw-logs`,
         removalPolicy: RemovalPolicy.DESTROY
         })
 
-      const iot_event = new AwsCustomResource(this, 'CustomIotThingsEventGroupMembership', {
-      functionName: `garnet-iot-custom-things-event`,
+      const iot_event = new AwsCustomResource(this, 'CustomIotUpdateGroupMembership', {
+      functionName: `garnet-iot-custom-updating-group-event`,
         onCreate: {
           service: 'Iot',
           action: 'UpdateEventConfigurations',
@@ -84,10 +89,9 @@ export class GarnetIotGroup extends Construct {
     // LAMBDA TO UPDATE BROKER WITH GROUP MEMBERSHIP
     const lambda_update_group_membership_log = new LogGroup(this, 'LambdaUpdateGroupThingLogs', {
       retention: RetentionDays.ONE_MONTH,
-    //   logGroupName: `garnet-iot-group-thing-lambda-cw-logs`,
       removalPolicy: RemovalPolicy.DESTROY
     })
-    const lambda_update_group_membership_path = `${__dirname}/lambda/group`;
+    const lambda_update_group_membership_path = `${__dirname}/lambda/groupMembership`;
     const lambda_update_group_membership = new Function(this, "LambdaUpdateGroupThing", {
       functionName: garnet_nomenclature.garnet_iot_group_lambda,
       description: 'Garnet IoT Things Group- Function that updates Things Group membership for Things',
