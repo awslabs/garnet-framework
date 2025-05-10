@@ -48,14 +48,17 @@ export const garnet_nomenclature = {
 
     // GARNET MODEL 
     aws_iot_thing: "AwsIotThing",
+    aws_iot_thing_group: "AwsIotThingGroup",
     aws_iot_lorawan_thing: "AwsIotLorawanThing",
     aws_iot_lorawan_gateway: "AwsIotLorawanGateway", 
     
     //GARNET INGESTION LAMBDA
     garnet_ingestion_update_broker_lambda: `garnet-ingestion-update-broker-lambda`,
     garnet_lake_transform_lambda: `garnet-lake-transform-lambda`, 
+    garnet_iot_lifecycle_lambda: `garnet-iot-thing-lifecycle-lambda`,
     garnet_iot_presence_lambda: `garnet-iot-presence-lambda`,
-    garnet_iot_group_lambda: `garnet-iot-group-lambda`,
+    garnet_iot_group_membership_lambda: `garnet-iot-group-membership-lambda`,
+    garnet_iot_group_lifecycle_lambda: `garnet-iot-group-lifecycle-lambda`,
     garnet_iot_authorizer_lambda: `garnet-iot-authorizer-lambda`,
     garnet_private_sub_lambda: `garnet-private-sub-lambda`, 
     garnet_lake_rule:`garnet_lake_rule`,

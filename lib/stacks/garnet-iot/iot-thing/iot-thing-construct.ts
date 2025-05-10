@@ -122,6 +122,69 @@ export class GarnetIotThing extends Construct {
       })
     
        // END CONNECTIVITY STATUS 
+
+
+
+
+       /*
+         *  THING LIFECYCLE 
+         */
+
+        // LAMBDA TO HANDLE THING CREATION/DELETION
+        const lambda_thing_lifecyle_log = new LogGroup(this, 'GarnetIotThingLifecycleLambdaLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          removalPolicy: RemovalPolicy.DESTROY
+        })
+        const lambda_thing_lifecycle_path = `${__dirname}/lambda/thingLifecycle`;
+        const lambda_thing_lifecyle = new Function(this, "GarnetIotThingLifecycleLambda", {
+          functionName: `${garnet_nomenclature.garnet_iot_lifecycle_lambda}`,
+          description: 'Garnet AWS IoT Things  Sync - Function that handles Thing lifecycle',
+          vpc: props.vpc,
+          vpcSubnets: {
+            subnetType: SubnetType.PRIVATE_WITH_EGRESS,
+          },
+          runtime: Runtime.NODEJS_22_X,
+          layers: [layer_lambda],
+          code: Code.fromAsset(lambda_thing_lifecycle_path),
+          handler: "index.handler",
+          timeout: Duration.seconds(50),
+          logGroup: lambda_thing_lifecyle_log,
+          architecture: Architecture.ARM_64,
+          environment: {
+            DNS_CONTEXT_BROKER: props.dns_context_broker,
+            AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
+          }
+        })
+        lambda_thing_lifecyle.node.addDependency(lambda_thing_lifecyle_log)
+
+        // IOT RULE FOR THING LIFECYCLE EVENTS
+        const iot_rule_thing_lifecycle = new CfnTopicRule(this, "GarnetIotThingLifecycleRule", {
+          ruleName: `garnet_iot_thing_lifecycle_rule`,
+          topicRulePayload: {
+            awsIotSqlVersion: "2016-03-23",
+            ruleDisabled: false,
+            sql: `SELECT * from '$aws/events/thing/#'`,
+            actions: [
+              {
+                lambda: {
+                  functionArn: lambda_thing_lifecyle.functionArn
+                }
+              }
+            ]
+          }
+        })
+
+        // GRANT IOT RULE PERMISSION TO INVOKE LAMBDA
+        new CfnPermission(this, 'GarnetIotThingLifecycleLambdaPermission', {
+          principal: `iot.amazonaws.com`,
+          action: 'lambda:InvokeFunction',
+          functionName: lambda_thing_lifecyle.functionName,
+          sourceArn: `${iot_rule_thing_lifecycle.attrArn}`
+        })
+
+        /*
+         *  END THING LIFECYCLE 
+         */
     
     }
 }
