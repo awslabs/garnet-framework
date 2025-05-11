@@ -58,6 +58,7 @@ export const garnet_nomenclature = {
     garnet_iot_lifecycle_lambda: `garnet-iot-thing-lifecycle-lambda`,
     garnet_iot_presence_lambda: `garnet-iot-presence-lambda`,
     garnet_iot_group_membership_lambda: `garnet-iot-group-membership-lambda`,
+    garnet_iot_group_hierarchy_lambda: `garnet-iot-group-hierarchy-lambda`,
     garnet_iot_group_lifecycle_lambda: `garnet-iot-group-lifecycle-lambda`,
     garnet_iot_authorizer_lambda: `garnet-iot-authorizer-lambda`,
     garnet_private_sub_lambda: `garnet-private-sub-lambda`, 

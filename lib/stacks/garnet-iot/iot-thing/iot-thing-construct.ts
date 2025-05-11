@@ -11,6 +11,11 @@ import { garnet_constant, garnet_nomenclature } from "../../../../constants";
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2";
 import { Parameters } from "../../../../configuration";
 
+/***
+ * https://docs.aws.amazon.com/iot/latest/developerguide/registry-events.html#registry-events-thing
+ */
+
+
 export interface GarnetIotThingProps {
     vpc: Vpc, 
     dns_context_broker: string
