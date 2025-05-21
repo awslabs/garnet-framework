@@ -61,14 +61,14 @@ export class GarnetDataLakeStream extends Construct {
 
 // KINESIS FIREHOSE DELIVERY STREAM
 const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
-    deliveryStreamName: garnet_nomenclature.garnet_lake_iot_firehose_stream,
+    deliveryStreamName: garnet_nomenclature.garnet_lake_firehose_stream,
     deliveryStreamType: "DirectPut",
     extendedS3DestinationConfiguration: {
       bucketArn: bucket.bucketArn,
       roleArn: role_firehose.roleArn,
       bufferingHints: {
-        intervalInSeconds: 60,
-        sizeInMBs: 64,
+        intervalInSeconds: garnet_nomenclature.garnet_lake_firehose_interval,
+        sizeInMBs: garnet_nomenclature.garnet_lake_buffer_size,
       },
       processingConfiguration: {
         enabled: true,

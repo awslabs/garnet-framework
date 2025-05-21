@@ -5,7 +5,7 @@
 import { Aws } from "aws-cdk-lib"
 const {version} = require('./package.json')
 
-const garnet_scorpio_version = "5.0.90"
+const garnet_scorpio_version = "5.0.91"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
@@ -82,8 +82,10 @@ export const garnet_nomenclature = {
     garnet_iot_group_queue: `garnet-iot-presence-${Aws.REGION}`,
 
     // GARNET FIREHOSE 
-    garnet_lake_iot_firehose_stream: `garnet-datalake-firehose-stream`,
+    garnet_lake_firehose_stream: `garnet-datalake-firehose-stream`,
     garnet_sub_firehose_stream: `garnet-subs-firehose-stream`, 
+    garnet_lake_firehose_interval: 60, // seconds
+    garnet_lake_buffer_size: 64, // MB
 
     // GARNET BROKER CLUSTER
     garnet_broker_cluster: `garnet-broker-cluster`,

@@ -245,7 +245,7 @@ export class GarnetOps extends NestedStack {
                 namespace: 'AWS/Firehose',
                 metricName: 'DeliveryToS3.Records', 
                 dimensionsMap: {
-                    DeliveryStreamName: garnet_nomenclature.garnet_lake_iot_firehose_stream,
+                    DeliveryStreamName: garnet_nomenclature.garnet_lake_firehose_stream,
                 }, 
                 statistic: 'Sum',
                 period: Duration.minutes(30)

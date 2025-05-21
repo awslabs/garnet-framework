@@ -58,14 +58,13 @@ export class GarnetApiAuthJwt extends Construct {
 
         props.secret_api_jwt.grantRead(api_auth_jwt_generator_lambda)
 
-        const api_auth_jwt_generator_provider_logs = new LogGroup(this, 'LambdaAuthJwtProviderLogs', {
+        const api_auth_jwt_generator_provider_logs = new LogGroup(this, 'LambdaJwtAuthProviderLogs', {
             retention: RetentionDays.ONE_MONTH,
             removalPolicy: RemovalPolicy.DESTROY
         })
 
-        const api_auth_jwt_generator_provider = new Provider(this, 'LambdaAuthJwtProvider', {
+        const api_auth_jwt_generator_provider = new Provider(this, 'LambdaJwtAuthProvider', {
         onEventHandler: api_auth_jwt_generator_lambda,
-        providerFunctionName: `${garnet_nomenclature.garnet_api_auth_jwt_lambda}-provider`,
         logGroup: api_auth_jwt_generator_provider_logs
         }) 
         api_auth_jwt_generator_provider.node.addDependency(api_auth_jwt_generator_provider_logs)

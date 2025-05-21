@@ -2,6 +2,30 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [1.4.1] - 2025-05-20 
+
+This new version includes enhancements to key components, bug fixes, and new integration features.
+
+### Enhancements
+
+- Enhanced the datalake component to transmit normalized entity versions including system attributes, providing more comprehensive data for analysis
+- Updated Scorpio Broker to version [5.0.91](https://gallery.ecr.aws/garnet/)
+- Improved stability of the subscriptions component
+- Added multi-architecture support for seamless transitions between concentrated and distributed deployments: 
+    - Implemented intelligent context resolution with configurable fallback mechanism 
+    - Ensured backward compatibility for existing subscriptions when changing architectures 
+    - Added context caching for improved performance
+
+
+### New Features
+
+- Added synchronization from AWS IoT to the context broker:
+    - The system now listens to AWS IoT Core event messages and automatically updates the context broker
+    - Creation, deletion, or updates of AWS IoT Things now trigger corresponding entity changes in the context broker using the AwsIotThing type
+    - Similar lifecycle management for AWS IoT Thing Groups creates or updates entities using the AwsIotThingGroup type
+
+ 
+
 ## [1.4.0] - 2025-02-19 
 
 We've implemented significant architectural changes in this release to improve cost efficiency and scalability. 
@@ -95,6 +119,6 @@ This new version fixes some bugs, introduces new features and potential breaking
 
 
 
-## [1.0.0] - 2023-05-02
+## [1.0.0] - 2023-11-02
 
 Initial commit of the Garnet Framework. 
