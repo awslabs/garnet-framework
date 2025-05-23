@@ -14,7 +14,7 @@ export const Parameters = {
      * - Concentrated: All services in one container, suitable for development and testing
      * - Distributed: 8 specialized microservices, recommended for production deployments
     */
-    architecture: ARCHITECTURE.Distributed,
+    architecture: ARCHITECTURE.Concentrated,
 
 
     // API Authorization
