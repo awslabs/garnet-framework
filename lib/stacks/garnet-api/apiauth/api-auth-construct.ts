@@ -63,13 +63,13 @@ export class GarnetApiAuthJwt extends Construct {
             removalPolicy: RemovalPolicy.DESTROY
         })
 
-        const api_auth_jwt_generator_provider = new Provider(this, 'LambdaJwtAuthProvider', {
+        const api_auth_jwt_generator_provider = new Provider(this, 'LambdaAuthJwtProvider', {
         onEventHandler: api_auth_jwt_generator_lambda,
         logGroup: api_auth_jwt_generator_provider_logs
         }) 
         api_auth_jwt_generator_provider.node.addDependency(api_auth_jwt_generator_provider_logs)
 
-        const api_auth_jwt_generator_resource = new CustomResource(this, 'ApiAuthJwtResource', {
+        const api_auth_jwt_generator_resource = new CustomResource(this, 'ApiJwtAuthResource', {
         serviceToken: api_auth_jwt_generator_provider.serviceToken
         })
         
