@@ -2,6 +2,16 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [1.4.2] - 2025-05-28
+
+### Bug Fixes
+
+- Updated Scorpio Broker to version [5.0.92](https://gallery.ecr.aws/garnet/)
+- Fixed context resolution issue affecting transitions between concentrated and distributed architectures
+- Improved handling of external context URLs with robust fallback mechanism
+- Enhanced error handling and logging for context resolution
+
+
 ## [1.4.1] - 2025-05-20 
 
 This new version includes enhancements to key components, bug fixes, and new integration features.

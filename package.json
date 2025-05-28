@@ -1,6 +1,6 @@
 {
   "name": "garnet",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "bin": {
     "garnet": "bin/garnet.js"
   },

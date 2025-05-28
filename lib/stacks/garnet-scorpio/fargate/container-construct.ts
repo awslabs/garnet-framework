@@ -834,7 +834,14 @@ export class GarnetScorpioFargate extends Construct {
         fargate_alb_listener.addTargets("AtContextServerTarget", {
             targets: [at_context_server_service],
             conditions: [
-                ListenerCondition.pathPatterns(["/ngsi-ld/v1/jsonldContexts/","/ngsi-ld/v1/jsonldContexts/*"]),
+                ListenerCondition.pathPatterns(
+                    [
+                        "/ngsi-ld/v1/jsonldContexts/",
+                        "/ngsi-ld/v1/jsonldContexts/*",
+                        "/createcache/",
+                        "/createcache/*"
+                    ]
+                ),
             ],
             priority: 111,
             targetGroupName: "AtContextServer",
