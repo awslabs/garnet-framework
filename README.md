@@ -1,8 +1,10 @@
 ## Garnet Framework 
 
+#### Version 1.4.3
+
 __Explore the [documentation website of Garnet Framework](https://garnet-framework.dev/docs) to get started.__ 
 
-#### Version 1.4.3
+
 
 ### Overview
 
