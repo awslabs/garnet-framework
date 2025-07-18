@@ -2,6 +2,12 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [1.4.3] - 2025-07-18
+
+### Enhancements
+
+- Added CORS preflight support for API Gateway with dedicated OPTIONS method handler
+
 ## [1.4.2] - 2025-05-28
 
 ### Bug Fixes
@@ -131,4 +137,4 @@ This new version fixes some bugs, introduces new features and potential breaking
 
 ## [1.0.0] - 2023-11-02
 
-Initial commit of the Garnet Framework. 
+Initial commit of the Garnet Framework.
