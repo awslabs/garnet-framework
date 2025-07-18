@@ -4,8 +4,6 @@
 
 __Explore the [documentation website of Garnet Framework](https://garnet-framework.dev/docs) to get started.__ 
 
-
-
 ### Overview
 
 The Garnet Framework is an open-source framework that enables you to build living digital twins and context-aware solutions through dynamic knowledge graphs. 
