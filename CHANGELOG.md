@@ -2,6 +2,82 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [1.4.5] - 2025-07-31
+
+### Bug Fixes
+
+- Fixed critical linked entity retrieval bug in Scorpio Broker [5.0.93](https://gallery.ecr.aws/garnet/) affecting `join=inline` with `joinLevel` parameters:
+  - Resolved issue where linked entities returned empty arrays instead of embedded entities when using `options=simplified` or `options=concise`
+  - Enhanced JSON-LD compaction process to preserve embedded entity data after processing
+  - Fixed handling of all NGSI-LD attribute types in concise format conversion
+
+- Resolved reactive streams initialization conflicts in subscription system:
+  - Fixed `ReactiveStreamsNoActiveSubscriptionsException` during startup caused by mixed Camel and reactive messaging patterns
+  - Refactored GarnetNotificationService to use pure reactive messaging with MutinyEmitter patterns
+  - Updated SQS configuration with proper credentials and queue naming conventions
+
+### Enhancements
+
+- Enhanced subscription validation with comprehensive input safety:
+  - Added type validation for malformed notification fields to prevent runtime crashes
+  - Implemented proper error handling for ClassCastException and IndexOutOfBoundsException scenarios
+  - Improved validation error messages for better debugging experience
+
+- Optimized private notification batching configuration:
+  - Reduced batch timeout to 1 second for improved responsiveness
+  - Maintained cost efficiency through intelligent batching (10 messages or 1 second timeout)
+  - Enhanced monitoring capabilities for batch processing metrics
+
+### Documentation
+
+- Updated comprehensive configuration documentation with copy-paste ready examples
+- Added complete Garnet Framework topic configuration in proper JavaScript object format
+- Included verification commands and testing procedures for both notification approaches
+- Provided build commands for production and development deployment scenarios
+
+## [1.4.4] - 2025-07-29
+
+### Enhancements
+
+- Updated Scorpio Broker to version [5.0.93](https://gallery.ecr.aws/garnet/) with comprehensive performance and functionality improvements:
+  - Implemented native timestamp usage across all services for improved query performance
+  - Optimized temporal query operations with enhanced database indexing for complex queries
+  - Enhanced subscription management with type-based indexing and improved JSONB operations
+  - Consolidated batch operations to reduce database round trips
+  - Added intelligent subscription indexing and JSON-LD context caching optimizations
+  - Improved linked entity optimization for better query performance on relationship-based filtering
+  - Enhanced database indexing for NGSI-LD relationship traversal supporting both Relationship and ListRelationship types
+  - Added comprehensive monitoring and analytics for relationship usage patterns
+  - Implemented thread-safe subscription processing with race condition protections
+  - Resolved Quarkus 3.24.5 upgrade compilation issues and memory allocation problems
+
+### New Features
+
+- **Garnet Private Endpoint System**: Replaced REST API Gateway with direct SQS integration for improved scalability:
+  - **Simplified subscription setup**: Omit the notification attribute to automatically use Garnet private endpoints
+  - **Scalable architecture**: Direct SQS batching with configurable batch sizes and timeout settings
+  - **AWS IoT Core integration**: Consumption through MQTT in AWS IoT Core remains unchanged for existing workflows
+  - **Lambda-compatible format**: Structured messages designed for serverless processing and MQTT topic distribution
+  - **Cost optimization**: Direct SQS approach reduces infrastructure overhead compared to API Gateway routing
+  - **Reliability improvements**: Built-in message durability, retry mechanisms, and dead letter queue support
+
+### Technical Implementation
+
+- Enhanced subscription service with type-based entity filtering for improved performance
+- Implemented thread-safe concurrent collections to eliminate race conditions in subscription processing
+- Added distributed cache synchronization using PostgreSQL NOTIFY/LISTEN for multi-instance deployments
+- Profile-based service activation ensures Garnet private endpoints are only active in SQS configurations
+- Automatic SQS queue creation leverages existing Apache Camel infrastructure
+- Built-in statistics and monitoring for queue performance and batch processing metrics
+
+### Upgrade Notes
+
+- Existing subscriptions with webhook endpoints continue to work unchanged
+- New subscriptions without notification attributes automatically use the Garnet private endpoint system
+- SQS profile deployments benefit from enhanced scalability and reduced latency
+- MQTT consumption patterns in AWS IoT Core remain compatible with existing implementations
+
+
 ## [1.4.3] - 2025-07-18
 
 ### Enhancements

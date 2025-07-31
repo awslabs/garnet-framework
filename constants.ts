@@ -5,10 +5,11 @@
 import { Aws } from "aws-cdk-lib"
 const {version} = require('./package.json')
 
-const garnet_scorpio_version = "5.0.92"
+const garnet_scorpio_version = "5.0.93-dev"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
+export const garnet_vector_bucket = `${garnet_bucket}-vector`
 export const garnet_broker = "Scorpio" 
 
 export const garnet_constant = {
@@ -121,12 +122,17 @@ export const garnet_nomenclature = {
 
   // GARNET UTILS 
 
-  garnet_utils_clean_ecs_taks_lambda :`garnet-utils-clean-ecstasks-lambda`,
-  garnet_utils_scorpio_sqs_lambda :`garnet-utils-scorpio-cleansqs-lambda`,
-  garnet_utils_az_lambda :`garnet-utils-getaz-lambda`,
-  garnet_utils_bucket_create_lambda: `garnet-utils-bucket-create-lambda`,
-  garnet_utils_bucket_check_lambda: `garnet-utils-bucket-check-lambda`,
-  garnet_utils_bucket_provider: `garnet-utils-bucket-provider-lambda`
+    garnet_utils_clean_ecs_taks_lambda :`garnet-utils-clean-ecstasks-lambda`,
+    garnet_utils_scorpio_sqs_lambda :`garnet-utils-scorpio-cleansqs-lambda`,
+    garnet_utils_az_lambda :`garnet-utils-getaz-lambda`,
+    garnet_utils_bucket_create_lambda: `garnet-utils-bucket-create-lambda`,
+    garnet_utils_bucket_check_lambda: `garnet-utils-bucket-check-lambda`,
+    garnet_utils_bucket_provider: `garnet-utils-bucket-provider-lambda`,
+
+    garnet_utils_vector_create_lambda: `garnet-utils-vector-create-lambda`,
+    garnet_utils_vector_check_lambda: `garnet-utils-vector-check-lambda`,
+    garnet_utils_vector_provider_lambda: `garnet-utils-vector-provider-lambda`,
+
 }
 
 
