@@ -3,13 +3,13 @@
 // List of AZs that support VPC links for HTTP APIs as https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability
 
 import { Aws } from "aws-cdk-lib"
+import { Parameters } from "./configuration"
 const {version} = require('./package.json')
 
-const garnet_scorpio_version = "5.0.93-dev"
+const garnet_scorpio_version = "5.0.93"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
-export const garnet_vector_bucket = `${garnet_bucket}-vector`
 export const garnet_broker = "Scorpio" 
 
 export const garnet_constant = {
@@ -33,11 +33,13 @@ export const garnet_scorpio_images = {
 }
 
 export const scorpiobroker_sqs_object = {
-    "SCORPIO_TOPICS_ENTITY": `garnet-scorpiobroker-entity`, 
-    "SCORPIO_TOPICS_REGISTRY": `garnet-scorpiobroker-registry`,
-    "SCORPIO_TOPICS_TEMPORAL": `garnet-scorpiobroker-temporal`,
+    "SCORPIO_TOPICS_ENTITY": `garnet-scorpiobroker-${Parameters.architecture}-entity`, 
+    "SCORPIO_TOPICS_REGISTRY": `garnet-scorpiobroker-${Parameters.architecture}-registry`,
+    "SCORPIO_TOPICS_TEMPORAL": `garnet-scorpiobroker-${Parameters.architecture}-temporal`,
     "SCORPIO_TOPICS_INTERNALNOTIFICATION": `garnet-scorpiobroker-internalnotification`,
     "SCORPIO_TOPICS_INTERNALREGSUB": `garnet-scorpiobroker-internalregsub`,
+    "SCORPIO_TOPICS_PRIVATE_NOTIFICATION": `garnet-scorpiobroker-private-notification`
+
 }
 
 export const garnet_nomenclature = {
@@ -63,6 +65,7 @@ export const garnet_nomenclature = {
     garnet_iot_group_lifecycle_lambda: `garnet-iot-group-lifecycle-lambda`,
     garnet_iot_authorizer_lambda: `garnet-iot-authorizer-lambda`,
     garnet_private_sub_lambda: `garnet-private-sub-lambda`, 
+    garnet_private_sub_sqs_lambda: `garnet-private-sub-sqs-lambda`, 
     garnet_lake_rule:`garnet_lake_rule`,
     garnet_subscriptions_rule: `garnet_subscriptions_rule`,
     garnet_iot_presence_rule: `garnet_iot_presence_rule`,
@@ -119,20 +122,21 @@ export const garnet_nomenclature = {
   garnet_proxy_rds: `garnet-proxy-rds`,
   garnet_db_cluster_id: `garnet-aurora-cluster`,
 
+  // GARNET PRIVATE SUB
+
+  garnet_scorpiobroker_private_notification_queue: scorpiobroker_sqs_object.SCORPIO_TOPICS_PRIVATE_NOTIFICATION,
+  garnet_scorpiobroker_private_notification_lambda: `${scorpiobroker_sqs_object.SCORPIO_TOPICS_PRIVATE_NOTIFICATION}-lambda`,
+
 
   // GARNET UTILS 
 
-    garnet_utils_clean_ecs_taks_lambda :`garnet-utils-clean-ecstasks-lambda`,
-    garnet_utils_scorpio_sqs_lambda :`garnet-utils-scorpio-cleansqs-lambda`,
-    garnet_utils_az_lambda :`garnet-utils-getaz-lambda`,
-    garnet_utils_bucket_create_lambda: `garnet-utils-bucket-create-lambda`,
-    garnet_utils_bucket_check_lambda: `garnet-utils-bucket-check-lambda`,
-    garnet_utils_bucket_provider: `garnet-utils-bucket-provider-lambda`,
-
-    garnet_utils_vector_create_lambda: `garnet-utils-vector-create-lambda`,
-    garnet_utils_vector_check_lambda: `garnet-utils-vector-check-lambda`,
-    garnet_utils_vector_provider_lambda: `garnet-utils-vector-provider-lambda`,
-
+  garnet_utils_clean_ecs_taks_lambda :`garnet-utils-clean-ecstasks-lambda`,
+  garnet_utils_scorpio_sqs_lambda :`garnet-utils-scorpio-cleansqs-lambda`,
+  garnet_utils_az_lambda :`garnet-utils-getaz-lambda`,
+  garnet_utils_bucket_create_lambda: `garnet-utils-bucket-create-lambda`,
+  garnet_utils_bucket_check_lambda: `garnet-utils-bucket-check-lambda`,
+  garnet_utils_bucket_provider: `garnet-utils-bucket-provider-lambda`,
+  garnet_utils_sqs_notification_provider: `garnet-utils-sqs-notification-provider-lambda`,
 }
 
 

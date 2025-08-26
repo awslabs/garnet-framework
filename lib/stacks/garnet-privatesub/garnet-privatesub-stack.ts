@@ -1,4 +1,4 @@
-import { Aws, CfnOutput, Duration, Names, NestedStack, NestedStackProps, RemovalPolicy } from "aws-cdk-lib"
+import { Aws, CfnOutput, CustomResource, Duration, Names, NestedStack, NestedStackProps, RemovalPolicy } from "aws-cdk-lib"
 import { EndpointType, LambdaRestApi } from "aws-cdk-lib/aws-apigateway"
 import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
 import { AnyPrincipal, Effect, Policy, PolicyDocument, PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
@@ -9,6 +9,10 @@ import { CfnTopicRule } from "aws-cdk-lib/aws-iot"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { Bucket } from "aws-cdk-lib/aws-s3"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
+import { Provider } from "aws-cdk-lib/custom-resources"
+import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources"
+import { Queue } from "aws-cdk-lib/aws-sqs"
+import { deployment_params } from "../../../architecture"
 
 export interface GarnetPrivateSubProps extends NestedStackProps{
     vpc: Vpc, 
@@ -210,6 +214,159 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
             ],
             },
         })
+
+
+
+        // NEW PRIVATE SQS BASED PRIVATE SUB
+
+       // garnet_scorpiobroker_private_notification_queue
+
+       // HERE A CUSTOM RESOURCE THAT CHECK IF SQS EXISTS IF NOT THEN CREATE IT AND GIVE BACK THE QUEUE ARN. 
+        // CUSTOM RESOURCE WITH A LAMBDA THAT WILL CREATE SQS PRIVATE NOTIFICATION QUEUE IF IT DOES NOT EXIST
+
+         const lambda_sqs_create_logs = new LogGroup(this, 'LambdaSqsCreateFunctionLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
+          
+        const lambda_sqs_private_notification_path = `${__dirname}/lambda/sqsCreate`
+        const lambda_sqs_private_notification_lambda = new Function(this, 'SqsPrivateNotificationCreateFunction', {
+              functionName: garnet_nomenclature.garnet_scorpiobroker_private_notification_lambda,
+              description: 'Garnet Utils - Function that creates SQS private notification Queue if it does not already exist',
+              runtime: Runtime.NODEJS_LATEST,
+              code: Code.fromAsset(lambda_sqs_private_notification_path),
+              logGroup: lambda_sqs_create_logs, 
+              handler: 'index.handler',
+              timeout: Duration.seconds(30),
+              architecture: Architecture.ARM_64,
+              environment: {
+                  QUEUE_NAME: garnet_nomenclature.garnet_scorpiobroker_private_notification_queue
+              }
+        })
+
+
+          lambda_sqs_private_notification_lambda.addToRolePolicy(new PolicyStatement({
+              actions: [
+                "sqs:CreateQueue",
+                "sqs:GetQueueUrl",
+                "sqs:GetQueueAttributes"
+                ],
+              resources: [`arn:aws:sqs:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-*`] 
+          }))
+
+           lambda_sqs_private_notification_lambda.node.addDependency(lambda_sqs_create_logs)
+
+
+        // CHECK QUEUE
+
+
+          const lambda_sqs_private_check_logs = new LogGroup(this, 'LambdaSqsCheckFunctionLogs', {
+            retention: RetentionDays.ONE_MONTH,
+            removalPolicy: RemovalPolicy.DESTROY
+        })
+
+          const lambda_sqs_private_check_path = `${__dirname}/lambda/sqsCheck`
+          const lambda_sqs_private_check = new Function(this, 'SqsPrivateCheckFunction', {
+                functionName: `garnet-utils-sqs-check-lambda`,
+                description: 'Garnet Utils - Function that check if SQS Private Queue exists',
+                runtime: Runtime.NODEJS_LATEST,
+                code: Code.fromAsset(lambda_sqs_private_check_path),
+                handler: 'index.handler',
+                timeout: Duration.seconds(50),
+                logGroup: lambda_sqs_private_check_logs, 
+                architecture: Architecture.ARM_64,
+                environment: {
+                  QUEUE_NAME: garnet_nomenclature.garnet_scorpiobroker_private_notification_queue
+                }
+          })
+
+          lambda_sqs_private_check.node.addDependency(lambda_sqs_private_check_logs)
+
+          lambda_sqs_private_check.addToRolePolicy(new PolicyStatement({
+              actions: [
+                "sqs:GetQueueUrl",
+                "sqs:GetQueueAttributes"
+                ],
+              resources: [`arn:aws:sqs:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-*`] 
+          }))
+
+        
+
+       const sqs_private_provider_log = new LogGroup(this, 'LambdaCustomSqsNotificationProviderLogs', {
+        retention: RetentionDays.ONE_MONTH,
+        // logGroupName: `garnet-provider-custom-bucket-lambda-cw-logs`,
+        removalPolicy: RemovalPolicy.DESTROY
+        })
+
+        const sqs_private_provider = new Provider(this, 'CustomSqsProvider', {
+          onEventHandler: lambda_sqs_private_notification_lambda,
+          isCompleteHandler: lambda_sqs_private_check,
+          providerFunctionName:  garnet_nomenclature.garnet_utils_sqs_notification_provider,
+          logGroup: sqs_private_provider_log,
+        }) 
+
+      sqs_private_provider.node.addDependency(sqs_private_provider_log)
+      
+       const sqs_private_resource = new CustomResource(this, 'CustomSqsNotificationResource', {
+            serviceToken: sqs_private_provider.serviceToken,
+        })
+
+      const sqs_name = sqs_private_resource.getAtt('queue_name').toString()
+
+        // LAMBDA SUB PRIVATE
+        const lambda_garnet_sqs_private_sub_log = new LogGroup(this, 'LambdaGarnetSqsSubFunctionLogs', {
+          retention: RetentionDays.ONE_MONTH,
+          // logGroupName: `garnet-private-sub-lambda-cw-logs`,
+          removalPolicy: RemovalPolicy.DESTROY
+      })
+        const lambda_garnet_sqs_private_sub_path = `${__dirname}/lambda/garnetSubSqs`
+        const lambda_garnet_sqs_private_sub = new Function(this, 'LambdaGarnetSubSqsFunction', {
+        functionName: garnet_nomenclature.garnet_private_sub_sqs_lambda, 
+        logGroup: lambda_garnet_sqs_private_sub_log,
+        description: 'Garnet Private Sub - Function for the private subscription from SQS',
+            runtime: Runtime.NODEJS_LATEST,
+            layers: [layer_lambda],
+            code: Code.fromAsset(lambda_garnet_sqs_private_sub_path),
+            handler: 'index.handler',
+            timeout: Duration.seconds(25),
+            architecture: Architecture.ARM_64,
+            environment: {
+            AWSIOTREGION: Aws.REGION
+            }
+        })
+        lambda_garnet_sqs_private_sub.node.addDependency(lambda_garnet_sqs_private_sub_log)
+        lambda_garnet_sqs_private_sub.addToRolePolicy(new PolicyStatement({
+            actions: ["iot:Publish"],
+            resources: [
+                `arn:aws:iot:${Aws.REGION}:${Aws.ACCOUNT_ID}:topic/garnet/subscriptions/*`,
+            ]
+        }))
+
+
+
+        const sqs_private_queue = Queue.fromQueueArn(this, `SqsPrivateQueue`, `arn:aws:sqs:${Aws.REGION}:${Aws.ACCOUNT_ID}:${sqs_name}`)
+
+        sqs_private_queue.node.addDependency(sqs_private_resource)
+
+                lambda_garnet_sqs_private_sub.addToRolePolicy(
+          new PolicyStatement({
+            actions: [
+              "sqs:ReceiveMessage",
+              "sqs:DeleteMessage",
+              "sqs:GetQueueAttributes",
+            ],
+            resources: [`${sqs_private_queue.queueArn}`],
+          })
+        )
+
+        lambda_garnet_sqs_private_sub.addEventSource(
+                  new SqsEventSource(sqs_private_queue, { 
+                    batchSize: deployment_params.lambda_broker_batch_size, 
+                    maxBatchingWindow: Duration.seconds(deployment_params.lambda_broker_batch_window), 
+                    maxConcurrency: deployment_params.lambda_broker_concurent_sqs
+                  })
+            )
+
 
     }
   }

@@ -1,6 +1,6 @@
 ## Garnet Framework 
 
-#### Version 1.4.3
+#### [Version 1.5.0](./CHANGELOG.md#150---2025-08-18)
 
 __Explore the [documentation website of Garnet Framework](https://garnet-framework.dev/docs) to get started.__ 
 

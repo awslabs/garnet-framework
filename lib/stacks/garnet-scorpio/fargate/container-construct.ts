@@ -99,7 +99,7 @@ export class GarnetScorpioFargate extends Construct {
         fargate_task_role.addToPolicy(
             new PolicyStatement({
                 resources: [
-                    `arn:aws:sqs:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-scorpiobroker-*`
+                    `arn:aws:sqs:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-*`
                 ],
                 actions: [
                     "sqs:*"
@@ -109,7 +109,7 @@ export class GarnetScorpioFargate extends Construct {
         fargate_task_role.addToPolicy(
             new PolicyStatement({
                 resources: [
-                    `arn:aws:sns:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-scorpiobroker-*`
+                    `arn:aws:sns:${Aws.REGION}:${Aws.ACCOUNT_ID}:garnet-*`
                 ],
                 actions: [
                     "sns:*"
@@ -148,41 +148,53 @@ export class GarnetScorpioFargate extends Construct {
             DBPORT: props.db_port,
             DBNAME: garnet_constant.dbname,
             SCORPIO_AT_CONTEXT_SERVER: `http://${garnet_nomenclature.garnet_broker_atcontextserver}:2023`,
+            // SCORPIO_DISTRIBUTED_CONTEXT_URL: `http://${garnet_nomenclature.garnet_broker_atcontextserver}:2023/ngsi-ld/v1/jsonldContexts/`,
             SCORPIO_ENTITY_MANAGER_SERVER: `http://${garnet_nomenclature.garnet_broker_entitymanager}:1025`,
             SCORPIO_DISTRIBUTED_GATEWAYURL: `http://${garnet_nomenclature.garnet_broker_atcontextserver}:2023`,
             SCORPIO_CONCENTRATED_GATEWAYURL:`http://localhost:9090`,
             SCORPIO_STARTUPDELAY: "10s",
             SCORPIO_ENTITY_MAX_LIMIT: "1000",
             SCORPIO_MESSAGING_MAX_SIZE: "100",
-            ATCONTEXT_CACHE_DURATION: "15m",
+            ATCONTEXT_CACHE_DURATION: "30m",
             QUARKUS_EUREKA_SERVICE_URL_DEFAULT: "http://eureka:8761/eureka",
             AWS_REGION: Aws.REGION,
             QUARKUS_LOG_LEVEL: "INFO",
             MYSETTINGS_SUBSCRIPTION_DELIVERY_STREAM: props.delivery_stream.deliveryStreamName!, 
             MYSETTINGS_MESSAGECONNECTION_OPTIONS: "?delay=250&greedy=true",
+
             // Core Connection Pool Settings
             QUARKUS_DATASOURCE_REACTIVE_MAX_SIZE: "150",
-            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "150s",
-            QUARKUS_DATASOURCE_REACTIVE_ACQUISITION_TIMEOUT: "5s",
+            QUARKUS_DATASOURCE_REACTIVE_IDLE_TIMEOUT: "40s",
+            QUARKUS_DATASOURCE_REACTIVE_ACQUISITION_TIMEOUT: "20s",
             QUARKUS_DATASOURCE_REACTIVE_INITIAL_SIZE: "80",
             QUARKUS_DATASOURCE_REACTIVE_MAX_LIFETIME: "1800s",
             QUARKUS_DATASOURCE_REACTIVE_BACKGROUND_VALIDATION_INTERVAL: "30s",
-            // PostgreSQL Specific Settings
-            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_PIPELINING_LIMIT: "256",
-            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_STATEMENT_CACHE_SIZE: "1000",
-            QUARKUS_DATASOURCE_REACTIV_POSTGRESQL_CACHE_PREPARED_STATEMENTS: "true",
 
-            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_ATTEMPTS: "5",
-            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_INTERVAL: "PT2S",
-            // Transaction Settings
-            QUARKUS_TRANSACTION_MANAGER_DEFAULT_TRANSACTION_TIMEOUT: "120",
-            QUARKUS_HTTP_LIMITS_MAX_BODY_SIZE: "20M",
-            QUARKUS_DATASOURCE_METRICS_ENABLED: "true",
-            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_CACHE_PREPARED_STATEMENTS: "true",
-            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_PIPELINE_DEPTH: "64",
-            // New optimization settings
-            QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_MAXIMUM_SIZE: "20000",
-            QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_EXPIRE_AFTER_WRITE: "300S",
+            QUARKUS_FLYWAY_MIGRATE_AT_START: "false", 
+            QUARKUS_FLYWAY_REPAIR_AT_START: "false", 
+            
+            // quarkus.flyway.lock-retry-count=50 ; quarkus.flyway.connect-retries=15
+            //quarkus.datasource.jdbc.acquisition-timeout=30s  # Longer wait for pool acquisition
+            //quarkus.vertx.max-worker-execute-time=120s  # For Vert.x tasks
+            //quarkus.datasource.jdbc.max-size=10  # Limit per-instance connections to reduce contention
+
+            QUARKUS_FLYWAY_LOCK_RETRY_COUNT: "60", 
+            QUARKUS_FLYWAY_CONNECT_RETRIES:"20",
+            // QUARKUS_VERTX_MAX_WORKER_EXECUTE_TIME: "120s",
+            // QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT: "30s",
+
+            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_ATTEMPTS: "7",
+            // QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_INTERVAL: "PT2S",
+
+
+            // // Transaction Settings
+            // QUARKUS_TRANSACTION_MANAGER_DEFAULT_TRANSACTION_TIMEOUT: "120",
+            // QUARKUS_HTTP_LIMITS_MAX_BODY_SIZE: "20M",
+            // QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_CACHE_PREPARED_STATEMENTS: "true",
+            // QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_PIPELINE_DEPTH: "64",
+            // // New optimization settings
+            // QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_MAXIMUM_SIZE: "20000",
+            // QUARKUS_CACHE_CAFFEINE_ENTITY_CACHE_EXPIRE_AFTER_WRITE: "300S",
             ...scorpiobroker_sqs_object 
         }
 
@@ -777,7 +789,7 @@ export class GarnetScorpioFargate extends Construct {
         at_context_server_task_def.addContainer("atContextServer", {
             essential: true,
             image: ContainerImage.fromRegistry(garnet_scorpio_images.at_context_server),
-            environment: scorpio_task_env,
+            environment: {...scorpio_task_env, QUARKUS_FLYWAY_MIGRATE_AT_START: "true",  QUARKUS_FLYWAY_REPAIR_AT_START: "true", },
             secrets: {
                 DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
                 DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
@@ -1090,7 +1102,7 @@ export class GarnetScorpioFargate extends Construct {
                     DBPASS: ecsSecret.fromSecretsManager(secret, 'password'),
                     DBUSER: ecsSecret.fromSecretsManager(secret, 'username')
                 },
-                environment: scorpio_task_env,
+                environment: {...scorpio_task_env, QUARKUS_FLYWAY_MIGRATE_AT_START: "true",  QUARKUS_FLYWAY_REPAIR_AT_START: "true" },
                 containerPort: 9090,
                 logDriver: LogDrivers.awsLogs({
                     streamPrefix: `garnet/scorpio`,
