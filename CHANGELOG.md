@@ -8,11 +8,9 @@ This version fixes bugs, introduces new features with potential breaking changes
 
 ### Performance Optimizations
 
-- Implemented IRI compaction caching to improve temporal query performance:
-  - Added context-hash based caching for JSON-LD IRI compaction operations
-  - Improved response times for large temporal queries through cache optimization
+- Implemented IRI compaction caching to improve temporal query performance
 - Enhanced subscription service with type-based entity filtering
-
+ 
 ### Enhancements
 
 - Updated Scorpio Broker to version [5.0.93](https://gallery.ecr.aws/garnet/) with performance and functionality improvements
