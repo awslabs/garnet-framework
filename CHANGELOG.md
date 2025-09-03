@@ -151,9 +151,9 @@ This new version fixes some bugs, introduces new features and potential breaking
 ### Added 
 
 - RDS Proxy for the database.  
-- Multi-typing support. See [Multi-Typing](https://garnet-framework.dev/docs/how/context-broker#multi-typing) section for information.
-- Connectivity status of Things connected using AWS IoT Core. See [Connectivity Status](https://garnet-framework.dev/docs/how/garnet-iot#connectivity-status) for more information. 
-- Sync of AWS Iot Things Group Membership with Shadows and the Context Broker. See [Garnet Thing](https://garnet-framework.dev/docs/how/garnet-iot#a-garnet-thing) section for more information. 
+- Multi-typing support. See [Multi-Typing](https://garnet-framework.tech/docs/how/context-broker#multi-typing) section for information.
+- Connectivity status of Things connected using AWS IoT Core. See [Connectivity Status](https://garnet-framework.tech/docs/how/garnet-iot#connectivity-status) for more information. 
+- Sync of AWS Iot Things Group Membership with Shadows and the Context Broker. See [Garnet Thing](https://garnet-framework.tech/docs/how/garnet-iot#a-garnet-thing) section for more information. 
 
 
 ### Changed

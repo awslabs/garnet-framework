@@ -80,7 +80,7 @@ if (Parameters.architecture == ARCHITECTURE.Concentrated) {
                     lambda_broker_concurent_sqs: 10,
         
                     aurora_min_capacity: 1, 
-                    aurora_max_capacity: 2, 
+                    aurora_max_capacity: 200, 
         
                     all_fargate_cpu: 1024, 
                     all_fargate_memory_limit: 4096,

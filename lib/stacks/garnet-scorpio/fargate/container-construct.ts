@@ -178,12 +178,12 @@ export class GarnetScorpioFargate extends Construct {
             //quarkus.vertx.max-worker-execute-time=120s  # For Vert.x tasks
             //quarkus.datasource.jdbc.max-size=10  # Limit per-instance connections to reduce contention
 
-            QUARKUS_FLYWAY_LOCK_RETRY_COUNT: "60", 
-            QUARKUS_FLYWAY_CONNECT_RETRIES:"20",
+            // QUARKUS_FLYWAY_LOCK_RETRY_COUNT: "300", 
+            // QUARKUS_FLYWAY_CONNECT_RETRIES:"50",
             // QUARKUS_VERTX_MAX_WORKER_EXECUTE_TIME: "120s",
             // QUARKUS_DATASOURCE_JDBC_ACQUISITION_TIMEOUT: "30s",
 
-            QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_ATTEMPTS: "7",
+            // QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_ATTEMPTS: "7",
             // QUARKUS_DATASOURCE_REACTIVE_POSTGRESQL_RECONNECT_INTERVAL: "PT2S",
 
 

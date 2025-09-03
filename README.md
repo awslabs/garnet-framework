@@ -2,7 +2,7 @@
 
 #### [Version 1.5.0](./CHANGELOG.md#150---2025-08-18)
 
-__Explore the [documentation website of Garnet Framework](https://garnet-framework.dev/docs) to get started.__ 
+__Explore the [documentation website of Garnet Framework](https://garnet-framework.tech/docs) to get started.__ 
 
 ### Overview
 
@@ -16,7 +16,7 @@ Through its knowledge graph capabilities, Garnet transforms fragmented data into
 
 ## Getting Started 
 
-Explore the [documentation website of Garnet Framework](https://garnet-framework.dev/docs) to get started. 
+Explore the [documentation website of Garnet Framework](https://garnet-framework.tech/docs) to get started. 
 
 ## Security
 
