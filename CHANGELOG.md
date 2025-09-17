@@ -2,6 +2,13 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [1.5.1] - 2025-09-17
+
+### Bug Fixes
+
+- Fixed subscription notification duplication issue introduced by the new SQS-based Garnet Private Notification Endpoint feature in version 1.5.0
+- Updated Scorpio Broker to version [5.0.94](https://gallery.ecr.aws/garnet/) with subscription processing improvements
+
 ## [1.5.0] - 2025-08-18
 
 This version fixes bugs, introduces new features with potential breaking changes, and improves performance. Users can raise issues in the GitHub issues section if any problems occur.
