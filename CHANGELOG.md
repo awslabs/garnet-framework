@@ -2,6 +2,12 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [1.5.2] - 2025-09-26
+
+### Enhancements
+
+- **Dynamic Date Partitioning for Data Lake**: Data lake partitions now use `observedAt` timestamps from NGSI-LD entities instead of ingestion time, enabling ingestion of historical data into the correct hourly partition folders based on actual observation time
+
 ## [1.5.1] - 2025-09-17
 
 ### Bug Fixes

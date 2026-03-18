@@ -1,6 +1,6 @@
 {
   "name": "garnet",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "bin": {
     "garnet": "bin/garnet.js"
   },
@@ -13,18 +13,18 @@
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
-    "@types/node": "24.5.0",
-    "aws-cdk": "^2.1029.1",
-    "constructs": "^10.4.2",
-    "jest": "^30.1.3",
+    "@types/node": "25.5.0",
+    "aws-cdk": "^2.1111.0",
+    "constructs": "^10.5.1",
+    "jest": "^30.3.0",
     "source-map-support": "^0.5.21",
-    "ts-jest": "^29.4.2",
+    "ts-jest": "^29.4.6",
     "ts-node": "^10.9.2",
-    "typescript": "~5.9.2"
+    "typescript": "~5.9.3"
   },
   "dependencies": {
-    "aws-cdk-lib": "2.215.0",
-    "constructs": "^10.4.2",
+    "aws-cdk-lib": "2.243.0",
+    "constructs": "^10.5.1",
     "source-map-support": "^0.5.21"
   }
 }

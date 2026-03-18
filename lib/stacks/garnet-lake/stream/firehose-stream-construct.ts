@@ -116,7 +116,7 @@ const kinesis_firehose = new CfnDeliveryStream( this, "GarnetFirehose", {
       dynamicPartitioningConfiguration: {
         enabled: true,
       },
-      prefix: `type=!{partitionKeyFromLambda:type}/dt=!{timestamp:yyyy}-!{timestamp:MM}-!{timestamp:dd}-!{timestamp:HH}/`,
+      prefix: `type=!{partitionKeyFromLambda:type}/dt=!{partitionKeyFromLambda:dt}/`,
       errorOutputPrefix: `type=!{firehose:error-output-type}/dt=!{timestamp:yyy}-!{timestamp:MM}-!{timestamp:dd}-!{timestamp:HH}/`,
     },
   }
