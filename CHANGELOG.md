@@ -2,6 +2,24 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [1.6.0] - 2026-03-18
+
+### Bug Fixes
+
+- **Temporal Query Window Truncation**: Updated Scorpio Broker to fix an issue where temporal queries with `timerel=between` returned only data from the last day of the requested window. The root cause was a default `lastN=50` silently applied when no limit was specified, restricting results to the 50 most recent instances regardless of the time window. See [#11](https://github.com/awslabs/garnet-framework/issues/11).
+
+### Enhancements
+
+- Updated Scorpio Broker to version [6.0.10](https://gallery.ecr.aws/garnet/) based on upstream ScorpioBroker 6.0.1
+- Upgraded Quarkus framework to version 3.32.3
+
+### New Features
+
+- **Extended Temporal Query Parameters** *(Scorpio Broker)*: New query parameters available on temporal endpoints:
+  - `firstN=N` — returns the N oldest instances (ascending time order), useful for chronological time-series charts
+  - `n=N&nOrder=ASC|DESC` — generic N with explicit direction
+  - `offsetN=K` — skip K instances within the N window for pagination
+
 ## [1.5.2] - 2025-09-26
 
 ### Enhancements
