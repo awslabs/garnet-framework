@@ -12,9 +12,10 @@ export const Parameters = {
      * Choose between Concentrated (single container) or Distributed (microservices) architecture.
      * You can fine-tune the deployment parameters in architecture.ts
      * - Concentrated: All services in one container, suitable for development and testing
-     * - Distributed: 8 specialized microservices, recommended for production deployments
+     * - Distributed: 8 specialized m
+     * icroservices, recommended for production deployments
     */
-    architecture: ARCHITECTURE.Distributed,
+    architecture: ARCHITECTURE.Concentrated,
 
 
     // API Authorization
