@@ -30,7 +30,7 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_22_X],
+          compatibleRuntimes: [Runtime.NODEJS_24_X],
         })
 
         // SECURITY GROUP
@@ -63,7 +63,7 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
         functionName: garnet_nomenclature.garnet_private_sub_lambda, 
         logGroup: lambda_garnet_private_sub_log,
         description: 'Garnet Private Sub - Function for the private subscription',
-            runtime: Runtime.NODEJS_22_X,
+            runtime: Runtime.NODEJS_24_X,
             layers: [layer_lambda],
             code: Code.fromAsset(lambda_garnet_private_sub_path),
             handler: 'index.handler',
@@ -233,7 +233,7 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
         const lambda_sqs_private_notification_lambda = new Function(this, 'SqsPrivateNotificationCreateFunction', {
               functionName: garnet_nomenclature.garnet_scorpiobroker_private_notification_lambda,
               description: 'Garnet Utils - Function that creates SQS private notification Queue if it does not already exist',
-              runtime: Runtime.NODEJS_LATEST,
+              runtime: Runtime.NODEJS_24_X,
               code: Code.fromAsset(lambda_sqs_private_notification_path),
               logGroup: lambda_sqs_create_logs, 
               handler: 'index.handler',
@@ -269,7 +269,7 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
           const lambda_sqs_private_check = new Function(this, 'SqsPrivateCheckFunction', {
                 functionName: `garnet-utils-sqs-check-lambda`,
                 description: 'Garnet Utils - Function that check if SQS Private Queue exists',
-                runtime: Runtime.NODEJS_LATEST,
+                runtime: Runtime.NODEJS_24_X,
                 code: Code.fromAsset(lambda_sqs_private_check_path),
                 handler: 'index.handler',
                 timeout: Duration.seconds(50),
@@ -324,12 +324,14 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
         functionName: garnet_nomenclature.garnet_private_sub_sqs_lambda, 
         logGroup: lambda_garnet_sqs_private_sub_log,
         description: 'Garnet Private Sub - Function for the private subscription from SQS',
-            runtime: Runtime.NODEJS_LATEST,
+            runtime: Runtime.NODEJS_24_X,
             layers: [layer_lambda],
             code: Code.fromAsset(lambda_garnet_sqs_private_sub_path),
             handler: 'index.handler',
             timeout: Duration.seconds(25),
             architecture: Architecture.ARM_64,
+            // Notifications are transformed and published concurrently per batch
+            memorySize: 512,
             environment: {
             AWSIOTREGION: Aws.REGION
             }
@@ -360,10 +362,12 @@ export interface GarnetPrivateSubProps extends NestedStackProps{
         )
 
         lambda_garnet_sqs_private_sub.addEventSource(
-                  new SqsEventSource(sqs_private_queue, { 
-                    batchSize: deployment_params.lambda_broker_batch_size, 
-                    maxBatchingWindow: Duration.seconds(deployment_params.lambda_broker_batch_window), 
-                    maxConcurrency: deployment_params.lambda_broker_concurent_sqs
+                  new SqsEventSource(sqs_private_queue, {
+                    batchSize: deployment_params.lambda_broker_batch_size,
+                    maxBatchingWindow: Duration.seconds(deployment_params.lambda_broker_batch_window),
+                    maxConcurrency: deployment_params.lambda_broker_concurent_sqs,
+                    // Redeliver only the notifications that failed to publish
+                    reportBatchItemFailures: true
                   })
             )
 

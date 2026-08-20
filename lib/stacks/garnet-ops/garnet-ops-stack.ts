@@ -213,8 +213,11 @@ export class GarnetOps extends NestedStack {
         let garnet_ingestion_lambda_update_broker_widget = set_lambda_widgets('Ingestion Lambda', garnet_nomenclature.garnet_ingestion_update_broker_lambda)
 
     
-        // GARNET SQS INGESTION 
+        // GARNET SQS INGESTION
         let garnet_ingestion_sqs_broker_widget = set_sqs_widgets('Garnet SQS Ingestion', garnet_nomenclature.garnet_ingestion_queue)
+
+        // GARNET SQS INGESTION DEAD LETTER QUEUE - anything here failed to reach the broker
+        let garnet_ingestion_dlq_widget = set_sqs_widgets('Garnet SQS Ingestion DLQ', garnet_nomenclature.garnet_ingestion_dlq)
 
         // GARNET DATALAKE 
         let garnet_datalake_metrics = [
@@ -264,6 +267,7 @@ export class GarnetOps extends NestedStack {
         let garnet_ingestion = new Row(
             garnet_ingestion_lambda_update_broker_widget,
             garnet_ingestion_sqs_broker_widget,
+            garnet_ingestion_dlq_widget,
             garnet_datalake_widget)
 
 

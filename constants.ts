@@ -80,7 +80,8 @@ export const garnet_nomenclature = {
 
     // GARNET IOT SQS
     garnet_iot_queue: `garnet-iot-sqs-${Aws.REGION}`, // DEPRECATED 
-    garnet_ingestion_queue: `garnet-ingestion-queue-${Aws.REGION}`, // DEPRECATED 
+    garnet_ingestion_queue: `garnet-ingestion-queue-${Aws.REGION}`, // DEPRECATED
+    garnet_ingestion_dlq: `garnet-ingestion-dlq-${Aws.REGION}`,
     garnet_iot_contextbroker_queue: `garnet-iot-sqs-contextbroker-${Aws.REGION}`,
     garnet_iot_presence_queue: `garnet-iot-presence-${Aws.REGION}`,
     garnet_iot_group_queue: `garnet-iot-presence-${Aws.REGION}`,

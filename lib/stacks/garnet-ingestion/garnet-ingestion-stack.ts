@@ -37,13 +37,25 @@ export class GarnetIngestionStack extends NestedStack {
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_22_X],
+          compatibleRuntimes: [Runtime.NODEJS_24_X],
         })
     
+        // DEAD LETTER QUEUE FOR ENTITIES THE BROKER KEEPS REJECTING
+        const sqs_garnet_dlq = new Queue(this, "SqsGarnetIngestionDlq", {
+          queueName: garnet_nomenclature.garnet_ingestion_dlq,
+          retentionPeriod: Duration.days(14),
+          enforceSSL: true
+        })
+
         // SQS ENTRY POINT
         const sqs_garnet_endpoint = new Queue(this, "SqsGarnetIot", {
           queueName: garnet_nomenclature.garnet_ingestion_queue,
-          visibilityTimeout: Duration.seconds(55)
+          visibilityTimeout: Duration.seconds(55),
+          enforceSSL: true,
+          deadLetterQueue: {
+            queue: sqs_garnet_dlq,
+            maxReceiveCount: 5
+          }
         })
 
     
@@ -60,13 +72,16 @@ export class GarnetIngestionStack extends NestedStack {
             vpcSubnets: {
               subnetType: SubnetType.PRIVATE_WITH_EGRESS,
             },
-            runtime: Runtime.NODEJS_22_X,
+            runtime: Runtime.NODEJS_24_X,
             code: Code.fromAsset(lambda_to_context_broker_path),
             handler: "index.handler",
             timeout: Duration.seconds(50),
             logGroup: lambda_to_context_broker_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
+            // Batches of entities are parsed and upserted here, the default 128 MB
+            // throttles CPU and lengthens every broker call
+            memorySize: 512,
             environment: {
               DNS_CONTEXT_BROKER: props.dns_context_broker
             }
@@ -102,10 +117,12 @@ export class GarnetIngestionStack extends NestedStack {
         )
     
         lambda_to_context_broker.addEventSource(
-          new SqsEventSource(sqs_garnet_endpoint, { 
-            batchSize: deployment_params.lambda_broker_batch_size, 
-            maxBatchingWindow: Duration.seconds(deployment_params.lambda_broker_batch_window), 
-            maxConcurrency: deployment_params.lambda_broker_concurent_sqs
+          new SqsEventSource(sqs_garnet_endpoint, {
+            batchSize: deployment_params.lambda_broker_batch_size,
+            maxBatchingWindow: Duration.seconds(deployment_params.lambda_broker_batch_window),
+            maxConcurrency: deployment_params.lambda_broker_concurent_sqs,
+            // Only the entities the broker rejected go back on the queue, not the whole batch
+            reportBatchItemFailures: true
           })
         )
       
