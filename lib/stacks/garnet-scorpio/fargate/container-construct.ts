@@ -1,15 +1,16 @@
 import { Aws, Duration,  RemovalPolicy, SecretValue } from "aws-cdk-lib"
 import { InterfaceVpcEndpoint, Peer, Port, SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
-import { Cluster, ContainerImage, ContainerInsights, FargateService, FargateTaskDefinition, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
+import { AlternateTarget, Cluster, ContainerImage, ContainerInsights, DeploymentControllerType, DeploymentStrategy, FargateService, FargateTaskDefinition, ListenerRuleConfiguration, LogDrivers, Secret as ecsSecret } from "aws-cdk-lib/aws-ecs"
 
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 import {garnet_constant, garnet_nomenclature, garnet_scorpio_images, scorpiobroker_sqs_object} from "../../../../constants"
 import { Construct } from "constructs"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
-import { ApplicationLoadBalancer, ApplicationProtocol, ListenerAction, ListenerCondition } from "aws-cdk-lib/aws-elasticloadbalancingv2"
+import { ApplicationListenerRule, ApplicationLoadBalancer, ApplicationProtocol, ApplicationTargetGroup, ListenerAction, ListenerCondition, TargetType } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 
-import { deployment_params } from "../../../../architecture"
+import { ARCHITECTURE, deployment_params, DEPLOYMENT_STRATEGY } from "../../../../architecture"
+import { Parameters } from "../../../../configuration"
 import { ApplicationLoadBalancedFargateService } from "aws-cdk-lib/aws-ecs-patterns"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 
@@ -240,9 +241,55 @@ export class GarnetScorpioFargate extends Construct {
             securityGroups: [sg_garnet_sns_vpc_endpoint]
         })
         
+        const blue_green = deployment_params.deployment_strategy == DEPLOYMENT_STRATEGY.BlueGreen
+
+        /**
+         * Deployment safety settings shared by every broker service.
+         *
+         * The circuit breaker is what makes a bad rollout self-correcting: without it
+         * ECS keeps retrying a task that cannot start and a failed deployment can hang
+         * for hours instead of rolling back.
+         *
+         * Under blue/green ECS needs room to run a whole second task set, so the
+         * minimum healthy percent goes to 100 (never drop capacity) and the strategy
+         * and bake time are set here rather than repeated per service.
+         */
+        const deployment_config = {
+            circuitBreaker: {
+                enable: true,
+                rollback: true
+            },
+            minHealthyPercent: blue_green ? 100 : 50,
+            maxHealthyPercent: blue_green ? 200 : 400,
+            ...(blue_green ? {
+                deploymentController: { type: DeploymentControllerType.ECS },
+                deploymentStrategy: DeploymentStrategy.BLUE_GREEN,
+                bakeTime: Duration.minutes(deployment_params.deployment_bake_time_minutes)
+            } : {})
+        }
+
+        /**
+         * Blue/green shifts traffic by swapping the target group behind one production
+         * listener rule. In the distributed architecture each service is registered in
+         * two or three target groups (its own routes plus the /q/* diagnostics route),
+         * and only the one carrying the alternate target configuration would swap: the
+         * remaining groups would keep sending requests to the retired task set, so
+         * during a bake /q/* would report a different version than the one serving
+         * traffic. CDK synthesizes that without complaint, so it is rejected here
+         * rather than deployed as a silently broken rollout.
+         */
+        if (blue_green && deployment_params.architecture == ARCHITECTURE.Distributed) {
+            throw new Error(
+                'deployment_strategy BlueGreen is currently supported only with the Concentrated architecture. ' +
+                'The Distributed architecture registers each broker service in multiple target groups, which native ' +
+                'ECS blue/green cannot shift atomically. Use DEPLOYMENT_STRATEGY.Rolling (the circuit breaker still ' +
+                'rolls back a failed deployment automatically). See DEPLOYMENT.md.'
+            )
+        }
+
   if (deployment_params.architecture == 'distributed') {
 
-        // APPLICATION LOAD BALANCER 
+        // APPLICATION LOAD BALANCER
         const fargate_alb = new ApplicationLoadBalancer(this, "ScorpioLoadBalancer", {
             vpc: props.vpc,
             internetFacing: false, 
@@ -310,8 +357,7 @@ export class GarnetScorpioFargate extends Construct {
                 },
               ],
             },
-            minHealthyPercent: 50,
-            maxHealthyPercent: 400,
+            ...deployment_config,
             serviceName: `${garnet_nomenclature.garnet_broker_entitymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate],
@@ -408,8 +454,7 @@ export class GarnetScorpioFargate extends Construct {
             serviceConnectConfiguration: {
                 namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName
             },
-            minHealthyPercent: 50,
-            maxHealthyPercent: 400,
+            ...deployment_config,
             serviceName: `${garnet_nomenclature.garnet_broker_querymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate],
@@ -525,8 +570,7 @@ export class GarnetScorpioFargate extends Construct {
               serviceConnectConfiguration: {
                 namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
               },
-              minHealthyPercent: 50,
-              maxHealthyPercent: 400,
+              ...deployment_config,
               serviceName: `${garnet_nomenclature.garnet_broker_subscriptionmanager}-service`,
               assignPublicIp: false,
               securityGroups: [sg_fargate],
@@ -626,8 +670,7 @@ export class GarnetScorpioFargate extends Construct {
               serviceConnectConfiguration: {
                 namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
               },
-              minHealthyPercent: 50,
-              maxHealthyPercent: 400,
+              ...deployment_config,
               serviceName: `${garnet_nomenclature.garnet_broker_historyentitymanager}-service`,
               assignPublicIp: false,
               securityGroups: [sg_fargate],
@@ -721,8 +764,7 @@ export class GarnetScorpioFargate extends Construct {
             serviceConnectConfiguration: {
                 namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
             },
-            minHealthyPercent: 50,
-            maxHealthyPercent: 400,
+            ...deployment_config,
             serviceName: `${garnet_nomenclature.garnet_broker_historyquerymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate]
@@ -809,8 +851,7 @@ export class GarnetScorpioFargate extends Construct {
         })
         const at_context_server_service = new FargateService(this,"AtContextServerService", {
             cluster: fargate_cluster,
-            minHealthyPercent: 50,
-            maxHealthyPercent: 400,
+            ...deployment_config,
             serviceName: `${garnet_nomenclature.garnet_broker_atcontextserver}-service`,
             taskDefinition: at_context_server_task_def,
             assignPublicIp: false,
@@ -919,8 +960,7 @@ export class GarnetScorpioFargate extends Construct {
             serviceConnectConfiguration: {
                 namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
             },
-            minHealthyPercent: 50,
-            maxHealthyPercent: 400,
+            ...deployment_config,
             serviceName: `${garnet_nomenclature.garnet_broker_registrymanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate]
@@ -1011,8 +1051,7 @@ export class GarnetScorpioFargate extends Construct {
             serviceConnectConfiguration: {
                 namespace: fargate_cluster.defaultCloudMapNamespace?.namespaceName,
             },
-            minHealthyPercent: 50,
-            maxHealthyPercent: 400,
+            ...deployment_config,
             serviceName: `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}-service`,
             assignPublicIp: false,
             securityGroups: [sg_fargate]
@@ -1079,6 +1118,131 @@ export class GarnetScorpioFargate extends Construct {
             // logGroupName: `${garnet_nomenclature.garnet_broker_allinone}-logs`,
             removalPolicy: RemovalPolicy.DESTROY
         })
+        const all_in_one_container_name = `${garnet_nomenclature.garnet_broker_allinone}-container`
+        const all_in_one_environment = {...scorpio_task_env, QUARKUS_FLYWAY_MIGRATE_AT_START: "true",  QUARKUS_FLYWAY_REPAIR_AT_START: "true" }
+        const all_in_one_secrets = {
+            DBPASS: ecsSecret.fromSecretsManager(secret, 'password'),
+            DBUSER: ecsSecret.fromSecretsManager(secret, 'username')
+        }
+        const all_in_one_log_driver = LogDrivers.awsLogs({
+            streamPrefix: `garnet/scorpio`,
+            logGroup: all_in_one_log
+        })
+
+    if (blue_green) {
+
+        /**
+         * Blue/green needs the service registered against a listener *rule* whose
+         * target group ECS can swap. ApplicationLoadBalancedFargateService attaches its
+         * target group as the listener default action and does not accept a deployment
+         * strategy, so the concentrated path is built explicitly here instead.
+         *
+         * Note this is a different resource topology from the rolling path: switching an
+         * existing stack between strategies replaces the load balancer and the broker
+         * gets a new internal DNS name. See DEPLOYMENT.md before flipping it.
+         */
+        const fargate_alb = new ApplicationLoadBalancer(this, 'ScorpioLoadBalancerBlueGreen', {
+            vpc: props.vpc,
+            internetFacing: false,
+            securityGroup: sg_alb,
+            loadBalancerName: `${garnet_nomenclature.garnet_load_balancer}-${deployment_params.architecture}`,
+            idleTimeout: Duration.seconds(60),
+            dropInvalidHeaderFields: true,
+            deletionProtection: false
+        })
+
+        const production_listener = fargate_alb.addListener('ScorpioProductionListener', {
+            port: 80,
+            defaultAction: ListenerAction.fixedResponse(404, { messageBody: "Not Found" })
+        })
+
+        // Routes to whichever task set is not yet live, so a release can be exercised
+        // end to end before any production request reaches it. Internal only.
+        const test_listener = fargate_alb.addListener('ScorpioTestListener', {
+            port: Parameters.deployment_test_listener_port,
+            protocol: ApplicationProtocol.HTTP,
+            defaultAction: ListenerAction.fixedResponse(404, { messageBody: "Not Found" })
+        })
+
+        const make_target_group = (id: string, name: string) => new ApplicationTargetGroup(this, id, {
+            vpc: props.vpc,
+            port: 9090,
+            protocol: ApplicationProtocol.HTTP,
+            targetType: TargetType.IP,
+            targetGroupName: name,
+            healthCheck: { path: '/q/health', port: '9090' },
+            deregistrationDelay: Duration.seconds(30)
+        })
+
+        // ECS swaps which of these two sits behind the production rule on each deployment
+        const blue_target_group = make_target_group('ScorpioBlueTargetGroup', 'garnet-broker-blue')
+        const green_target_group = make_target_group('ScorpioGreenTargetGroup', 'garnet-broker-green')
+
+        const production_rule = new ApplicationListenerRule(this, 'ScorpioProductionRule', {
+            listener: production_listener,
+            priority: 1,
+            conditions: [ListenerCondition.pathPatterns(['/*'])],
+            targetGroups: [blue_target_group]
+        })
+
+        const test_rule = new ApplicationListenerRule(this, 'ScorpioTestRule', {
+            listener: test_listener,
+            priority: 1,
+            conditions: [ListenerCondition.pathPatterns(['/*'])],
+            targetGroups: [green_target_group]
+        })
+
+        const all_in_one_task_def = new FargateTaskDefinition(this, 'ScorpioAllInOneFargateDefinition', {
+            taskRole: fargate_task_role,
+            cpu: deployment_params.all_fargate_cpu!,
+            memoryLimitMiB: deployment_params.all_fargate_memory_limit!,
+            family: `garnet-scorpio-all-in-one-task-definition`
+        })
+
+        all_in_one_task_def.addContainer('allInOne', {
+            essential: true,
+            image: ContainerImage.fromRegistry(garnet_scorpio_images.allInOne),
+            containerName: all_in_one_container_name,
+            environment: all_in_one_environment,
+            secrets: all_in_one_secrets,
+            portMappings: [{ containerPort: 9090, hostPort: 9090 }],
+            logging: all_in_one_log_driver
+        })
+
+        const all_in_one_service = new FargateService(this, 'FargateServiceScorpioBlueGreen', {
+            cluster: fargate_cluster,
+            taskDefinition: all_in_one_task_def,
+            serviceName: `${garnet_nomenclature.garnet_broker_allinone}-service`,
+            assignPublicIp: false,
+            securityGroups: [sg_fargate],
+            healthCheckGracePeriod: Duration.seconds(120),
+            ...deployment_config
+        })
+
+        blue_target_group.addTarget(all_in_one_service.loadBalancerTarget({
+            containerName: all_in_one_container_name,
+            containerPort: 9090,
+            alternateTarget: new AlternateTarget('ScorpioAlternateTarget', {
+                alternateTargetGroup: green_target_group,
+                productionListener: ListenerRuleConfiguration.applicationListenerRule(production_rule),
+                testListener: ListenerRuleConfiguration.applicationListenerRule(test_rule)
+            })
+        }))
+
+        all_in_one_service.autoScaleTaskCount({
+            minCapacity: deployment_params.all_autoscale_min_capacity!,
+            maxCapacity: deployment_params.all_autoscale_max_capacity!
+        }).scaleOnRequestCount('RequestScaling', {
+            requestsPerTarget: deployment_params.autoscale_requests_number!,
+            targetGroup: blue_target_group,
+            scaleInCooldown: Duration.seconds(10),
+            scaleOutCooldown: Duration.seconds(30)
+        })
+
+        this.fargate_alb = fargate_alb
+
+    } else {
+
         const fargate_alb = new ApplicationLoadBalancedFargateService(this, 'FargateServiceScorpio', {
             cluster: fargate_cluster,
             serviceName: `${garnet_nomenclature.garnet_broker_allinone}-service`,
@@ -1087,29 +1251,23 @@ export class GarnetScorpioFargate extends Construct {
             },
             cpu: deployment_params.all_fargate_cpu!,
             memoryLimitMiB: deployment_params.all_fargate_memory_limit,
-            minHealthyPercent: 50, 
-            maxHealthyPercent: 400, 
+            minHealthyPercent: 50,
+            maxHealthyPercent: 400,
 
             // The container waits SCORPIO_STARTUPDELAY then runs Flyway migrations before
             // /q/health answers, so a short grace period kills tasks mid-startup
             healthCheckGracePeriod: Duration.seconds(120),
-            publicLoadBalancer: false, 
+            publicLoadBalancer: false,
             loadBalancerName: `${garnet_nomenclature.garnet_load_balancer}-${deployment_params.architecture}`,
             taskImageOptions: {
-                containerName: `${garnet_nomenclature.garnet_broker_allinone}-container`, 
-                family: `garnet-scorpio-all-in-one-task-definition`, 
+                containerName: all_in_one_container_name,
+                family: `garnet-scorpio-all-in-one-task-definition`,
                 image: ContainerImage.fromRegistry(garnet_scorpio_images.allInOne),
                 taskRole: fargate_task_role,
-                secrets: {
-                    DBPASS: ecsSecret.fromSecretsManager(secret, 'password'),
-                    DBUSER: ecsSecret.fromSecretsManager(secret, 'username')
-                },
-                environment: {...scorpio_task_env, QUARKUS_FLYWAY_MIGRATE_AT_START: "true",  QUARKUS_FLYWAY_REPAIR_AT_START: "true" },
+                secrets: all_in_one_secrets,
+                environment: all_in_one_environment,
                 containerPort: 9090,
-                logDriver: LogDrivers.awsLogs({
-                    streamPrefix: `garnet/scorpio`,
-                    logGroup: all_in_one_log
-                })
+                logDriver: all_in_one_log_driver
             },
         // Default is 512
             securityGroups: [sg_fargate]
@@ -1117,13 +1275,13 @@ export class GarnetScorpioFargate extends Construct {
 
 
 
-        fargate_alb.service.autoScaleTaskCount({  
-            minCapacity: deployment_params.all_autoscale_min_capacity!, 
+        fargate_alb.service.autoScaleTaskCount({
+            minCapacity: deployment_params.all_autoscale_min_capacity!,
             maxCapacity: deployment_params.all_autoscale_max_capacity!
             }).scaleOnRequestCount('RequestScaling', {
             requestsPerTarget: deployment_params.autoscale_requests_number!,
             targetGroup: fargate_alb.targetGroup,
-            scaleInCooldown: Duration.seconds(10), 
+            scaleInCooldown: Duration.seconds(10),
             scaleOutCooldown: Duration.seconds(30)
         })
 
@@ -1137,6 +1295,8 @@ export class GarnetScorpioFargate extends Construct {
         // Default drain is 300s, which holds scaled-in tasks (and their DB
         // connections) far longer than the 10s scale-in cooldown expects
         fargate_alb.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30')
+
+    }
 
 }
    

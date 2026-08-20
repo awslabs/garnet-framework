@@ -15,15 +15,37 @@ import {Parameters} from "./configuration"
 // const sizing = Parameters.sizing
 
 export const enum ARCHITECTURE {
-    Concentrated = "concentrated", 
+    Concentrated = "concentrated",
     Distributed = "distributed"
+}
+
+export const enum DEPLOYMENT_STRATEGY {
+    Rolling = "rolling",
+    BlueGreen = "bluegreen"
 }
 
 type DeploymentParams = {
     architecture: string,
     autoscale_requests_number: number,
-    lambda_broker_batch_window: number, 
-    lambda_broker_batch_size: number, 
+    /**
+     * Deployment strategy for the broker services.
+     * - Rolling: replaces tasks in place. Cheapest, and the only safe option for a
+     *   Scorpio release that carries a Flyway schema migration, because both task
+     *   sets share one Aurora cluster and a rolled-back task set would face a
+     *   schema it does not expect.
+     * - BlueGreen: starts a second task set, lets you validate it on the test
+     *   listener port, then shifts the production listener and holds a bake window
+     *   during which rollback is a listener swap. Runs (and bills) both task sets
+     *   for the duration of the bake.
+     */
+    deployment_strategy: DEPLOYMENT_STRATEGY,
+    /**
+     * How long the previous task set is kept after traffic shifts, so a
+     * regression can be rolled back without a redeploy. Blue/green only.
+     */
+    deployment_bake_time_minutes: number,
+    lambda_broker_batch_window: number,
+    lambda_broker_batch_size: number,
     lambda_broker_concurent_sqs: number,
     aurora_storage_type?: DBClusterStorageType,
     aurora_min_capacity: number, 
@@ -73,8 +95,11 @@ export let deployment_params: DeploymentParams
 if (Parameters.architecture == ARCHITECTURE.Concentrated) {
     deployment_params = {
                     architecture: ARCHITECTURE.Concentrated,
-                    autoscale_requests_number: 50, 
-        
+                    autoscale_requests_number: 50,
+
+                    deployment_strategy: Parameters.deployment_strategy,
+                    deployment_bake_time_minutes: Parameters.deployment_bake_time_minutes,
+
                     lambda_broker_batch_window: 1,
                     lambda_broker_batch_size: 10, 
                     lambda_broker_concurent_sqs: 10,
@@ -92,9 +117,12 @@ if (Parameters.architecture == ARCHITECTURE.Concentrated) {
 } else {
         deployment_params = {
         architecture: ARCHITECTURE.Distributed,
-        aurora_min_capacity: 2, 
+        aurora_min_capacity: 2,
         aurora_max_capacity: 200,
-        autoscale_requests_number: 50, 
+        autoscale_requests_number: 50,
+
+        deployment_strategy: Parameters.deployment_strategy,
+        deployment_bake_time_minutes: Parameters.deployment_bake_time_minutes,
 
         lambda_broker_batch_window: 1,
         lambda_broker_batch_size: 20, 
