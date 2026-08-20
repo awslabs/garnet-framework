@@ -698,7 +698,7 @@ export class GarnetScorpioFargate extends Construct {
         history_query_manager_task_def.addContainer("historyQueryManager", {
         essential: true,
         image: ContainerImage.fromRegistry(garnet_scorpio_images.history_query_manager),
-        environment: { QUARKUS_HTTP_PORT: "1041", ...scorpio_task_env },
+        environment: { ...scorpio_task_env, QUARKUS_HTTP_PORT: "1041" },
         secrets: {
             DBPASS: ecsSecret.fromSecretsManager(secret, "password"),
             DBUSER: ecsSecret.fromSecretsManager(secret, "username"),
@@ -1052,7 +1052,7 @@ export class GarnetScorpioFargate extends Construct {
         registry_subscription_manager_service
         .autoScaleTaskCount({
             minCapacity: deployment_params.registrysubscriptionmanager_autoscale_min_capacity!,
-            maxCapacity: deployment_params.registrysubscriptionmanager_autoscale_min_capacity!,
+            maxCapacity: deployment_params.registrysubscriptionmanager_autoscale_max_capacity!,
         })
         .scaleOnRequestCount("RequestScaling", {
             requestsPerTarget: deployment_params.autoscale_requests_number,
@@ -1090,7 +1090,9 @@ export class GarnetScorpioFargate extends Construct {
             minHealthyPercent: 50, 
             maxHealthyPercent: 400, 
 
-            healthCheckGracePeriod: Duration.seconds(20),  
+            // The container waits SCORPIO_STARTUPDELAY then runs Flyway migrations before
+            // /q/health answers, so a short grace period kills tasks mid-startup
+            healthCheckGracePeriod: Duration.seconds(120),
             publicLoadBalancer: false, 
             loadBalancerName: `${garnet_nomenclature.garnet_load_balancer}-${deployment_params.architecture}`,
             taskImageOptions: {
@@ -1131,6 +1133,10 @@ export class GarnetScorpioFargate extends Construct {
             path: '/q/health',
             port: '9090'
         })
+
+        // Default drain is 300s, which holds scaled-in tasks (and their DB
+        // connections) far longer than the 10s scale-in cooldown expects
+        fargate_alb.targetGroup.setAttribute('deregistration_delay.timeout_seconds', '30')
 
 }
    
