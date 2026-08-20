@@ -13,7 +13,7 @@ export class GarnetNetworking extends Construct {
   constructor(scope: Construct, id: string, props: GarnetNetworkingProps) {
     super(scope, id)
 
-    let broker_id = garnet_broker
+    const broker_id = garnet_broker
 
     // VPC
     const vpc = new Vpc(this, `VpcGarnet${broker_id}`, {

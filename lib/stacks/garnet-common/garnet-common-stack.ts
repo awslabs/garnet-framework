@@ -29,7 +29,7 @@ export class GarnetCommon extends NestedStack {
     networking_construct.node.addDependency(utils_construct)
     
 
-    this.az1 = utils_construct.az1,
+    this.az1 = utils_construct.az1
     this.az2 = utils_construct.az2
     this.vpc = networking_construct.vpc
     this.secret = secret_construct.secret 

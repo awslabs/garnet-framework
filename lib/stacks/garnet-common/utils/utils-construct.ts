@@ -79,7 +79,7 @@ export class Utils extends Construct {
       
       // CLEAN SQS QUEUES CREATED BY SCORPIO BROKER 
 
-        let sqs_urls = Object.values(scorpiobroker_sqs_object).map(q => `https://sqs.${Aws.REGION}.amazonaws.com/${Aws.ACCOUNT_ID}/${q}`)
+        const sqs_urls = Object.values(scorpiobroker_sqs_object).map(q => `https://sqs.${Aws.REGION}.amazonaws.com/${Aws.ACCOUNT_ID}/${q}`)
 
         const scorpio_sqs_lambda_log = new LogGroup(this, 'LambdaScorpioSqsFunctionLogs', {
           retention: RetentionDays.ONE_MONTH,

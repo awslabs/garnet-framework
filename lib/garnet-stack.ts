@@ -16,7 +16,7 @@ export class GarnetStack extends Stack {
 
   getLogicalId(element: CfnElement): string {
     if (element?.node?.id?.includes('NestedStackResource')) {
-        let stack_name = (/([a-zA-Z0-9]+)\.NestedStackResource/.exec(element.node.id)![1])
+        const stack_name = (/([a-zA-Z0-9]+)\.NestedStackResource/.exec(element.node.id)![1])
         return stack_name
     }
     return super.getLogicalId(element)

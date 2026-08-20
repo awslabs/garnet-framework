@@ -144,7 +144,7 @@ export class GarnetScorpioFargate extends Construct {
         )
 
         // SCORPIO TASK ENV
-        let scorpio_task_env = {
+        const scorpio_task_env = {
             DBHOST: props.db_endpoint,
             DBPORT: props.db_port,
             DBNAME: garnet_constant.dbname,

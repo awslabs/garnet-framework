@@ -76,7 +76,7 @@ export class GarnetOps extends NestedStack {
             ]
         
         
-            let garnet_broker_service_widget = new SingleValueWidget({
+            const garnet_broker_service_widget = new SingleValueWidget({
                 title: `Garnet Scorpio -  ${Name}`,
                 width: 24,
                 period: Duration.seconds(60),
@@ -87,7 +87,7 @@ export class GarnetOps extends NestedStack {
         }
 
         const set_lambda_widgets = (label:string, functionName: string ) => {
-            let garnet_lambda_metrics = [
+            const garnet_lambda_metrics = [
                 new Metric({
                     label: `${label}- Invocations`,
                     namespace: 'AWS/Lambda',
@@ -153,7 +153,7 @@ export class GarnetOps extends NestedStack {
         }
 
         const set_sqs_widgets = (label:string, queueName:string) => {
-            let garnet_sqs_metrics = [
+            const garnet_sqs_metrics = [
                 new Metric({
                     label: `${label} - Nb Message Sent`,
                     namespace: 'AWS/SQS',
@@ -210,17 +210,17 @@ export class GarnetOps extends NestedStack {
 
         // GARNET INGESTION LAMBDA UPDATE BROKER
         
-        let garnet_ingestion_lambda_update_broker_widget = set_lambda_widgets('Ingestion Lambda', garnet_nomenclature.garnet_ingestion_update_broker_lambda)
+        const garnet_ingestion_lambda_update_broker_widget = set_lambda_widgets('Ingestion Lambda', garnet_nomenclature.garnet_ingestion_update_broker_lambda)
 
     
         // GARNET SQS INGESTION
-        let garnet_ingestion_sqs_broker_widget = set_sqs_widgets('Garnet SQS Ingestion', garnet_nomenclature.garnet_ingestion_queue)
+        const garnet_ingestion_sqs_broker_widget = set_sqs_widgets('Garnet SQS Ingestion', garnet_nomenclature.garnet_ingestion_queue)
 
         // GARNET SQS INGESTION DEAD LETTER QUEUE - anything here failed to reach the broker
-        let garnet_ingestion_dlq_widget = set_sqs_widgets('Garnet SQS Ingestion DLQ', garnet_nomenclature.garnet_ingestion_dlq)
+        const garnet_ingestion_dlq_widget = set_sqs_widgets('Garnet SQS Ingestion DLQ', garnet_nomenclature.garnet_ingestion_dlq)
 
         // GARNET DATALAKE 
-        let garnet_datalake_metrics = [
+        const garnet_datalake_metrics = [
             new Metric({
                 label: 'Garnet Lake - Number of Objects Stored',
                 namespace: 'AWS/S3',
@@ -255,7 +255,7 @@ export class GarnetOps extends NestedStack {
             })
         ]
 
-        let garnet_datalake_widget = new SingleValueWidget({
+        const garnet_datalake_widget = new SingleValueWidget({
             title: 'Garnet Data Lake',
             width: 24,
             period: Duration.seconds(60),
@@ -264,7 +264,7 @@ export class GarnetOps extends NestedStack {
         })
 
 
-        let garnet_ingestion = new Row(
+        const garnet_ingestion = new Row(
             garnet_ingestion_lambda_update_broker_widget,
             garnet_ingestion_sqs_broker_widget,
             garnet_ingestion_dlq_widget,
@@ -275,7 +275,7 @@ export class GarnetOps extends NestedStack {
 
 
      
-        let garnet_broker_db_metrics = [
+        const garnet_broker_db_metrics = [
             new Metric({
                 label: 'Garnet Broker Aurora - DataBase Connections',
                 namespace: 'AWS/RDS',
@@ -364,7 +364,7 @@ export class GarnetOps extends NestedStack {
             }),
         ]
         
-        let garnet_broker_db_widget = new SingleValueWidget({
+        const garnet_broker_db_widget = new SingleValueWidget({
             title: 'Garnet Broker - Database',
             width: 24,
             period: Duration.seconds(60),
@@ -436,9 +436,9 @@ export class GarnetOps extends NestedStack {
         )
 
         
-        let service_sqs_widget: any = []
+        const service_sqs_widget: any = []
         Object.entries(scorpiobroker_sqs_object).forEach(([key, value]) => {
-            let sqs_service_widget = set_sqs_widgets(`${key} SQS`, value)
+            const sqs_service_widget = set_sqs_widgets(`${key} SQS`, value)
             garnet_dashboard.addWidgets(sqs_service_widget)
         })
 

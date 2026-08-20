@@ -22,7 +22,7 @@ export class GarnetIot extends NestedStack {
          *  EVENT CONFIGURATION
          */
 
-        let event_param = {
+        const event_param = {
          eventConfigurations: { 
           "THING": {
             "Enabled": true
