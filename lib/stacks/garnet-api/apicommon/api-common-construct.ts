@@ -37,7 +37,7 @@ export class GarnetApiCommon extends Construct {
     const layer_lambda_path = `./lib/layers`;
     const layer_lambda = new LayerVersion(this, "LayerLambda", {
       code: Code.fromAsset(layer_lambda_path),
-      compatibleRuntimes: [Runtime.NODEJS_22_X],
+      compatibleRuntimes: [Runtime.NODEJS_24_X],
     });
 
     // **********************************************
@@ -60,7 +60,7 @@ export class GarnetApiCommon extends Construct {
       functionName: `garnet-api-version-lambda`,
       vpc: props.vpc,
       description: "Garnet API - Function that returns the Garnet Version",
-      runtime: Runtime.NODEJS_22_X,
+      runtime: Runtime.NODEJS_24_X,
       code: Code.fromAsset(lambda_garnet_version_path),
       handler: "index.handler",
       timeout: Duration.seconds(30),

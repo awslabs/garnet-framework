@@ -2,6 +2,32 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
+## [Unreleased]
+
+### Bug Fixes
+
+- **Ingestion data loss under broker backpressure**: The ingestion function acknowledged SQS messages even when the context broker rejected or timed out on the upsert, silently discarding entities. Failed messages are now reported back to SQS individually, so they are retried and eventually dead-lettered instead of dropped
+- **AWS IoT presence events skipped**: A single console-originated event (`iotconsole*`) aborted the whole SQS batch, dropping the connectivity status of every remaining Thing in that batch
+- **AWS IoT Thing deletion**: Deleting a Thing referenced an undefined variable, so the corresponding entity was never removed from the broker
+- **Registry Subscription Manager autoscaling**: Maximum task count was set from the *minimum* capacity parameter, preventing the service from scaling out in the distributed architecture
+- Removed a trailing space in the `entityOperations/upsert` query string used by the AWS IoT Thing and Thing Group sync functions
+
+### Enhancements
+
+- **Ingestion dead letter queue**: Entities the broker rejects after 5 attempts are now retained for 14 days on a dedicated DLQ (`garnet-ingestion-dlq-<region>`) and surfaced on the Garnet Ops dashboard, instead of being lost
+- **Aurora PostgreSQL upgraded to 16.11** (from 16.6). Applied as an in-place minor version upgrade on the next deployment
+- **Faster startup and scaling of the context broker**: increased the health check grace period so tasks are no longer killed while running Flyway migrations, and reduced ALB deregistration delay from 300s to 30s so scaled-in tasks release their database connections promptly
+- **Lambda performance**: raised memory (and therefore CPU) for the ingestion, data lake transform and private notification functions, and enabled HTTP keep-alive plus parallel upserts on the ingestion path
+- Standardised all Lambda functions on the Node.js 24 runtime, replacing the variable `NODEJS_LATEST` runtime that could shift between deployments
+- Added unit tests for the ingestion function's batch failure handling (`npm test`)
+
+### Security
+
+- Updated `axios` in the Lambda layer to 1.19.0, and `aws-cdk-lib` to 2.266.0, resolving all reported advisories in both dependency trees
+- The data lake and Athena results buckets are now created with default SSE-S3 encryption and all four public access blocks enabled. Hardening is re-applied on each deployment, so buckets created by earlier versions are covered
+- Enforced TLS-only access on the ingestion queue and its dead letter queue
+- Disabled RDS Proxy debug logging, which wrote every SQL statement (including data values) to CloudWatch Logs
+
 ## [1.6.0] - 2026-03-18
 
 ### Bug Fixes

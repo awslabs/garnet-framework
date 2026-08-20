@@ -33,7 +33,7 @@ export class GarnetIotThing extends Construct {
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "LayerLambda", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_22_X],
+          compatibleRuntimes: [Runtime.NODEJS_24_X],
         })
     
 
@@ -61,7 +61,7 @@ export class GarnetIotThing extends Construct {
                 vpcSubnets: {
                   subnetType: SubnetType.PRIVATE_WITH_EGRESS,
                 },
-          runtime: Runtime.NODEJS_22_X,
+          runtime: Runtime.NODEJS_24_X,
           layers: [layer_lambda],
           code: Code.fromAsset(lambda_update_presence_path),
           handler: "index.handler",
@@ -148,7 +148,7 @@ export class GarnetIotThing extends Construct {
           vpcSubnets: {
             subnetType: SubnetType.PRIVATE_WITH_EGRESS,
           },
-          runtime: Runtime.NODEJS_22_X,
+          runtime: Runtime.NODEJS_24_X,
           layers: [layer_lambda],
           code: Code.fromAsset(lambda_thing_lifecycle_path),
           handler: "index.handler",

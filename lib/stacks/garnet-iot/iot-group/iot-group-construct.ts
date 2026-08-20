@@ -46,7 +46,7 @@ export class GarnetIotGroup extends Construct {
         const layer_lambda_path = `./lib/layers`;
         const layer_lambda = new LayerVersion(this, "GarnetIoTSharedLayer", {
           code: Code.fromAsset(layer_lambda_path),
-          compatibleRuntimes: [Runtime.NODEJS_22_X],
+          compatibleRuntimes: [Runtime.NODEJS_24_X],
         })
 
         /////////////////////////////////////////////
@@ -68,7 +68,7 @@ export class GarnetIotGroup extends Construct {
           vpcSubnets: {
             subnetType: SubnetType.PRIVATE_WITH_EGRESS,
           },
-          runtime: Runtime.NODEJS_22_X,
+          runtime: Runtime.NODEJS_24_X,
           layers: [layer_lambda],
           code: Code.fromAsset(lambda_update_group_membership_path),
           handler: "index.handler",
@@ -140,7 +140,7 @@ export class GarnetIotGroup extends Construct {
           vpcSubnets: {
             subnetType: SubnetType.PRIVATE_WITH_EGRESS,
           },
-          runtime: Runtime.NODEJS_22_X,
+          runtime: Runtime.NODEJS_24_X,
           layers: [layer_lambda],
           code: Code.fromAsset(lambda_group_lifecycle_path),
           handler: "index.handler",

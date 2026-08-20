@@ -76,7 +76,7 @@ export class GarnetApiGateway extends Construct{
         // Create CORS preflight Lambda function first
         const corsLambda = new LambdaFunction(this, 'CorsPreflightHandler', {
             functionName: 'garnet-api-cors-preflight',
-            runtime: Runtime.NODEJS_LATEST,
+            runtime: Runtime.NODEJS_24_X,
             handler: 'index.handler',
             code: Code.fromInline(`
 exports.handler  = async (event) => {
