@@ -7,7 +7,7 @@ import { Construct } from "constructs"
 import { deployment_params } from "../../../../architecture"
 import { Role, ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { garnet_broker, garnet_constant, garnet_nomenclature } from "../../../../constants"
-import { Alarm } from "aws-cdk-lib/aws-cloudwatch"
+import { Alarm, TreatMissingData } from "aws-cdk-lib/aws-cloudwatch"
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources"
 
 export interface GarnetScorpioDatabaseProps {
@@ -39,7 +39,7 @@ export class GarnetScorpioDatabase extends Construct{
             securityGroupName: garnet_nomenclature.garnet_broker_sg_database
         })
 
-        const engine = DatabaseClusterEngine.auroraPostgres({ version: AuroraPostgresEngineVersion.VER_16_6 })
+        const engine = DatabaseClusterEngine.auroraPostgres({ version: AuroraPostgresEngineVersion.VER_16_11 })
 
         // Parameter Group
 
@@ -97,8 +97,10 @@ export class GarnetScorpioDatabase extends Construct{
             proxyTarget: ProxyTarget.fromCluster(cluster),
             secrets: [secret],
             maxConnectionsPercent: 100,
-            debugLogging: true,
-            vpc: props.vpc, 
+            // Debug logging writes every SQL statement to CloudWatch. Enable it only
+            // while troubleshooting: it is costly at ingestion volume and logs data values.
+            debugLogging: false,
+            vpc: props.vpc,
             idleClientTimeout: Duration.minutes(5), 
             requireTLS: false,
             role: role_proxy,
@@ -119,10 +121,13 @@ export class GarnetScorpioDatabase extends Construct{
 
         // Add CloudWatch alarms for key metrics
         new Alarm(this, 'DatabaseConnectionsAlarm', {
+            alarmName: `garnet-broker-database-connections-${Aws.REGION}`,
+            alarmDescription: 'Garnet Broker - Aurora connection count is approaching the limit for the current ACU capacity. Attach an SNS action to be notified.',
             metric: cluster.metricDatabaseConnections(),
             threshold: 900,  // 90% of max connections
             evaluationPeriods: 3,
-            datapointsToAlarm: 2
+            datapointsToAlarm: 2,
+            treatMissingData: TreatMissingData.NOT_BREACHING
         })
 
         this.database_endpoint = rds_proxy.endpoint

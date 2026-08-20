@@ -29,7 +29,7 @@ export class GarnetBucket extends Construct {
       const lambda_bucket = new Function(this, 'BucketCreateFunction', {
             functionName: garnet_nomenclature.garnet_utils_bucket_create_lambda,
             description: 'Garnet Utils - Function that creates Garnet Bucket if it does not exist',
-            runtime: Runtime.NODEJS_22_X,
+            runtime: Runtime.NODEJS_24_X,
             code: Code.fromAsset(lambda_bucket_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
@@ -48,9 +48,11 @@ export class GarnetBucket extends Construct {
             "s3:CreateBucket",
             "s3:PutMetricsConfiguration",
             "s3:HeadBucket",
-            "s3:ListBucket"
+            "s3:ListBucket",
+            "s3:PutEncryptionConfiguration",
+            "s3:PutBucketPublicAccessBlock"
             ],
-          resources: ["arn:aws:s3:::*"] 
+          resources: ["arn:aws:s3:::*"]
       }))
 
 
@@ -63,7 +65,7 @@ export class GarnetBucket extends Construct {
       const lambda_bucket_check = new Function(this, 'BucketCheckFunction', {
             functionName: `garnet-utils-bucket-check-lambda`,
             description: 'Garnet Utils - Function that check if Garnet Bucket exists',
-            runtime: Runtime.NODEJS_22_X,
+            runtime: Runtime.NODEJS_24_X,
             code: Code.fromAsset(lambda_bucket_check_path),
             handler: 'index.handler',
             timeout: Duration.seconds(50),
