@@ -4,7 +4,16 @@ All notable changes to the Garnet Framework will be documented in this file.
 
 ## [Unreleased]
 
+### New Features
+
+- **Deployment circuit breakers on every broker service**: a release whose tasks cannot start is now detected and rolled back automatically. Previously only the concentrated service had this, so in the distributed architecture a failed deployment could hang for hours instead of reverting
+- **Opt-in blue/green deployments** for the concentrated architecture, using native ECS support (no CodeDeploy). A second task set is started and validated on an internal test listener before any production traffic shifts, then the previous task set is retained for a bake window so rollback is a listener swap. Configure with `deployment_strategy` in `configuration.ts`. Not available for the distributed architecture, and not safe for Scorpio releases carrying a schema migration — see [DEPLOYMENT.md](DEPLOYMENT.md)
+- **CI/CD pipelines** (GitHub Actions): gated lint, typecheck, unit test, security scan and synth stages on every pull request, and a staged dev/stage/prod delivery pipeline using OIDC role assumption with approval gates. Includes a post-deploy smoke test that exercises the deployed API, since a successful `cdk deploy` only means CloudFormation converged
+- **Lint tooling** (`npm run lint`), targeting defect classes rather than formatting
+
 ### Bug Fixes
+
+- **API token generation could hang stack deployment**: the JWT generator's catch block referenced an undefined variable, so any Secrets Manager failure raised a `ReferenceError` instead of returning a failure status, leaving the custom resource waiting for a response. Found by the new linter on its first run
 
 - **Ingestion data loss under broker backpressure**: The ingestion function acknowledged SQS messages even when the context broker rejected or timed out on the upsert, silently discarding entities. Failed messages are now reported back to SQS individually, so they are retried and eventually dead-lettered instead of dropped
 - **AWS IoT presence events skipped**: A single console-originated event (`iotconsole*`) aborted the whole SQS batch, dropping the connectivity status of every remaining Thing in that batch

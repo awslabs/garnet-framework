@@ -20,6 +20,20 @@ Through its knowledge graph capabilities, Garnet transforms fragmented data into
 
 Explore the [documentation website of Garnet Framework](https://garnet-framework.tech/docs) to get started. 
 
+## Deploying
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the build and release process: the CI/CD pipeline, environment setup, deployment strategies (rolling and blue/green), rollback procedures and a cost breakdown.
+
+Quick reference for local work:
+
+```bash
+npm install          # root + Lambda layer dependencies
+npm run lint         # what CI gates on
+npm run typecheck
+npm test
+npm run synth        # cdk synth, no AWS credentials required
+```
+
 ## Security
 
 See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
