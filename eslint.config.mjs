@@ -81,18 +81,24 @@ export default tseslint.config(
     }
   },
 
-  // Build tooling and Jest specs
+  // Build and pipeline tooling
   {
-    files: ['jest.config.js', 'install.js'],
+    files: ['jest.config.js', 'install.js', '.github/scripts/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'commonjs',
       globals: {
         require: 'readonly',
         module: 'writable',
+        exports: 'writable',
         process: 'readonly',
         console: 'readonly',
-        __dirname: 'readonly'
+        __dirname: 'readonly',
+        // Provided by the Node runtime, not by a bundler
+        fetch: 'readonly',
+        AbortController: 'readonly',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly'
       }
     },
     extends: [js.configs.recommended]

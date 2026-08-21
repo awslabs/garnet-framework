@@ -1,0 +1,131 @@
+name: CD
+
+# Continuous delivery, not deployment: a merge to main deploys to dev
+# automatically, then stage and prod each wait on a GitHub Environment approval.
+# The broker is stateful and shares one Aurora cluster per environment, so a
+# human decides when a release moves forward.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Environment to deploy
+        required: true
+        type: choice
+        options: [dev, stage, prod]
+      architecture:
+        description: Architecture to deploy (must match the environment's existing stack)
+        required: true
+        default: concentrated
+        type: choice
+        options: [concentrated, distributed]
+
+# Never run two deploys at the same environment concurrently. Not cancelling in
+# progress: interrupting cdk deploy can leave a stack in UPDATE_IN_PROGRESS.
+concurrency:
+  group: cd-${{ github.event.inputs.environment || 'pipeline' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  # Re-verify rather than trusting that CI ran on this commit. Cheap, and it
+  # closes the window where main is deployed without ever having been green.
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test -- --ci
+
+  deploy-dev:
+    name: Deploy dev
+    needs: verify
+    # workflow_dispatch takes the single-environment path below instead
+    if: github.event_name == 'push'
+    # No approval on dev: it exists to find what unit tests cannot
+    environment:
+      name: dev
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required to mint the OIDC token
+      contents: read
+    steps:
+      - uses: ./.github/actions/deploy
+        # Repo/environment configuration, not secrets in the code
+        with:
+          aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          architecture: ${{ vars.GARNET_ARCHITECTURE }}
+          deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          node-version: ${{ env.NODE_VERSION }}
+
+  deploy-stage:
+    name: Deploy stage
+    needs: deploy-dev
+    # Approval is configured on the GitHub Environment, not here
+    environment:
+      name: stage
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: ./.github/actions/deploy
+        with:
+          aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          architecture: ${{ vars.GARNET_ARCHITECTURE }}
+          deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          node-version: ${{ env.NODE_VERSION }}
+
+  deploy-prod:
+    name: Deploy prod
+    needs: deploy-stage
+    environment:
+      name: prod
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: ./.github/actions/deploy
+        with:
+          aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          architecture: ${{ vars.GARNET_ARCHITECTURE }}
+          deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          node-version: ${{ env.NODE_VERSION }}
+
+  # Single-environment path for workflow_dispatch, so a hotfix or a re-deploy
+  # does not have to walk the whole ladder.
+  deploy-manual:
+    name: Deploy ${{ github.event.inputs.environment }} (manual)
+    if: github.event_name == 'workflow_dispatch'
+    needs: verify
+    environment:
+      name: ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: ./.github/actions/deploy
+        with:
+          aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          architecture: ${{ github.event.inputs.architecture }}
+          deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          node-version: ${{ env.NODE_VERSION }}

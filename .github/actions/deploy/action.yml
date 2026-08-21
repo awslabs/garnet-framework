@@ -1,0 +1,102 @@
+name: Deploy Garnet
+description: Assume a deployment role via OIDC, configure the stack, and deploy it
+
+inputs:
+  aws-role-arn:
+    description: IAM role to assume via GitHub OIDC. No long-lived access keys.
+    required: true
+  aws-region:
+    description: Region to deploy into
+    required: true
+  architecture:
+    description: concentrated or distributed
+    required: true
+  deployment-strategy:
+    description: rolling or bluegreen
+    required: false
+    default: rolling
+  node-version:
+    description: Node version used for the build
+    required: false
+    default: '24'
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v6
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        npm ci --ignore-scripts
+        # The Lambda layer is bundled from disk by Code.fromAsset, so its
+        # dependencies must be installed before synth or the layer ships empty.
+        npm ci --prefix lib/layers/nodejs
+
+    # Short-lived credentials minted per run. Nothing to rotate or leak.
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v5
+      with:
+        role-to-assume: ${{ inputs.aws-role-arn }}
+        aws-region: ${{ inputs.aws-region }}
+        role-session-name: garnet-deploy-${{ github.run_id }}
+
+    - name: Apply deployment configuration
+      shell: bash
+      env:
+        GARNET_ARCHITECTURE: ${{ inputs.architecture }}
+        GARNET_DEPLOYMENT_STRATEGY: ${{ inputs.deployment-strategy }}
+        GARNET_REGION: ${{ inputs.aws-region }}
+      run: node .github/scripts/apply-configuration.js
+
+    - name: Show what will change
+      shell: bash
+      # Non-zero exit just means "there is a diff", so it must not fail the step
+      run: npx cdk diff || true
+
+    - name: Deploy
+      shell: bash
+      run: |
+        npx cdk deploy \
+          --require-approval never \
+          --outputs-file cdk-outputs.json \
+          --progress events
+        # --require-approval never is safe here because the security-relevant
+        # review already happened: CI gated the PR and the GitHub Environment
+        # gated this job. An interactive prompt would just hang the runner.
+
+    - name: Smoke test
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: node .github/scripts/smoke-test.js
+
+    - name: Publish stack outputs
+      shell: bash
+      run: |
+        {
+          echo "### Garnet deployment"
+          echo ""
+          echo "| Output | Value |"
+          echo "| --- | --- |"
+          node -e "
+            const o = require('./cdk-outputs.json');
+            const stack = o.Garnet || {};
+            const redact = k => /Token|Secret/i.test(k);
+            for (const [k, v] of Object.entries(stack)) {
+              console.log('| ' + k + ' | ' + (redact(k) ? '(redacted)' : String(v)) + ' |');
+            }
+          "
+        } >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload deployment outputs
+      uses: actions/upload-artifact@v5
+      with:
+        name: cdk-outputs-${{ inputs.architecture }}-${{ github.run_id }}
+        path: cdk-outputs.json
+        retention-days: 30

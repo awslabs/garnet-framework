@@ -1,0 +1,170 @@
+name: CI
+
+# Runs on every pull request, and on pushes to the long-lived branches so a
+# green main is a meaningful signal rather than just "the PR was green once".
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+# A new push to the same PR makes the in-flight run obsolete
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: '24'
+
+jobs:
+  # Stage 1: cheapest signal first, so a formatting mistake does not burn a synth
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      # install.js runs as a preinstall hook and npm installs every nested
+      # package.json, including the Lambda layer. --ignore-scripts skips it so CI
+      # controls installation explicitly.
+      - run: npm ci --ignore-scripts
+      - run: npm run lint
+
+  typecheck:
+    name: Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+
+  # Stage 2: unit tests. No network, no AWS credentials.
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm test -- --ci
+
+  # Stage 3: security. Split from the build so a new advisory is attributable.
+  security:
+    name: Security scan
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+
+      - name: Install Lambda layer dependencies
+        run: npm ci --prefix lib/layers/nodejs
+
+      # Only these two trees reach production. Dev-only advisories in the jest or
+      # eslint toolchain should not gate a deploy, so they are reported separately
+      # below rather than failing the job.
+      - name: Audit deployed dependencies
+        run: |
+          echo "::group::Root (production only)"
+          npm audit --omit=dev
+          echo "::endgroup::"
+          echo "::group::Lambda layer (ships to Lambda)"
+          npm audit --prefix lib/layers/nodejs
+          echo "::endgroup::"
+
+      - name: Audit dev dependencies (advisory only)
+        continue-on-error: true
+        run: npm audit
+
+      # Catches a credential committed in the diff before it reaches main
+      - name: Scan for committed secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Stage 4: build the deployable artifact. For CDK that is the synthesized
+  # cloud assembly: templates plus Lambda assets, deployable without re-synth.
+  synth:
+    name: Synth cloud assembly
+    runs-on: ubuntu-latest
+    needs: [test, security]
+    strategy:
+      fail-fast: false
+      # Both architectures are supported configurations, so both must synth.
+      # A change that only works for one is a regression for the other's users.
+      matrix:
+        architecture: [concentrated, distributed]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm ci --prefix lib/layers/nodejs
+
+      - name: Select architecture ${{ matrix.architecture }}
+        run: |
+          node - <<'EOF'
+          const fs = require('fs')
+          const target = process.env.ARCHITECTURE === 'distributed' ? 'Distributed' : 'Concentrated'
+          const path = 'configuration.ts'
+          const src = fs.readFileSync(path, 'utf8')
+          const out = src.replace(/architecture: ARCHITECTURE\.\w+/, `architecture: ARCHITECTURE.${target}`)
+          if (out === src && !src.includes(`ARCHITECTURE.${target}`)) {
+            throw new Error('Could not set architecture in configuration.ts')
+          }
+          fs.writeFileSync(path, out)
+          EOF
+        env:
+          ARCHITECTURE: ${{ matrix.architecture }}
+
+      # No AWS credentials needed: a region is enough to resolve the template.
+      - name: Synth
+        run: npx cdk synth --quiet
+        env:
+          CDK_DEFAULT_REGION: us-east-1
+          CDK_DEFAULT_ACCOUNT: '000000000000'
+
+      # Retained so the exact assembly that passed CI is what CD deploys,
+      # rather than a fresh synth that could pick up a different dependency.
+      - name: Upload cloud assembly
+        uses: actions/upload-artifact@v5
+        with:
+          name: cloud-assembly-${{ matrix.architecture }}
+          path: cdk.out/
+          retention-days: 14
+
+  # Single required status check, so branch protection does not need updating
+  # every time a job is added or renamed.
+  ci:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck, test, security, synth]
+    if: always()
+    steps:
+      - name: Verify all stages passed
+        run: |
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "One or more CI stages failed"
+            exit 1
+          fi
+          echo "All CI stages passed"
