@@ -158,6 +158,33 @@ One-time, per AWS account:
 5. **Create the GitHub Environments** (`dev`, `stage`, `prod`), add the variables from [Environments](#environments), and add required reviewers to `stage` and `prod`. The approval gate is configured on the Environment, not in the workflow.
 6. **Protect `main`**: require the `CI` status check. It aggregates every CI job, so branch protection does not need updating when a job is added.
 
+## Verification status
+
+Blue/green and the circuit breaker were verified against a live deployment (concentrated architecture, `us-east-1`, Scorpio 6.0.10), not only through synthesis.
+
+**Blue/green traffic shift.** On a deployment that changes the task definition, ECS starts a second task set and the ALB rules move in two distinct steps:
+
+1. The **test listener rule flips first** — `:8080` points at the new task set while `:80` still serves 100% from the old one. This is the window in which a release can be validated before it takes production traffic.
+2. Once the new set is healthy, the **production rule shifts** to it.
+
+Observed on the production listener rule as weighted forward actions, sampled every 25s through a deployment:
+
+```
+:80 [blue=0 green=100]   :8080 [blue=0   green=100]   deploy=IN_PROGRESS
+:80 [blue=0 green=100]   :8080 [blue=100 green=0]     deploy=IN_PROGRESS   <- test listener flipped
+:80 [blue=100 green=0]   :8080 [blue=100 green=0]     deploy=IN_PROGRESS   <- production shifted
+```
+
+**Bake window.** During the bake the service ran **4 tasks for a desired count of 2** — both revisions alive at once, with two active deployments — then returned to 2 when the bake expired, ~10 minutes after the shift, matching `deployment_bake_time_minutes`. This is the behaviour the cost table above prices.
+
+**Zero downtime.** 20 consecutive authenticated API requests spanning the shift all returned 200, and an entity written before the deployment was still readable afterwards.
+
+**Circuit breaker.** A deployment pointed at a nonexistent image tag (`CannotPullContainerError`) was rolled back automatically: `ROLLBACK_IN_PROGRESS` ~11 minutes after the deployment started, then `ROLLBACK_SUCCESSFUL`, restoring the previous task definition revision. CloudFormation followed with `UPDATE_ROLLBACK_COMPLETE`. **Production served HTTP 200 at every poll throughout** — the failing task set never received traffic.
+
+**End-to-end ingestion.** An entity sent to the ingestion queue was upserted through Lambda → broker → Aurora and read back through the API with its properties correctly normalized.
+
+One reporting quirk worth knowing: `describe-services` and `describe-service-deployments` return **no** `strategy` or `bakeTimeInMinutes` field for a blue/green service, even though CloudFormation submitted `Strategy: BLUE_GREEN` and the behaviour above is unambiguously blue/green. Do not use those fields to confirm the strategy is active — check for the weighted forward action on the production listener rule, or for both revisions running during a deployment.
+
 ## Known limitations
 
 Verified constraints, not speculation:
@@ -165,6 +192,7 @@ Verified constraints, not speculation:
 - **Blue/green is concentrated-only.** Explained above; enforced with a clear error.
 - **Blue/green is unsafe for schema-changing releases.** Shared Aurora cluster.
 - **Switching strategy changes resource topology.** The rolling path uses `ApplicationLoadBalancedFargateService`; blue/green builds the ALB explicitly, because that pattern does not accept a deployment strategy and attaches its target group as the listener default action rather than as a rule. Flipping the strategy on an existing stack replaces the load balancer, so the broker gets a new internal DNS name. Plan it like an architecture change, not a config tweak.
-- **The blue/green test listener is not reachable from GitHub-hosted runners.** It is internal to the VPC by design.
-- **Blue/green has been verified through synthesis, not through a live traffic shift.** The generated template requests `BLUE_GREEN` with the expected bake time, listener rules and alternate target group, and is covered by tests. Before enabling it in production, run one deploy in a test account and confirm the shift and bake behave as expected.
-- **Whether Scorpio tolerates two versions against one schema concurrently is an upstream property**, not something this framework controls. That assumption underpins the whole broker-tier design.
+- **The blue/green test listener is not reachable from GitHub-hosted runners.** It is internal to the VPC by design, so the pipeline cannot exercise it without a runner inside the VPC.
+- **Whether Scorpio tolerates two versions against one schema concurrently is an upstream property**, not something this framework controls. That assumption underpins the whole broker-tier design. The verification above used one Scorpio version on both task sets, so it does not test two Scorpio versions running concurrently.
+- **A first deployment takes about 45 minutes**, dominated by Aurora, the RDS proxy target group, and the NAT gateway. Subsequent broker-only deployments take roughly 15-20 minutes including the bake.
+- **`cdk destroy` does not remove everything.** The Aurora cluster has `DeletionPolicy: Snapshot`, so a final snapshot is retained and continues to bill; the data lake and Athena buckets are created by a custom resource that deliberately does not delete them. After tearing down a test environment, check for leftover snapshots (`aws rds describe-db-cluster-snapshots --snapshot-type manual`) and `garnet-datalake-*` buckets.
