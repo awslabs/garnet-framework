@@ -25,11 +25,11 @@ Two workflows, both defined in [.github/workflows/](.github/workflows/) so the b
 | Typecheck | `tsc --noEmit` | Any type error |
 | Unit tests | `jest`, no network or AWS calls | A failing assertion |
 | Security scan | `npm audit` on deployed dependencies, `gitleaks` on the diff | A vulnerable production dependency or a committed secret |
-| Synth | `cdk synth` for **both** architectures | A template that will not synthesize |
+| Synth | `cdk synth` for Scorpio concentrated/distributed and Garnet distributed | A supported deployment profile that will not synthesize |
 
 The security stage distinguishes dependencies that reach production (the root tree with `--omit=dev`, plus the Lambda layer that ships inside the deployment package) from dev-only tooling. A `jest` advisory does not gate a deploy; it is reported and left non-blocking. An `axios` advisory does gate it.
 
-Synth runs as a matrix over `concentrated` and `distributed` because both are supported configurations. The synthesized cloud assembly is uploaded as an artifact, so CD deploys the exact templates that passed rather than re-synthesizing and possibly resolving a different dependency.
+Synth runs the two Scorpio architectures and the complete distributed Garnet profile, including its immutable broker and load images. The synthesized cloud assembly is uploaded as an artifact, so CD deploys the exact templates that passed rather than re-synthesizing and possibly resolving a different dependency.
 
 **CD** ([cd.yml](.github/workflows/cd.yml)) is continuous *delivery*. A merge to `main` deploys to `dev` automatically. `stage` and `prod` each wait on a GitHub Environment approval, because the broker is stateful and there is one Aurora cluster per environment — a bad release is not free to undo. Use the `workflow_dispatch` trigger to deploy a single environment without walking the whole ladder.
 

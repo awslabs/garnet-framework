@@ -103,15 +103,40 @@ jobs:
   # Stage 4: build the deployable artifact. For CDK that is the synthesized
   # cloud assembly: templates plus Lambda assets, deployable without re-synth.
   synth:
-    name: Synth cloud assembly
+    name: Synth ${{ matrix.profile }}
     runs-on: ubuntu-latest
     needs: [test, security]
     strategy:
       fail-fast: false
-      # Both architectures are supported configurations, so both must synth.
-      # A change that only works for one is a regression for the other's users.
+      # Scorpio supports both layouts. Garnet deliberately supports only the
+      # independently scalable distributed layout, so gate that complete stack
+      # as a separate profile instead of merely changing the architecture enum.
       matrix:
-        architecture: [concentrated, distributed]
+        include:
+          - profile: scorpio-concentrated
+            engine: scorpio
+            architecture: concentrated
+            broker_image: ""
+            load_image: ""
+            public_origin: ""
+            notification_origins: ""
+            context_hosts: ""
+          - profile: scorpio-distributed
+            engine: scorpio
+            architecture: distributed
+            broker_image: ""
+            load_image: ""
+            public_origin: ""
+            notification_origins: ""
+            context_hosts: ""
+          - profile: garnet-distributed
+            engine: garnet
+            architecture: distributed
+            broker_image: public.ecr.aws/garnet/broker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            load_image: public.ecr.aws/garnet/load@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+            public_origin: https://broker.example
+            notification_origins: https://callbacks.example
+            context_hosts: uri.etsi.org,contexts.example
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -121,21 +146,18 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm ci --prefix lib/layers/nodejs
 
-      - name: Select architecture ${{ matrix.architecture }}
-        run: |
-          node - <<'EOF'
-          const fs = require('fs')
-          const target = process.env.ARCHITECTURE === 'distributed' ? 'Distributed' : 'Concentrated'
-          const path = 'configuration.ts'
-          const src = fs.readFileSync(path, 'utf8')
-          const out = src.replace(/architecture: ARCHITECTURE\.\w+/, `architecture: ARCHITECTURE.${target}`)
-          if (out === src && !src.includes(`ARCHITECTURE.${target}`)) {
-            throw new Error('Could not set architecture in configuration.ts')
-          }
-          fs.writeFileSync(path, out)
-          EOF
+      - name: Configure ${{ matrix.profile }}
+        run: node .github/scripts/apply-configuration.js
         env:
-          ARCHITECTURE: ${{ matrix.architecture }}
+          GARNET_BROKER_ENGINE: ${{ matrix.engine }}
+          GARNET_BROKER_IMAGE: ${{ matrix.broker_image }}
+          GARNET_LOAD_IMAGE: ${{ matrix.load_image }}
+          GARNET_BROKER_PUBLIC_ORIGIN: ${{ matrix.public_origin }}
+          GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: ${{ matrix.notification_origins }}
+          GARNET_CONTEXT_ALLOW_HOSTS: ${{ matrix.context_hosts }}
+          GARNET_ARCHITECTURE: ${{ matrix.architecture }}
+          GARNET_DEPLOYMENT_STRATEGY: rolling
+          GARNET_REGION: us-east-1
 
       # No AWS credentials needed: a region is enough to resolve the template.
       - name: Synth
@@ -149,7 +171,7 @@ jobs:
       - name: Upload cloud assembly
         uses: actions/upload-artifact@v5
         with:
-          name: cloud-assembly-${{ matrix.architecture }}
+          name: cloud-assembly-${{ matrix.profile }}
           path: cdk.out/
           retention-days: 14
 

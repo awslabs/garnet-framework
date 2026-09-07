@@ -1,5 +1,5 @@
 import { App, Stack } from "aws-cdk-lib"
-import { Template } from "aws-cdk-lib/assertions"
+import { Match, Template } from "aws-cdk-lib/assertions"
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { GarnetBroker } from "../lib/stacks/garnet-broker/garnet-broker-stack"
@@ -334,6 +334,17 @@ describe("Garnet Broker AWS runtime", () => {
   it("health-checks the public API through the production path", () => {
     const template = synth_broker()
 
+    template.hasResourceProperties(
+      "AWS::ElasticLoadBalancingV2::Listener",
+      {
+        Port: 80,
+        Protocol: "HTTP",
+        DefaultActions: [{
+          Type: "forward",
+          TargetGroupArn: Match.anyValue()
+        }]
+      }
+    )
     template.hasResourceProperties(
       "AWS::ElasticLoadBalancingV2::TargetGroup",
       {

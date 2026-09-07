@@ -25,8 +25,7 @@ import {
 import {
     ApplicationLoadBalancer,
     ApplicationProtocol,
-    ApplicationTargetGroup,
-    ListenerAction
+    ApplicationTargetGroup
 } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { Rule, Schedule } from "aws-cdk-lib/aws-events"
 import { EcsTask } from "aws-cdk-lib/aws-events-targets"
@@ -441,13 +440,11 @@ export class GarnetBrokerRuntime extends Construct {
             idleTimeout: Duration.seconds(60),
             dropInvalidHeaderFields: true
         })
-        const listener = this.fargate_alb.addListener("Listener", {
-            port: 80,
-            defaultAction: ListenerAction.fixedResponse(404)
-        })
-        const target_group: ApplicationTargetGroup = listener.addTargets(
+        const target_group = new ApplicationTargetGroup(
+            this,
             "ApiTarget",
             {
+                vpc: props.vpc,
                 targets: [api.service],
                 port: 8080,
                 protocol: ApplicationProtocol.HTTP,
@@ -460,6 +457,10 @@ export class GarnetBrokerRuntime extends Construct {
                 }
             }
         )
+        this.fargate_alb.addListener("Listener", {
+            port: 80,
+            defaultTargetGroups: [target_group]
+        })
         target_group.setAttribute(
             "deregistration_delay.timeout_seconds",
             "30"
