@@ -45,6 +45,7 @@ import { garnet_constant } from "../../../../constants"
 import { GarnetMigration } from "../migration/migration-construct"
 import { GarnetLoad } from "../load/load-construct"
 import { GARNET_SERVICE_CAPACITY } from "./runtime-profile"
+import { scale_on_queue_backlog } from "./queue-scaling"
 import {
     GarnetServiceResult,
     GarnetTaskFactory
@@ -352,6 +353,16 @@ export class GarnetBrokerRuntime extends Construct {
         }))
         matcher.service.node.addDependency(relay.service)
         this.event_queue.grantConsumeMessages(matcher.task_definition.taskRole)
+        if (matcher.scaling === undefined) {
+            throw new Error("Garnet matcher requires task-count scaling")
+        }
+        scale_on_queue_backlog({
+            id: "MatcherBacklogScaling",
+            queue: this.event_queue,
+            service: matcher.service,
+            scaling: matcher.scaling,
+            target_backlog_per_task: 8
+        })
 
         const sink = add(factory.create_service({
             id: "LakeSink",
@@ -478,17 +489,15 @@ export class GarnetBrokerRuntime extends Construct {
             })
         }
 
-        api.service
-            .autoScaleTaskCount({
-                minCapacity: GARNET_SERVICE_CAPACITY.api.min_tasks,
-                maxCapacity: GARNET_SERVICE_CAPACITY.api.max_tasks
-            })
-            .scaleOnRequestCount("ApiRequestScaling", {
-                requestsPerTarget: 750,
-                targetGroup: target_group,
-                scaleInCooldown: Duration.seconds(180),
-                scaleOutCooldown: Duration.seconds(30)
-            })
+        if (api.scaling === undefined) {
+            throw new Error("Garnet API requires task-count scaling")
+        }
+        api.scaling.scaleOnRequestCount("ApiRequestScaling", {
+            requestsPerTarget: 750,
+            targetGroup: target_group,
+            scaleInCooldown: Duration.seconds(180),
+            scaleOutCooldown: Duration.seconds(30)
+        })
 
         const maintenance_log = new LogGroup(this, "MaintenanceLogs", {
             retention: RetentionDays.ONE_MONTH,

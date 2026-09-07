@@ -252,6 +252,54 @@ describe("Garnet Broker AWS runtime", () => {
     expect(rendered).not.toContain('"sqs:*"')
     expect(rendered).not.toContain('"sns:*"')
     expect(rendered).not.toContain("AWS::SNS::Topic")
+    template.hasResourceProperties(
+      "AWS::CloudWatch::Alarm",
+      {
+        DatapointsToAlarm: 2,
+        EvaluationPeriods: 2,
+        Metrics: Match.arrayWith([
+          Match.objectLike({
+            Expression: "visible / running",
+            ReturnData: true
+          }),
+          Match.objectLike({
+            MetricStat: {
+              Metric: {
+                MetricName: "ApproximateNumberOfMessagesVisible",
+                Namespace: "AWS/SQS"
+              },
+              Stat: "Average"
+            },
+            ReturnData: false
+          }),
+          Match.objectLike({
+            MetricStat: {
+              Metric: {
+                MetricName: "RunningTaskCount",
+                Namespace: "ECS/ContainerInsights"
+              },
+              Stat: "Average"
+            },
+            ReturnData: false
+          })
+        ])
+      }
+    )
+    template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "StepScaling",
+        StepScalingPolicyConfiguration: Match.objectLike({
+          AdjustmentType: "ChangeInCapacity",
+          Cooldown: 60,
+          StepAdjustments: Match.arrayWith([
+            Match.objectLike({
+              ScalingAdjustment: 4
+            })
+          ])
+        })
+      }
+    )
   })
 
   it("uses one TLS single-shard Valkey group for replica-safe federation state", () => {

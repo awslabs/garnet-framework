@@ -131,6 +131,14 @@ from the Aurora Secrets Manager secret. Aurora requires TLS, and reports are enc
 blocked from public access, retained when the stack is removed, and written below
 `garnet-load/<run-id>/`.
 
+The API service scales on ALB requests per target, and background services retain CPU scaling.
+The matcher additionally scales on visible SQS watermarks per running matcher task, using
+Container Insights `RunningTaskCount`: at or below one watermark/task for two minutes removes one task;
+8, 16, and 32 watermarks/task add 1, 2, and 4 tasks respectively. This measures independent FIFO
+partitions that another matcher can consume, not Entity events: one coalesced watermark may cover
+many events, and one hot FIFO partition remains serial. The separate oldest-message alarm detects
+that lag instead of adding tasks that cannot make it parallel.
+
 After deploying with `--outputs-file cdk-outputs.json`, run a short multi-generator diagnostic:
 
 ```bash

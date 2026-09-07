@@ -12,6 +12,7 @@ import {
     LogDrivers,
     OperatingSystemFamily,
     PropagatedTagSource,
+    ScalableTaskCount,
     Secret as EcsSecret
 } from "aws-cdk-lib/aws-ecs"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
@@ -38,6 +39,7 @@ export interface GarnetServiceResult {
     service: FargateService
     task_definition: FargateTaskDefinition
     container: ContainerDefinition
+    scaling?: ScalableTaskCount
 }
 
 export interface GarnetTaskFactoryProps {
@@ -160,21 +162,20 @@ export class GarnetTaskFactory extends Construct {
             )
         })
 
-        if (
-            spec.capacity.max_tasks > spec.capacity.min_tasks &&
-            spec.cpu_autoscaling !== false
-        ) {
-            service
-                .autoScaleTaskCount({
-                    minCapacity: spec.capacity.min_tasks,
-                    maxCapacity: spec.capacity.max_tasks
-                })
-                .scaleOnCpuUtilization(`${spec.id}CpuScaling`, {
+        let scaling: ScalableTaskCount | undefined
+        if (spec.capacity.max_tasks > spec.capacity.min_tasks) {
+            scaling = service.autoScaleTaskCount({
+                minCapacity: spec.capacity.min_tasks,
+                maxCapacity: spec.capacity.max_tasks
+            })
+            if (spec.cpu_autoscaling !== false) {
+                scaling.scaleOnCpuUtilization(`${spec.id}CpuScaling`, {
                     targetUtilizationPercent: 60,
                     scaleInCooldown: Duration.seconds(120),
                     scaleOutCooldown: Duration.seconds(30)
                 })
+            }
         }
-        return { service, task_definition, container }
+        return { service, task_definition, container, scaling }
     }
 }
