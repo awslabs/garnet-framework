@@ -143,14 +143,18 @@ describe("Garnet Broker AWS runtime", () => {
       LOAD_GENERATOR_VCPUS: "4",
       GARNET_IMAGE: IMAGE
     })
+    expect(environment).not.toHaveProperty("LOAD_HEADERS_JSON")
     expect(environment.LOAD_URL).toHaveProperty("Fn::Join")
     const secrets =
       generator.Properties.ContainerDefinitions[0].Secrets
         .map((entry: any) => entry.Name)
     expect(secrets).toEqual(expect.arrayContaining([
       "LOAD_DATABASE_USER",
-      "LOAD_DATABASE_PASSWORD"
+      "LOAD_DATABASE_PASSWORD",
+      "LOAD_HEADERS_JSON"
     ]))
+    expect(JSON.stringify(generator.Properties.ContainerDefinitions[0]))
+      .toContain("garnet/secret/api-client")
 
     template.resourceCountIs("AWS::S3::Bucket", 1)
     template.hasResourceProperties("AWS::S3::Bucket", {

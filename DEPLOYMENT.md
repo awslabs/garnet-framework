@@ -149,12 +149,35 @@ The launcher starts one ECS task per generator index, gives all tasks the same f
 waits for runs longer than the AWS CLI's built-in waiter supports, and then starts the aggregate
 task even if a generator failed. Its final line is the exact S3 URI of the aggregate report.
 
-This first AWS plane targets the broker's internal ALB and records
-`LOAD_ENVIRONMENT=aws-ecs-internal`. The launcher rejects `LOAD_QUALIFICATION=1`: it measures the
-real Fargate → ALB → broker → Aurora and event-worker path, but it bypasses API Gateway and its
-authorizer. It is valid capacity and scaling diagnostic evidence, not the final public-ingress
-release qualification. Automating a non-secret public authentication mechanism for the load
-tasks remains a release task.
+Without `LOAD_QUALIFICATION=1`, the AWS plane targets the broker's internal ALB and records
+`LOAD_ENVIRONMENT=aws-ecs-internal`. It measures the real Fargate → ALB → broker → Aurora and
+event-worker path while keeping API Gateway outside a short scaling diagnostic.
+
+For production qualification, set `LOAD_QUALIFICATION=1`. The launcher then targets the deployed
+`GarnetEndpoint` and records `LOAD_ENVIRONMENT=aws-ecs`, so API Gateway, its Lambda authorizer, the
+VPC link and the internal ALB are all measured. The generator task receives `LOAD_HEADERS_JSON`
+from the named API-client Secrets Manager secret; neither the launcher, RunTask overrides, reports
+nor CloudFormation outputs contain the credential:
+
+```bash
+LOAD_RUN_ID=AwsQualification1 \
+LOAD_QUALIFICATION=1 \
+LOAD_GENERATOR_COUNT=4 \
+LOAD_RATE=5000 \
+LOAD_DURATION_SECONDS=3600 \
+LOAD_WARMUP_SECONDS=60 \
+LOAD_FIXTURE_ENTITIES=50000 \
+LOAD_START_DELAY_SECONDS=900 \
+LOAD_EXTERNAL_TELEMETRY_ID=cloudwatch-run-id \
+LOAD_SYSTEM_COST_PER_HOUR=12.50 \
+LOAD_MAX_READ_P99_MS=100 \
+LOAD_MAX_WRITE_P99_MS=150 \
+LOAD_MAX_QUEUE_P99_MS=10 \
+GARNET_COMMIT="$(git rev-parse HEAD)" \
+npm run load:aws
+```
+
+Replace the example cost and latency budgets with the approved values for the deployment.
 
 Useful controls are the same as the broker's Bun load runner, including `LOAD_PROFILE`,
 `LOAD_WORKLOAD`, latency budgets, `LOAD_MAX_IN_FLIGHT`, and `LOAD_DATABASE_EVENT_DRAIN`. Every run

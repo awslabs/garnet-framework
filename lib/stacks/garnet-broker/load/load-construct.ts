@@ -24,9 +24,12 @@ import {
     Bucket,
     BucketEncryption
 } from "aws-cdk-lib/aws-s3"
-import { ISecret } from "aws-cdk-lib/aws-secretsmanager"
+import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
-import { garnet_constant } from "../../../../constants"
+import {
+    garnet_constant,
+    garnet_nomenclature
+} from "../../../../constants"
 
 export interface GarnetLoadProps {
     vpc: Vpc
@@ -42,8 +45,9 @@ export interface GarnetLoadProps {
  * On-demand load tasks.
  *
  * These are task definitions, not services: they cost nothing while idle. The
- * internal ALB target deliberately records `aws-ecs-internal`, so its report
- * cannot be mistaken for qualification through the public production ingress.
+ * The task defaults to the internal ALB diagnostic path. The launcher can
+ * override only its non-secret URL and evidence mode for public qualification;
+ * the API Authorization object always comes from Secrets Manager.
  */
 export class GarnetLoad extends Construct {
     public readonly generator_task: FargateTaskDefinition
@@ -111,6 +115,11 @@ export class GarnetLoad extends Construct {
                 "password"
             )
         }
+        const api_token_secret = Secret.fromSecretNameV2(
+            this,
+            "ApiTokenSecret",
+            garnet_nomenclature.garnet_api_client_secret
+        )
         const report_environment = {
             AWS_REGION: Aws.REGION,
             LOAD_REPORT_S3_BUCKET: this.report_bucket.bucketName,
@@ -142,7 +151,11 @@ export class GarnetLoad extends Construct {
                 LOAD_GENERATOR_VCPUS: "4",
                 GARNET_IMAGE: props.broker_image
             },
-            secrets: database_secrets,
+            secrets: {
+                ...database_secrets,
+                LOAD_HEADERS_JSON:
+                    EcsSecret.fromSecretsManager(api_token_secret)
+            },
             logging: LogDrivers.awsLogs({
                 streamPrefix: "garnet/load-generator",
                 logGroup: log_group

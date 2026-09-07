@@ -50,6 +50,14 @@ const positive_number = (env, name, fallback) => {
   return value
 }
 
+const boolean_setting = (env, name, fallback = false) => {
+  const raw = setting(env, name)
+  if (raw === undefined) return fallback
+  if (raw === '1' || raw.toLowerCase() === 'true') return true
+  if (raw === '0' || raw.toLowerCase() === 'false') return false
+  throw new Error(`${name} shall be 1, 0, true, or false`)
+}
+
 const load_run_id = (raw, now) => {
   const candidate =
     raw ||
@@ -75,15 +83,7 @@ const environment = values =>
   Object.entries(values).map(([name, value]) => ({ name, value: String(value) }))
 
 const plan_load_test = (outputs, env = process.env, now = new Date()) => {
-  const qualification = setting(env, 'LOAD_QUALIFICATION')
-  if (
-    qualification === '1' ||
-    qualification?.toLowerCase() === 'true'
-  ) {
-    throw new Error(
-      'the internal load plane is diagnostic and cannot set LOAD_QUALIFICATION=1'
-    )
-  }
+  const qualification = boolean_setting(env, 'LOAD_QUALIFICATION')
 
   const generator_count = positive_integer(
     env,
@@ -132,7 +132,13 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
   const shared = {
     LOAD_RUN_ID: run_id,
     LOAD_GENERATOR_COUNT: String(generator_count),
-    LOAD_START_AT: start_at.toISOString()
+    LOAD_START_AT: start_at.toISOString(),
+    LOAD_URL: required_output(
+      outputs,
+      qualification ? 'GarnetEndpoint' : 'GarnetLoadBrokerUrl'
+    ),
+    LOAD_ENVIRONMENT: qualification ? 'aws-ecs' : 'aws-ecs-internal',
+    ...(qualification ? { LOAD_QUALIFICATION: '1' } : {})
   }
   for (const name of PASSTHROUGH_SETTINGS) {
     const value = setting(env, name)
@@ -188,6 +194,7 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
         })
       }]
     },
+    qualification,
     run_id,
     started_by: `garnet-${run_id}`.slice(0, 36),
     report_uri:

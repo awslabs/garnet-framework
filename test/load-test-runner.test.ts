@@ -12,7 +12,8 @@ const OUTPUTS = {
   GarnetLoadSecurityGroup: "sg-123",
   GarnetLoadSubnets: "subnet-a,subnet-b",
   GarnetLoadReportBucket: "garnet-load-reports",
-  GarnetLoadBrokerUrl: "http://internal.example"
+  GarnetLoadBrokerUrl: "http://internal.example",
+  GarnetEndpoint: "https://public.example"
 }
 
 const override_environment = (
@@ -49,17 +50,53 @@ describe("AWS load-test launcher", () => {
     expect(environments[0]).toMatchObject({
       LOAD_RATE: "5000",
       LOAD_FIXTURE_ENTITIES: "50000",
-      LOAD_GENERATOR_COUNT: "3"
+      LOAD_GENERATOR_COUNT: "3",
+      LOAD_URL: "http://internal.example",
+      LOAD_ENVIRONMENT: "aws-ecs-internal"
     })
+    expect(environments[0]).not.toHaveProperty("LOAD_QUALIFICATION")
+    expect(environments[0]).not.toHaveProperty("LOAD_HEADERS_JSON")
+    expect(plan.qualification).toBe(false)
     expect(plan.report_uri).toBe(
       "s3://garnet-load-reports/garnet-load/release42/aggregate.json"
     )
   })
 
-  it("refuses to label the internal ALB path as qualification", () => {
-    expect(() => plan_load_test(OUTPUTS, {
+  it("routes qualification through public authenticated ingress", () => {
+    const plan = plan_load_test(
+      OUTPUTS,
+      {
+        LOAD_QUALIFICATION: "true",
+        LOAD_GENERATOR_COUNT: "2",
+        LOAD_START_DELAY_SECONDS: "60"
+      },
+      new Date("2026-09-07T12:00:00Z")
+    )
+
+    expect(plan.qualification).toBe(true)
+    for (const override of plan.generator_overrides) {
+      expect(override_environment(override)).toMatchObject({
+        LOAD_URL: "https://public.example",
+        LOAD_ENVIRONMENT: "aws-ecs",
+        LOAD_QUALIFICATION: "1"
+      })
+      expect(override_environment(override))
+        .not.toHaveProperty("LOAD_HEADERS_JSON")
+    }
+  })
+
+  it("fails closed when public qualification has no deployed endpoint", () => {
+    const { GarnetEndpoint: _endpoint, ...internal_outputs } = OUTPUTS
+
+    expect(() => plan_load_test(internal_outputs, {
       LOAD_QUALIFICATION: "1"
-    })).toThrow("internal load plane is diagnostic")
+    })).toThrow("GarnetEndpoint is missing")
+  })
+
+  it("rejects an ambiguous qualification value", () => {
+    expect(() => plan_load_test(OUTPUTS, {
+      LOAD_QUALIFICATION: "sometimes"
+    })).toThrow("LOAD_QUALIFICATION shall be 1, 0, true, or false")
   })
 
   it("runs the aggregate even when one generator fails", async () => {
