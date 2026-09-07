@@ -7,6 +7,7 @@ How Garnet is built, tested, deployed and rolled back.
 - [Deployment strategies](#deployment-strategies)
 - [The database constraint](#the-database-constraint)
 - [Rollback](#rollback)
+- [AWS scale diagnostics](#aws-scale-diagnostics)
 - [Cost](#cost)
 - [Local development](#local-development)
 - [Setting up the pipeline](#setting-up-the-pipeline)
@@ -34,7 +35,7 @@ Synth runs as a matrix over `concentrated` and `distributed` because both are su
 
 Authentication is OIDC role assumption via `aws-actions/configure-aws-credentials`. Credentials are minted per run and expire with it; there are no long-lived access keys in the repository or in GitHub secrets. See [Setting up the pipeline](#setting-up-the-pipeline).
 
-After every deploy, [smoke-test.js](.github/scripts/smoke-test.js) calls the deployed API. This matters because a green `cdk deploy` only means CloudFormation converged — it does not mean the broker answers NGSI-LD requests. The smoke test checks that the version endpoint reports every broker container healthy, that an entity query traverses API Gateway → VPC link → ALB → broker → Aurora, and that the authorizer rejects a forged token.
+After every deploy, [smoke-test.js](.github/scripts/smoke-test.js) calls the deployed API. This matters because a green `cdk deploy` only means CloudFormation converged — it does not mean the broker answers NGSI-LD requests. The smoke test performs an authenticated NGSI-LD create, local read, Attribute update, verified reread, delete and confirmed 404 through API Gateway → VPC link → ALB → broker → Aurora. It also requires the authorizer to return 401 or 403 for a forged token and cleans up after partial failures.
 
 ## Environments
 
@@ -45,6 +46,9 @@ Each environment is a separate AWS account (or at minimum a separate region), ho
 | `AWS_REGION` | `eu-west-1` | Must be a region Garnet supports (see `azlist` in [constants.ts](constants.ts)) |
 | `GARNET_ARCHITECTURE` | `concentrated` | Must match the architecture already deployed in that account |
 | `GARNET_DEPLOYMENT_STRATEGY` | `rolling` | `rolling` or `bluegreen` |
+| `GARNET_BROKER_ENGINE` | `garnet` | Garnet requires the distributed rolling profile |
+| `GARNET_BROKER_IMAGE` | `…@sha256:…` | Immutable ARM64/multi-architecture broker image |
+| `GARNET_LOAD_IMAGE` | `…@sha256:…` | Optional image built from `test/load/Dockerfile` |
 | `AWS_DEPLOY_ROLE_ARN` (secret) | `arn:aws:iam::…:role/garnet-deploy` | Role assumed via OIDC |
 
 Garnet is configured by editing [configuration.ts](configuration.ts), not by environment variables, so the pipeline rewrites that file before synth using [apply-configuration.js](.github/scripts/apply-configuration.js). That script refuses an unknown value or an unsupported combination rather than silently deploying the default — a wrong architecture would replace the load balancer.
@@ -109,6 +113,49 @@ Aurora itself is not blue/green. CDK has no managed RDS Blue/Green Deployments s
 | Schema migration already applied | Not automatically recoverable. Restore from the Aurora snapshot or apply a compensating migration |
 
 Keeping `main` deployable is what makes the third row work. If a commit breaks CI, push the fix immediately or revert to unblock everyone else.
+
+## AWS scale diagnostics
+
+When `GARNET_LOAD_IMAGE` is set to an immutable digest, a Garnet deployment includes two
+on-demand ARM64 task definitions and a private versioned S3 report bucket:
+
+- a 4-vCPU / 8-GiB generator task;
+- a 1-vCPU / 2-GiB aggregate task.
+
+They are not ECS services and cost nothing while idle. Database username and password are injected
+from the Aurora Secrets Manager secret. Aurora requires TLS, and reports are encrypted at rest,
+blocked from public access, retained when the stack is removed, and written below
+`garnet-load/<run-id>/`.
+
+After deploying with `--outputs-file cdk-outputs.json`, run a short multi-generator diagnostic:
+
+```bash
+LOAD_RUN_ID=AwsSmoke1 \
+LOAD_GENERATOR_COUNT=4 \
+LOAD_RATE=5000 \
+LOAD_DURATION_SECONDS=300 \
+LOAD_WARMUP_SECONDS=30 \
+LOAD_FIXTURE_ENTITIES=50000 \
+LOAD_START_DELAY_SECONDS=900 \
+GARNET_COMMIT="$(git rev-parse HEAD)" \
+npm run load:aws
+```
+
+The launcher starts one ECS task per generator index, gives all tasks the same future schedule,
+waits for runs longer than the AWS CLI's built-in waiter supports, and then starts the aggregate
+task even if a generator failed. Its final line is the exact S3 URI of the aggregate report.
+
+This first AWS plane targets the broker's internal ALB and records
+`LOAD_ENVIRONMENT=aws-ecs-internal`. The launcher rejects `LOAD_QUALIFICATION=1`: it measures the
+real Fargate → ALB → broker → Aurora and event-worker path, but it bypasses API Gateway and its
+authorizer. It is valid capacity and scaling diagnostic evidence, not the final public-ingress
+release qualification. Automating a non-secret public authentication mechanism for the load
+tasks remains a release task.
+
+Useful controls are the same as the broker's Bun load runner, including `LOAD_PROFILE`,
+`LOAD_WORKLOAD`, latency budgets, `LOAD_MAX_IN_FLIGHT`, and `LOAD_DATABASE_EVENT_DRAIN`. Every run
+should use a new `LOAD_RUN_ID`; the deterministic S3 object set makes a missing generator report
+an aggregate failure instead of silently reducing the measured load.
 
 ## Cost
 

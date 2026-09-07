@@ -11,6 +11,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc --noEmit",
     "test": "jest",
+    "load:aws": "node .github/scripts/run-load-test.js",
     "audit:deploy": "npm audit --omit=dev && npm audit --prefix lib/layers/nodejs",
     "synth": "cdk synth --quiet",
     "cdk": "cdk",
