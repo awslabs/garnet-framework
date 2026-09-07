@@ -30,7 +30,7 @@ export const scale_on_queue_backlog = (
     const period = Duration.minutes(1)
     const visible = props.queue.metricApproximateNumberOfMessagesVisible({
         period,
-        statistic: "Average"
+        statistic: "Sum"
     })
     const running = new Metric({
         namespace: "ECS/ContainerInsights",

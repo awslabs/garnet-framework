@@ -268,7 +268,7 @@ describe("Garnet Broker AWS runtime", () => {
                 MetricName: "ApproximateNumberOfMessagesVisible",
                 Namespace: "AWS/SQS"
               },
-              Stat: "Average"
+              Stat: "Sum"
             },
             ReturnData: false
           }),
