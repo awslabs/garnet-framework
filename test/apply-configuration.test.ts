@@ -18,6 +18,28 @@ const REAL_CONFIG = fs.readFileSync(
 )
 
 describe('apply_configuration', () => {
+  it('keeps Scorpio as the explicit default engine', () => {
+    const { source, engine } = apply_configuration(REAL_CONFIG, {
+      GARNET_ARCHITECTURE: 'concentrated'
+    })
+
+    expect(engine).toBe('Scorpio')
+    expect(source).toContain('broker_engine: BROKER_ENGINE.Scorpio')
+  })
+
+  it('selects Garnet only with a digest-pinned distributed image', () => {
+    const image = `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`
+    const { source, engine } = apply_configuration(REAL_CONFIG, {
+      GARNET_BROKER_ENGINE: 'garnet',
+      GARNET_BROKER_IMAGE: image,
+      GARNET_ARCHITECTURE: 'distributed'
+    })
+
+    expect(engine).toBe('Garnet')
+    expect(source).toContain('broker_engine: BROKER_ENGINE.Garnet')
+    expect(source).toContain(`garnet_broker_image: "${image}"`)
+  })
+
   it('sets the concentrated architecture', () => {
     const { source, architecture } = apply_configuration(REAL_CONFIG, {
       GARNET_ARCHITECTURE: 'concentrated'
@@ -85,6 +107,36 @@ describe('apply_configuration', () => {
     it('fails on an unknown architecture', () => {
       expect(() => apply_configuration(REAL_CONFIG, { GARNET_ARCHITECTURE: 'monolith' }))
         .toThrow(/GARNET_ARCHITECTURE must be one of/)
+    })
+
+    it('fails on an unknown broker engine', () => {
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_BROKER_ENGINE: 'other',
+        GARNET_ARCHITECTURE: 'distributed'
+      })).toThrow(/GARNET_BROKER_ENGINE must be one of/)
+    })
+
+    it('requires Garnet to use the distributed rolling profile', () => {
+      const image = `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_BROKER_ENGINE: 'garnet',
+        GARNET_BROKER_IMAGE: image,
+        GARNET_ARCHITECTURE: 'concentrated'
+      })).toThrow(/requires GARNET_ARCHITECTURE=distributed/)
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_BROKER_ENGINE: 'garnet',
+        GARNET_BROKER_IMAGE: image,
+        GARNET_ARCHITECTURE: 'distributed',
+        GARNET_DEPLOYMENT_STRATEGY: 'bluegreen'
+      })).toThrow(/not supported with the distributed architecture/)
+    })
+
+    it('requires a digest-pinned Garnet image', () => {
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_BROKER_ENGINE: 'garnet',
+        GARNET_BROKER_IMAGE: 'public.ecr.aws/garnet/broker:latest',
+        GARNET_ARCHITECTURE: 'distributed'
+      })).toThrow(/must be a digest-pinned image/)
     })
 
     it('fails on a missing architecture', () => {

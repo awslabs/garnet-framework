@@ -1,7 +1,41 @@
 import { ARCHITECTURE, DEPLOYMENT_STRATEGY } from "./architecture"
+import { BROKER_ENGINE } from "./broker-engine"
 
 // GARNET PARAMETERS
 export const Parameters = {
+    /**
+     * Context broker implementation.
+     *
+     * Scorpio remains the default until Garnet's AWS soak and release comparison gates pass.
+     * Garnet uses the distributed architecture and requires a digest-pinned multi-architecture
+     * image below.
+     */
+    broker_engine: BROKER_ENGINE.Scorpio,
+
+    /**
+     * Immutable Garnet Broker image, for example:
+     * public.ecr.aws/example/garnet-broker@sha256:<64 hexadecimal characters>
+     */
+    garnet_broker_image: "",
+
+    /**
+     * Public broker origin used for absolute EntityMap and distributed Subscription callback
+     * URLs. Leave empty only for deployments that do not expose those distributed operations.
+     */
+    garnet_broker_public_origin: "",
+
+    /**
+     * Exact comma-separated HTTP(S) origins approved for notification delivery. An empty value
+     * keeps outbound HTTP notification delivery deny-all.
+     */
+    garnet_notification_delivery_allow_origins: "",
+
+    /**
+     * Comma-separated remote JSON-LD context hosts approved for this environment. Empty is the
+     * secure deny-all default.
+     */
+    garnet_context_allow_hosts: "",
+
     /**
      * See regions in which you can deploy Garnet: 
      * https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability

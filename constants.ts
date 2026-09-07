@@ -4,13 +4,15 @@
 
 import { Aws } from "aws-cdk-lib"
 import { Parameters } from "./configuration"
+import { BROKER_ENGINE } from "./broker-engine"
 const {version} = require('./package.json')
 
 const garnet_scorpio_version = "6.0.10"
 
 export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
-export const garnet_broker = "Scorpio" 
+export const garnet_broker =
+    Parameters.broker_engine == BROKER_ENGINE.Garnet ? "Garnet" : "Scorpio"
 
 export const garnet_constant = {
     garnet_version: version,
@@ -163,7 +165,6 @@ export const azlist: any = {
     "sa-east-1": ["sae1-az1", "sae1-az2", "sae1-az3"],
     "us-gov-west-1": ["usgw1-az1", "usgw1-az2", "usgw1-az3"]
 }
-
 
 
 
