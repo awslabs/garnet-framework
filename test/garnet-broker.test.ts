@@ -2,11 +2,12 @@ import { App, Stack } from "aws-cdk-lib"
 import { Template } from "aws-cdk-lib/assertions"
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
-import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { GarnetBroker } from "../lib/stacks/garnet-broker/garnet-broker-stack"
 
 const IMAGE =
   `public.ecr.aws/garnet/broker@sha256:${"a".repeat(64)}`
+const LOAD_IMAGE =
+  `public.ecr.aws/garnet/load@sha256:${"b".repeat(64)}`
 
 const create_vpc = (stack: Stack): Vpc =>
   new Vpc(stack, "Vpc", {
@@ -39,20 +40,14 @@ const synth_broker = (
     }
   })
   const vpc = create_vpc(stack)
-  const secret = new Secret(stack, "DatabaseSecret", {
-    generateSecretString: {
-      secretStringTemplate: JSON.stringify({ username: "garnetadmin" }),
-      generateStringKey: "password"
-    }
-  })
   const stream = new CfnDeliveryStream(stack, "DeliveryStream", {
     deliveryStreamName: "garnet-test-stream"
   })
   const broker = new GarnetBroker(stack, "Broker", {
     vpc,
-    secret,
     delivery_stream: stream,
     image: IMAGE,
+    load_image: LOAD_IMAGE,
     public_origin: "https://broker.example",
     notification_delivery_allow_origins: "https://callbacks.example",
     context_allow_hosts: "uri.etsi.org",
@@ -80,12 +75,12 @@ describe("Garnet Broker AWS runtime", () => {
     })
   })
 
-  it("creates every long-lived role and both one-shot tasks on ARM64", () => {
+  it("creates every long-lived role and on-demand task on ARM64", () => {
     const template = synth_broker()
     const task_definitions =
       template.findResources("AWS::ECS::TaskDefinition")
 
-    expect(Object.keys(task_definitions)).toHaveLength(11)
+    expect(Object.keys(task_definitions)).toHaveLength(13)
     template.resourceCountIs("AWS::ECS::Service", 9)
     const entry_points: string[] = []
     for (const resource of Object.values(task_definitions) as any[]) {
@@ -103,6 +98,8 @@ describe("Garnet Broker AWS runtime", () => {
       "/garnet-delivery",
       "/garnet-event-sink",
       "/garnet-federation",
+      "/garnet-load",
+      "/garnet-load-aggregate",
       "/garnet-maintenance",
       "/garnet-matcher",
       "/garnet-migrate",
@@ -110,6 +107,71 @@ describe("Garnet Broker AWS runtime", () => {
       "/garnet-relay",
       "/garnet-subscription-reconciler"
     ].sort())
+  })
+
+  it("provisions idle load tasks with private durable evidence", () => {
+    const template = synth_broker()
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const generator = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-load-generator"
+      )
+    const aggregate = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-load-aggregate"
+      )
+
+    expect(generator.Properties).toMatchObject({
+      Cpu: "4096",
+      Memory: "8192"
+    })
+    expect(aggregate.Properties).toMatchObject({
+      Cpu: "1024",
+      Memory: "2048"
+    })
+    const environment = Object.fromEntries(
+      generator.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+    expect(environment).toMatchObject({
+      LOAD_DATABASE_NAME: "scorpio",
+      LOAD_DATABASE_SSL_MODE: "require",
+      LOAD_ENVIRONMENT: "aws-ecs-internal",
+      LOAD_GENERATOR_VCPUS: "4",
+      GARNET_IMAGE: IMAGE
+    })
+    expect(environment.LOAD_URL).toHaveProperty("Fn::Join")
+    const secrets =
+      generator.Properties.ContainerDefinitions[0].Secrets
+        .map((entry: any) => entry.Name)
+    expect(secrets).toEqual(expect.arrayContaining([
+      "LOAD_DATABASE_USER",
+      "LOAD_DATABASE_PASSWORD"
+    ]))
+
+    template.resourceCountIs("AWS::S3::Bucket", 1)
+    template.hasResourceProperties("AWS::S3::Bucket", {
+      BucketEncryption: {
+        ServerSideEncryptionConfiguration: [{
+          ServerSideEncryptionByDefault: {
+            SSEAlgorithm: "AES256"
+          }
+        }]
+      },
+      PublicAccessBlockConfiguration: {
+        BlockPublicAcls: true,
+        BlockPublicPolicy: true,
+        IgnorePublicAcls: true,
+        RestrictPublicBuckets: true
+      },
+      VersioningConfiguration: {
+        Status: "Enabled"
+      }
+    })
+    template.resourceCountIs("AWS::ECS::Service", 9)
   })
 
   it("keeps local traffic local and externalizes every scalable background role", () => {
@@ -290,20 +352,39 @@ describe("Garnet Broker AWS runtime", () => {
     const app = new App()
     const stack = new Stack(app, "InvalidImageStack")
     const vpc = create_vpc(stack)
-    const secret = new Secret(stack, "Secret")
     const stream = new CfnDeliveryStream(stack, "Stream", {
       deliveryStreamName: "garnet-test-stream"
     })
 
     expect(() => new GarnetBroker(stack, "Broker", {
       vpc,
-      secret,
       delivery_stream: stream,
       image: "public.ecr.aws/garnet/broker:latest",
+      load_image: "",
       public_origin: "",
       notification_delivery_allow_origins: "",
       context_allow_hosts: "",
       eventual_entity_reads: false
     })).toThrow(/digest-pinned/)
+  })
+
+  it("rejects a mutable load image without affecting normal deployments", () => {
+    const app = new App()
+    const stack = new Stack(app, "InvalidLoadImageStack")
+    const vpc = create_vpc(stack)
+    const stream = new CfnDeliveryStream(stack, "Stream", {
+      deliveryStreamName: "garnet-test-stream"
+    })
+
+    expect(() => new GarnetBroker(stack, "Broker", {
+      vpc,
+      delivery_stream: stream,
+      image: IMAGE,
+      load_image: "public.ecr.aws/garnet/load:latest",
+      public_origin: "",
+      notification_delivery_allow_origins: "",
+      context_allow_hosts: "",
+      eventual_entity_reads: false
+    })).toThrow(/load image must be immutable and digest-pinned/)
   })
 })

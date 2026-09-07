@@ -10,14 +10,13 @@ import {
     DatabaseClusterEngine,
     ParameterGroup
 } from "aws-cdk-lib/aws-rds"
-import { Secret } from "aws-cdk-lib/aws-secretsmanager"
+import { ISecret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import { deployment_params } from "../../../../architecture"
 import { garnet_constant } from "../../../../constants"
 
 export interface GarnetBrokerDatabaseProps {
     vpc: Vpc
-    secret: Secret
 }
 
 /**
@@ -30,6 +29,7 @@ export interface GarnetBrokerDatabaseProps {
 export class GarnetBrokerDatabase extends Construct {
     public readonly cluster: DatabaseCluster
     public readonly security_group: SecurityGroup
+    public readonly secret: ISecret
 
     constructor(scope: Construct, id: string, props: GarnetBrokerDatabaseProps) {
         super(scope, id)
@@ -52,7 +52,7 @@ export class GarnetBrokerDatabase extends Construct {
         this.cluster = new DatabaseCluster(this, "Cluster", {
             engine,
             parameterGroup: parameter_group,
-            credentials: Credentials.fromSecret(props.secret),
+            credentials: Credentials.fromGeneratedSecret("garnetadmin"),
             defaultDatabaseName: garnet_constant.dbname,
             clusterIdentifier: "garnet-broker-aurora",
             vpc: props.vpc,
@@ -79,6 +79,7 @@ export class GarnetBrokerDatabase extends Construct {
             deletionProtection: false,
             removalPolicy: RemovalPolicy.SNAPSHOT
         })
+        this.secret = this.cluster.secret!
 
         new Alarm(this, "AcuUtilizationAlarm", {
             alarmName: `garnet-broker-aurora-acu-${Aws.REGION}`,

@@ -40,10 +40,11 @@ import {
     Queue,
     QueueEncryption
 } from "aws-cdk-lib/aws-sqs"
-import { Secret } from "aws-cdk-lib/aws-secretsmanager"
+import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import { garnet_constant } from "../../../../constants"
 import { GarnetMigration } from "../migration/migration-construct"
+import { GarnetLoad } from "../load/load-construct"
 import { GARNET_SERVICE_CAPACITY } from "./runtime-profile"
 import {
     GarnetServiceResult,
@@ -53,13 +54,14 @@ import {
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
     database: DatabaseCluster
-    database_secret: Secret
+    database_secret: ISecret
     federation_state_host: string
     federation_state_port: number
     federation_state_secret: Secret
     eventual_entity_reads: boolean
     delivery_stream: CfnDeliveryStream
     image: string
+    load_image: string
     public_origin: string
     notification_delivery_allow_origins: string
     context_allow_hosts: string
@@ -70,6 +72,7 @@ export class GarnetBrokerRuntime extends Construct {
     public readonly sg_broker: SecurityGroup
     public readonly cluster: Cluster
     public readonly event_queue: Queue
+    public readonly load?: GarnetLoad
 
     constructor(scope: Construct, id: string, props: GarnetBrokerRuntimeProps) {
         super(scope, id)
@@ -461,6 +464,19 @@ export class GarnetBrokerRuntime extends Construct {
             "deregistration_delay.timeout_seconds",
             "30"
         )
+
+        if (props.load_image.trim() !== "") {
+            this.load = new GarnetLoad(this, "Load", {
+                vpc: props.vpc,
+                cluster: this.cluster,
+                database: props.database,
+                database_secret: props.database_secret,
+                broker_origin: this.fargate_alb.loadBalancerDnsName,
+                broker_image: props.image,
+                load_image: props.load_image
+            })
+        }
+
         api.service
             .autoScaleTaskCount({
                 minCapacity: GARNET_SERVICE_CAPACITY.api.min_tasks,

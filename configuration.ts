@@ -19,6 +19,13 @@ export const Parameters = {
     garnet_broker_image: "",
 
     /**
+     * Optional immutable load-runner image built from test/load/Dockerfile.
+     * When set, the stack creates idle on-demand ECS task definitions and an
+     * S3 evidence bucket; no load tasks run during deployment.
+     */
+    garnet_load_image: "",
+
+    /**
      * Public broker origin used for absolute EntityMap and distributed Subscription callback
      * URLs. Leave empty only for deployments that do not expose those distributed operations.
      */

@@ -29,15 +29,19 @@ describe('apply_configuration', () => {
 
   it('selects Garnet only with a digest-pinned distributed image', () => {
     const image = `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`
+    const load_image =
+      `public.ecr.aws/garnet/load@sha256:${'b'.repeat(64)}`
     const { source, engine } = apply_configuration(REAL_CONFIG, {
       GARNET_BROKER_ENGINE: 'garnet',
       GARNET_BROKER_IMAGE: image,
+      GARNET_LOAD_IMAGE: load_image,
       GARNET_ARCHITECTURE: 'distributed'
     })
 
     expect(engine).toBe('Garnet')
     expect(source).toContain('broker_engine: BROKER_ENGINE.Garnet')
     expect(source).toContain(`garnet_broker_image: "${image}"`)
+    expect(source).toContain(`garnet_load_image: "${load_image}"`)
   })
 
   it('sets the concentrated architecture', () => {
@@ -157,6 +161,22 @@ describe('apply_configuration', () => {
         GARNET_BROKER_IMAGE: 'public.ecr.aws/garnet/broker:latest',
         GARNET_ARCHITECTURE: 'distributed'
       })).toThrow(/must be a digest-pinned image/)
+    })
+
+    it('accepts only a digest-pinned Garnet load image', () => {
+      const image =
+        `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_BROKER_ENGINE: 'garnet',
+        GARNET_BROKER_IMAGE: image,
+        GARNET_LOAD_IMAGE: 'public.ecr.aws/garnet/load:latest',
+        GARNET_ARCHITECTURE: 'distributed'
+      })).toThrow(/GARNET_LOAD_IMAGE must be a digest-pinned image/)
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_LOAD_IMAGE:
+          `public.ecr.aws/garnet/load@sha256:${'b'.repeat(64)}`,
+        GARNET_ARCHITECTURE: 'concentrated'
+      })).toThrow(/available only with GARNET_BROKER_ENGINE=garnet/)
     })
 
     it('fails on a missing architecture', () => {

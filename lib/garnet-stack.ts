@@ -56,9 +56,9 @@ export class GarnetStack extends Stack {
       Parameters.broker_engine == BROKER_ENGINE.Garnet
         ? new GarnetBroker(this, 'GarnetBroker', {
             vpc: garnet_common.vpc,
-            secret: garnet_common.secret,
             delivery_stream: garnet_datalake.delivery_stream,
             image: Parameters.garnet_broker_image,
+            load_image: Parameters.garnet_load_image,
             public_origin: Parameters.garnet_broker_public_origin,
             notification_delivery_allow_origins:
               Parameters.garnet_notification_delivery_allow_origins,
@@ -111,6 +111,33 @@ export class GarnetStack extends Stack {
       value: Parameters.broker_engine,
       description: 'Context broker implementation'
     })
+    if (
+      Parameters.broker_engine == BROKER_ENGINE.Garnet &&
+      (garnet_broker_stack as GarnetBroker).load !== undefined
+    ) {
+      const load = (garnet_broker_stack as GarnetBroker).load!
+      new CfnOutput(this, 'GarnetLoadCluster', {
+        value: load.cluster_name
+      })
+      new CfnOutput(this, 'GarnetLoadGeneratorTask', {
+        value: load.generator_task.taskDefinitionArn
+      })
+      new CfnOutput(this, 'GarnetLoadAggregateTask', {
+        value: load.aggregate_task.taskDefinitionArn
+      })
+      new CfnOutput(this, 'GarnetLoadSecurityGroup', {
+        value: load.security_group.securityGroupId
+      })
+      new CfnOutput(this, 'GarnetLoadSubnets', {
+        value: load.subnet_ids.join(',')
+      })
+      new CfnOutput(this, 'GarnetLoadReportBucket', {
+        value: load.report_bucket.bucketName
+      })
+      new CfnOutput(this, 'GarnetLoadBrokerUrl', {
+        value: load.broker_url
+      })
+    }
     new CfnOutput(this, 'GarnetEndpoint', {
       value: garnet_api.broker_api_endpoint,
       description: 'Garnet Unified API'

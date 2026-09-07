@@ -10,6 +10,7 @@
  * Env:
  *   GARNET_BROKER_ENGINE       scorpio | garnet       (optional, defaults to scorpio)
  *   GARNET_BROKER_IMAGE        digest-pinned image    (required for garnet)
+ *   GARNET_LOAD_IMAGE          digest-pinned image    (optional, garnet only)
  *   GARNET_EVENTUAL_ENTITY_READS true | false          (optional, defaults to false)
  *   GARNET_ARCHITECTURE        concentrated | distributed
  *   GARNET_DEPLOYMENT_STRATEGY rolling | bluegreen   (optional, defaults to rolling)
@@ -109,6 +110,15 @@ const apply_configuration = (source, env) => {
       'GARNET_EVENTUAL_ENTITY_READS=true is available only with GARNET_BROKER_ENGINE=garnet'
     )
   }
+  const load_image = (env.GARNET_LOAD_IMAGE || '').trim()
+  if (load_image !== '' && !DIGEST_IMAGE.test(load_image)) {
+    throw new Error('GARNET_LOAD_IMAGE must be a digest-pinned image')
+  }
+  if (engine != 'Garnet' && load_image !== '') {
+    throw new Error(
+      'GARNET_LOAD_IMAGE is available only with GARNET_BROKER_ENGINE=garnet'
+    )
+  }
 
   let out = source
   out = replace_setting(out, /broker_engine: BROKER_ENGINE\.\w+/g, `broker_engine: BROKER_ENGINE.${engine}`, 'the broker_engine setting')
@@ -128,6 +138,14 @@ const apply_configuration = (source, env) => {
       `garnet_broker_image: "${env.GARNET_BROKER_IMAGE}"`,
       'the garnet_broker_image setting'
     )
+    if (load_image !== '') {
+      out = replace_setting(
+        out,
+        /garnet_load_image: "[^"]*"/g,
+        `garnet_load_image: "${load_image}"`,
+        'the garnet_load_image setting'
+      )
+    }
   }
 
   if (env.GARNET_REGION) {
@@ -142,7 +160,8 @@ const apply_configuration = (source, env) => {
     architecture,
     strategy,
     engine,
-    eventual_reads: eventual_reads_key == 'true'
+    eventual_reads: eventual_reads_key == 'true',
+    load_image
   }
 }
 
