@@ -4,6 +4,7 @@ export interface GarnetServiceCapacity {
     min_tasks: number
     max_tasks: number
     database_pool: number
+    reader_database_pool?: number
 }
 
 export const GARNET_SERVICE_CAPACITY = {
@@ -12,7 +13,8 @@ export const GARNET_SERVICE_CAPACITY = {
         memory_mib: 4096,
         min_tasks: 2,
         max_tasks: 32,
-        database_pool: 16
+        database_pool: 16,
+        reader_database_pool: 8
     },
     federation: {
         cpu: 512,

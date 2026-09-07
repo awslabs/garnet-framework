@@ -28,7 +28,9 @@ const create_vpc = (stack: Stack): Vpc =>
     ]
   })
 
-const synth_broker = (): Template => {
+const synth_broker = (
+  eventual_entity_reads = true
+): Template => {
   const app = new App()
   const stack = new Stack(app, "TestStack", {
     env: {
@@ -53,7 +55,8 @@ const synth_broker = (): Template => {
     image: IMAGE,
     public_origin: "https://broker.example",
     notification_delivery_allow_origins: "https://callbacks.example",
-    context_allow_hosts: "uri.etsi.org"
+    context_allow_hosts: "uri.etsi.org",
+    eventual_entity_reads
   })
   return Template.fromStack(broker)
 }
@@ -63,6 +66,7 @@ describe("Garnet Broker AWS runtime", () => {
     const template = synth_broker()
 
     template.resourceCountIs("AWS::RDS::DBCluster", 1)
+    template.resourceCountIs("AWS::RDS::DBInstance", 2)
     template.resourceCountIs("AWS::RDS::DBProxy", 0)
     template.hasResourceProperties("AWS::RDS::DBCluster", {
       Engine: "aurora-postgresql",
@@ -126,8 +130,40 @@ describe("Garnet Broker AWS runtime", () => {
       SNAPSHOT_WORKERS: "0",
       BROKER_WORKERS: "2",
       DB_POOL_MAX_REQUIRED: "true",
-      DB_POOL_MAX: "16"
+      DB_POOL_MAX: "16",
+      READ_CONSISTENCY: "eventual",
+      READ_DB_POOL_MAX: "8"
     })
+    expect(environment.READ_DBHOST).toHaveProperty("Fn::GetAtt")
+
+    const snapshot = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-snapshot"
+      )
+    const snapshot_environment = Object.fromEntries(
+      snapshot.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+    expect(snapshot_environment).not.toHaveProperty("READ_DBHOST")
+  })
+
+  it("keeps eventual Entity reads opt-in", () => {
+    const template = synth_broker(false)
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const api = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name === "garnet-api"
+      )
+    const environment = Object.fromEntries(
+      api.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+
+    expect(environment).not.toHaveProperty("READ_DBHOST")
+    expect(environment).not.toHaveProperty("READ_CONSISTENCY")
+    expect(environment).not.toHaveProperty("READ_DB_POOL_MAX")
   })
 
   it("uses one deterministic high-throughput FIFO matcher queue", () => {
@@ -260,7 +296,8 @@ describe("Garnet Broker AWS runtime", () => {
       image: "public.ecr.aws/garnet/broker:latest",
       public_origin: "",
       notification_delivery_allow_origins: "",
-      context_allow_hosts: ""
+      context_allow_hosts: "",
+      eventual_entity_reads: false
     })).toThrow(/digest-pinned/)
   })
 })

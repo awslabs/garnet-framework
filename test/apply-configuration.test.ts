@@ -58,6 +58,26 @@ describe('apply_configuration', () => {
     expect(source).toContain('architecture: ARCHITECTURE.Distributed')
   })
 
+  it('keeps eventual Entity reads explicit', () => {
+    const disabled = apply_configuration(REAL_CONFIG, {
+      GARNET_ARCHITECTURE: 'concentrated'
+    })
+    const enabled = apply_configuration(REAL_CONFIG, {
+      GARNET_BROKER_ENGINE: 'garnet',
+      GARNET_BROKER_IMAGE:
+        `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`,
+      GARNET_ARCHITECTURE: 'distributed',
+      GARNET_EVENTUAL_ENTITY_READS: 'true'
+    })
+
+    expect(disabled.eventual_reads).toBe(false)
+    expect(disabled.source)
+      .toContain('garnet_eventual_entity_reads: false')
+    expect(enabled.eventual_reads).toBe(true)
+    expect(enabled.source)
+      .toContain('garnet_eventual_entity_reads: true')
+  })
+
   it('defaults to the rolling strategy when none is given', () => {
     const { strategy, source } = apply_configuration(REAL_CONFIG, {
       GARNET_ARCHITECTURE: 'concentrated'
@@ -156,6 +176,20 @@ describe('apply_configuration', () => {
         GARNET_ARCHITECTURE: 'concentrated',
         GARNET_REGION: 'not-a-region!'
       })).toThrow(/does not look like an AWS region/)
+    })
+
+    it('rejects an invalid Entity-read consistency switch', () => {
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_ARCHITECTURE: 'concentrated',
+        GARNET_EVENTUAL_ENTITY_READS: 'sometimes'
+      })).toThrow(/GARNET_EVENTUAL_ENTITY_READS/)
+    })
+
+    it('does not silently apply Garnet reader settings to Scorpio', () => {
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_ARCHITECTURE: 'concentrated',
+        GARNET_EVENTUAL_ENTITY_READS: 'true'
+      })).toThrow(/available only with GARNET_BROKER_ENGINE=garnet/)
     })
 
     it('rejects blue/green with the distributed architecture', () => {

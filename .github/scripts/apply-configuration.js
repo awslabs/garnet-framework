@@ -10,6 +10,7 @@
  * Env:
  *   GARNET_BROKER_ENGINE       scorpio | garnet       (optional, defaults to scorpio)
  *   GARNET_BROKER_IMAGE        digest-pinned image    (required for garnet)
+ *   GARNET_EVENTUAL_ENTITY_READS true | false          (optional, defaults to false)
  *   GARNET_ARCHITECTURE        concentrated | distributed
  *   GARNET_DEPLOYMENT_STRATEGY rolling | bluegreen   (optional, defaults to rolling)
  *   GARNET_REGION              AWS region            (optional, leaves file value)
@@ -47,6 +48,8 @@ const apply_configuration = (source, env) => {
   const engine_key = (env.GARNET_BROKER_ENGINE || 'scorpio').toLowerCase()
   const architecture_key = (env.GARNET_ARCHITECTURE || '').toLowerCase()
   const strategy_key = (env.GARNET_DEPLOYMENT_STRATEGY || 'rolling').toLowerCase()
+  const eventual_reads_key =
+    (env.GARNET_EVENTUAL_ENTITY_READS || 'false').toLowerCase()
 
   const engine = ENGINES[engine_key]
   if (!engine) {
@@ -66,6 +69,11 @@ const apply_configuration = (source, env) => {
   if (!strategy) {
     throw new Error(
       `GARNET_DEPLOYMENT_STRATEGY must be one of ${Object.keys(STRATEGIES).join(', ')}, got '${env.GARNET_DEPLOYMENT_STRATEGY}'`
+    )
+  }
+  if (eventual_reads_key !== 'true' && eventual_reads_key !== 'false') {
+    throw new Error(
+      `GARNET_EVENTUAL_ENTITY_READS must be true or false, got '${env.GARNET_EVENTUAL_ENTITY_READS}'`
     )
   }
 
@@ -96,11 +104,22 @@ const apply_configuration = (source, env) => {
       'GARNET_BROKER_IMAGE must be a digest-pinned image when GARNET_BROKER_ENGINE=garnet'
     )
   }
+  if (engine != 'Garnet' && eventual_reads_key == 'true') {
+    throw new Error(
+      'GARNET_EVENTUAL_ENTITY_READS=true is available only with GARNET_BROKER_ENGINE=garnet'
+    )
+  }
 
   let out = source
   out = replace_setting(out, /broker_engine: BROKER_ENGINE\.\w+/g, `broker_engine: BROKER_ENGINE.${engine}`, 'the broker_engine setting')
   out = replace_setting(out, /architecture: ARCHITECTURE\.\w+/g, `architecture: ARCHITECTURE.${architecture}`, 'the architecture setting')
   out = replace_setting(out, /deployment_strategy: DEPLOYMENT_STRATEGY\.\w+/g, `deployment_strategy: DEPLOYMENT_STRATEGY.${strategy}`, 'the deployment_strategy setting')
+  out = replace_setting(
+    out,
+    /garnet_eventual_entity_reads: (?:true|false)/g,
+    `garnet_eventual_entity_reads: ${eventual_reads_key}`,
+    'the garnet_eventual_entity_reads setting'
+  )
 
   if (engine == 'Garnet') {
     out = replace_setting(
@@ -118,14 +137,20 @@ const apply_configuration = (source, env) => {
     out = replace_setting(out, /aws_region: "[^"]*"/g, `aws_region: "${env.GARNET_REGION}"`, 'the aws_region setting')
   }
 
-  return { source: out, architecture, strategy, engine }
+  return {
+    source: out,
+    architecture,
+    strategy,
+    engine,
+    eventual_reads: eventual_reads_key == 'true'
+  }
 }
 
 const main = () => {
   const source = fs.readFileSync(CONFIG_PATH, 'utf8')
   const result = apply_configuration(source, process.env)
   fs.writeFileSync(CONFIG_PATH, result.source)
-  console.log(`Configured Garnet: engine=${result.engine} architecture=${result.architecture} strategy=${result.strategy}` +
+  console.log(`Configured Garnet: engine=${result.engine} architecture=${result.architecture} strategy=${result.strategy} eventual-reads=${result.eventual_reads}` +
     (process.env.GARNET_REGION ? ` region=${process.env.GARNET_REGION}` : ''))
 }
 

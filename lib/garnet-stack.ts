@@ -62,7 +62,9 @@ export class GarnetStack extends Stack {
             public_origin: Parameters.garnet_broker_public_origin,
             notification_delivery_allow_origins:
               Parameters.garnet_notification_delivery_allow_origins,
-            context_allow_hosts: Parameters.garnet_context_allow_hosts
+            context_allow_hosts: Parameters.garnet_context_allow_hosts,
+            eventual_entity_reads:
+              Parameters.garnet_eventual_entity_reads
           })
         : new GarnetScorpio(this, 'ScorpioBroker', {
             vpc: garnet_common.vpc,

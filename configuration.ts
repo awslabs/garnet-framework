@@ -37,6 +37,12 @@ export const Parameters = {
     garnet_context_allow_hosts: "",
 
     /**
+     * Route eligible current and temporal Entity reads to Aurora's reader endpoint.
+     * This explicitly accepts replica lag; keep false for conformance and read-after-write users.
+     */
+    garnet_eventual_entity_reads: false,
+
+    /**
      * See regions in which you can deploy Garnet: 
      * https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability
     */

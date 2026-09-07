@@ -57,6 +57,7 @@ export interface GarnetBrokerRuntimeProps {
     federation_state_host: string
     federation_state_port: number
     federation_state_secret: Secret
+    eventual_entity_reads: boolean
     delivery_stream: CfnDeliveryStream
     image: string
     public_origin: string
@@ -291,6 +292,19 @@ export class GarnetBrokerRuntime extends Construct {
                 ...distributed_environment,
                 PORT: "8080",
                 BROKER_WORKERS: "2",
+                ...(
+                    props.eventual_entity_reads
+                        ? {
+                            READ_DBHOST:
+                                props.database.clusterReadEndpoint.hostname,
+                            READ_CONSISTENCY: "eventual",
+                            READ_DB_POOL_MAX: String(
+                                GARNET_SERVICE_CAPACITY.api
+                                    .reader_database_pool
+                            )
+                        }
+                        : {}
+                ),
                 HTTP_MAX_IN_FLIGHT: "512",
                 HTTP_MAX_REQUEST_BODY_BYTES: "134217728",
                 SNAPSHOT_WORKERS: "0",

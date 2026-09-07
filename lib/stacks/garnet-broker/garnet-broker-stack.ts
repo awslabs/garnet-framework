@@ -16,6 +16,7 @@ export interface GarnetBrokerProps extends NestedStackProps {
     public_origin: string
     notification_delivery_allow_origins: string
     context_allow_hosts: string
+    eventual_entity_reads: boolean
 }
 
 export class GarnetBroker extends NestedStack {
@@ -43,6 +44,7 @@ export class GarnetBroker extends NestedStack {
             federation_state_host: federation_state.endpoint,
             federation_state_port: federation_state.port,
             federation_state_secret: federation_state.auth_token,
+            eventual_entity_reads: props.eventual_entity_reads,
             delivery_stream: props.delivery_stream,
             image: props.image,
             public_origin: props.public_origin,
