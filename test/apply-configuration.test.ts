@@ -31,17 +31,54 @@ describe('apply_configuration', () => {
     const image = `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`
     const load_image =
       `public.ecr.aws/garnet/load@sha256:${'b'.repeat(64)}`
-    const { source, engine } = apply_configuration(REAL_CONFIG, {
+    const result = apply_configuration(REAL_CONFIG, {
       GARNET_BROKER_ENGINE: 'garnet',
       GARNET_BROKER_IMAGE: image,
       GARNET_LOAD_IMAGE: load_image,
+      GARNET_BROKER_PUBLIC_ORIGIN: ' HTTPS://Broker.Example:443 ',
+      GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
+        'https://hooks.example, http://notifications.internal:8080',
+      GARNET_CONTEXT_ALLOW_HOSTS:
+        'URI.ETSI.ORG,contexts.example:8443,uri.etsi.org',
       GARNET_ARCHITECTURE: 'distributed'
     })
 
-    expect(engine).toBe('Garnet')
-    expect(source).toContain('broker_engine: BROKER_ENGINE.Garnet')
-    expect(source).toContain(`garnet_broker_image: "${image}"`)
-    expect(source).toContain(`garnet_load_image: "${load_image}"`)
+    expect(result.engine).toBe('Garnet')
+    expect(result.source).toContain('broker_engine: BROKER_ENGINE.Garnet')
+    expect(result.source).toContain(`garnet_broker_image: "${image}"`)
+    expect(result.source).toContain(`garnet_load_image: "${load_image}"`)
+    expect(result.public_origin).toBe('https://broker.example')
+    expect(result.notification_origins).toBe(
+      'https://hooks.example,http://notifications.internal:8080'
+    )
+    expect(result.context_hosts).toBe(
+      'uri.etsi.org,contexts.example:8443'
+    )
+    expect(result.source).toContain(
+      'garnet_broker_public_origin: "https://broker.example"'
+    )
+    expect(result.source).toContain(
+      'garnet_notification_delivery_allow_origins: ' +
+      '"https://hooks.example,http://notifications.internal:8080"'
+    )
+    expect(result.source).toContain(
+      'garnet_context_allow_hosts: "uri.etsi.org,contexts.example:8443"'
+    )
+  })
+
+  it('clears a stale optional load image when the deployment omits it', () => {
+    const stale = REAL_CONFIG.replace(
+      'garnet_load_image: ""',
+      `garnet_load_image: "public.ecr.aws/garnet/load@sha256:${'b'.repeat(64)}"`
+    )
+    const { source } = apply_configuration(stale, {
+      GARNET_BROKER_ENGINE: 'garnet',
+      GARNET_BROKER_IMAGE:
+        `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`,
+      GARNET_ARCHITECTURE: 'distributed'
+    })
+
+    expect(source).toContain('garnet_load_image: ""')
   })
 
   it('sets the concentrated architecture', () => {
@@ -176,7 +213,64 @@ describe('apply_configuration', () => {
         GARNET_LOAD_IMAGE:
           `public.ecr.aws/garnet/load@sha256:${'b'.repeat(64)}`,
         GARNET_ARCHITECTURE: 'concentrated'
-      })).toThrow(/available only with GARNET_BROKER_ENGINE=garnet/)
+      })).toThrow(
+        /GARNET_LOAD_IMAGE is available only with GARNET_BROKER_ENGINE=garnet/
+      )
+    })
+
+    it('rejects malformed broker and notification origins', () => {
+      const garnet = {
+        GARNET_BROKER_ENGINE: 'garnet',
+        GARNET_BROKER_IMAGE:
+          `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`,
+        GARNET_ARCHITECTURE: 'distributed'
+      }
+      expect(() => apply_configuration(REAL_CONFIG, {
+        ...garnet,
+        GARNET_BROKER_PUBLIC_ORIGIN: 'https://broker.example/path'
+      })).toThrow(/GARNET_BROKER_PUBLIC_ORIGIN accepts only/)
+      expect(() => apply_configuration(REAL_CONFIG, {
+        ...garnet,
+        GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
+          'https://*.example'
+      })).toThrow(
+        /GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS accepts only/
+      )
+      expect(() => apply_configuration(REAL_CONFIG, {
+        ...garnet,
+        GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
+          'https://hooks.example,'
+      })).toThrow(
+        /GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS cannot contain an empty/
+      )
+    })
+
+    it('rejects malformed context hosts', () => {
+      const garnet = {
+        GARNET_BROKER_ENGINE: 'garnet',
+        GARNET_BROKER_IMAGE:
+          `public.ecr.aws/garnet/broker@sha256:${'a'.repeat(64)}`,
+        GARNET_ARCHITECTURE: 'distributed'
+      }
+      for (const value of [
+        'https://contexts.example',
+        'contexts.example/path',
+        '*.example'
+      ]) {
+        expect(() => apply_configuration(REAL_CONFIG, {
+          ...garnet,
+          GARNET_CONTEXT_ALLOW_HOSTS: value
+        })).toThrow(/GARNET_CONTEXT_ALLOW_HOSTS accepts only/)
+      }
+    })
+
+    it('does not silently apply Garnet network settings to Scorpio', () => {
+      expect(() => apply_configuration(REAL_CONFIG, {
+        GARNET_ARCHITECTURE: 'concentrated',
+        GARNET_BROKER_PUBLIC_ORIGIN: 'https://broker.example'
+      })).toThrow(
+        /GARNET_BROKER_PUBLIC_ORIGIN is available only with GARNET_BROKER_ENGINE=garnet/
+      )
     })
 
     it('fails on a missing architecture', () => {

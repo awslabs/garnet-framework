@@ -49,6 +49,10 @@ Each environment is a separate AWS account (or at minimum a separate region), ho
 | `GARNET_BROKER_ENGINE` | `garnet` | Garnet requires the distributed rolling profile |
 | `GARNET_BROKER_IMAGE` | `…@sha256:…` | Immutable ARM64/multi-architecture broker image |
 | `GARNET_LOAD_IMAGE` | `…@sha256:…` | Optional image built from `test/load/Dockerfile` |
+| `GARNET_BROKER_PUBLIC_ORIGIN` | `https://broker.example` | Stable public origin for EntityMaps and distributed Subscription callbacks |
+| `GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS` | `https://hooks.example` | Comma-separated exact callback origins; empty keeps HTTP delivery deny-all |
+| `GARNET_CONTEXT_ALLOW_HOSTS` | `uri.etsi.org,contexts.example:8443` | Comma-separated exact remote JSON-LD hosts; empty keeps remote loading deny-all |
+| `GARNET_EVENTUAL_ENTITY_READS` | `false` | Opts eligible reads into Aurora replica lag when explicitly set to `true` |
 | `AWS_DEPLOY_ROLE_ARN` (secret) | `arn:aws:iam::…:role/garnet-deploy` | Role assumed via OIDC |
 
 Garnet is configured by editing [configuration.ts](configuration.ts), not by environment variables, so the pipeline rewrites that file before synth using [apply-configuration.js](.github/scripts/apply-configuration.js). That script refuses an unknown value or an unsupported combination rather than silently deploying the default — a wrong architecture would replace the load balancer.
