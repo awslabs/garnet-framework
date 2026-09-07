@@ -146,6 +146,68 @@ describe("Garnet Broker AWS runtime", () => {
     expect(rendered).not.toContain("AWS::SNS::Topic")
   })
 
+  it("uses one TLS single-shard Valkey group for replica-safe federation state", () => {
+    const template = synth_broker()
+
+    template.resourceCountIs(
+      "AWS::ElastiCache::ReplicationGroup",
+      1
+    )
+    template.resourceCountIs("AWS::ElastiCache::ServerlessCache", 0)
+    template.hasResourceProperties(
+      "AWS::ElastiCache::ReplicationGroup",
+      {
+        Engine: "valkey",
+        EngineVersion: "8.2",
+        CacheNodeType: "cache.t4g.small",
+        ClusterMode: "disabled",
+        NumCacheClusters: 2,
+        AutomaticFailoverEnabled: true,
+        MultiAZEnabled: true,
+        AtRestEncryptionEnabled: true,
+        TransitEncryptionEnabled: true,
+        TransitEncryptionMode: "required",
+        SnapshotRetentionLimit: 0
+      }
+    )
+    template.hasResourceProperties(
+      "AWS::EC2::SecurityGroupIngress",
+      {
+        Description: "Garnet federation cache and cooldown state",
+        FromPort: 6379,
+        IpProtocol: "tcp",
+        ToPort: 6379
+      }
+    )
+
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const api = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name === "garnet-api"
+      )
+    const container = api.Properties.ContainerDefinitions[0]
+    const environment = Object.fromEntries(
+      container.Environment.map(
+        (entry: any) => [entry.Name, entry.Value]
+      )
+    )
+    expect(environment).toMatchObject({
+      FEDERATION_STATE_PORT: "6379",
+      FEDERATION_STATE_TLS: "true",
+      FEDERATION_STATE_PREFIX: "garnet:federation:v1"
+    })
+    expect(environment.FEDERATION_STATE_HOST).toHaveProperty("Fn::GetAtt")
+    expect(
+      container.Secrets.some(
+        (secret: any) =>
+          secret.Name === "FEDERATION_STATE_PASSWORD"
+      )
+    ).toBe(true)
+    expect(JSON.stringify(template.toJSON()))
+      .toContain("resolve:secretsmanager")
+  })
+
   it("gates every service on the one-shot migration resource", () => {
     const template = synth_broker()
     const custom_resources =

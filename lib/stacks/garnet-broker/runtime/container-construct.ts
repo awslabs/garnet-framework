@@ -54,6 +54,9 @@ export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
     database: DatabaseCluster
     database_secret: Secret
+    federation_state_host: string
+    federation_state_port: number
+    federation_state_secret: Secret
     delivery_stream: CfnDeliveryStream
     image: string
     public_origin: string
@@ -249,6 +252,10 @@ export class GarnetBrokerRuntime extends Construct {
         const distributed_environment = {
             ENTITY_EVENT_TRANSPORT: "sqs-watermark",
             ENTITY_EVENT_WATERMARK_QUEUE_URL: this.event_queue.queueUrl,
+            FEDERATION_STATE_HOST: props.federation_state_host,
+            FEDERATION_STATE_PORT: String(props.federation_state_port),
+            FEDERATION_STATE_TLS: "true",
+            FEDERATION_STATE_PREFIX: "garnet:federation:v1",
             NOTIFICATION_DELIVERY_MODE: "external",
             PERIODIC_NOTIFICATION_MODE: "external",
             DISTRIBUTED_SUBSCRIPTION_RECONCILIATION_MODE: "external",
@@ -269,7 +276,11 @@ export class GarnetBrokerRuntime extends Construct {
             FEDERATION_ROUTER_TOKEN:
                 EcsSecret.fromSecretsManager(federation_token),
             DISTRIBUTED_SUBSCRIPTION_CALLBACK_TOKEN:
-                EcsSecret.fromSecretsManager(callback_token)
+                EcsSecret.fromSecretsManager(callback_token),
+            FEDERATION_STATE_PASSWORD:
+                EcsSecret.fromSecretsManager(
+                    props.federation_state_secret
+                )
         }
         const api = add(factory.create_service({
             id: "Api",
