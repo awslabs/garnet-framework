@@ -1,18 +1,18 @@
 import { CustomResource, Duration, RemovalPolicy } from "aws-cdk-lib"
 import { Code, LayerVersion, Runtime, Function, Architecture } from "aws-cdk-lib/aws-lambda"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
-import { Secret } from "aws-cdk-lib/aws-secretsmanager"
+import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import { garnet_nomenclature } from "../../../../constants"
 import { Provider } from "aws-cdk-lib/custom-resources"
-import { PolicyStatement, ServicePrincipal } from "aws-cdk-lib/aws-iam"
+import { ServicePrincipal } from "aws-cdk-lib/aws-iam"
 
 export interface GarnetApiAuthJwtProps {
     secret_api_jwt: Secret
 }
 
 export class GarnetApiAuthJwt extends Construct {
-    public readonly garnet_api_token: string
+    public readonly garnet_api_token_secret: ISecret
     public readonly lambda_authorizer_arn: string
     constructor(scope: Construct, id: string, props: GarnetApiAuthJwtProps){
         super(scope, id)
@@ -35,6 +35,14 @@ export class GarnetApiAuthJwt extends Construct {
             removalPolicy: RemovalPolicy.DESTROY
         })
 
+        const api_token_secret = new Secret(this, 'ApiClientToken', {
+            secretName: garnet_nomenclature.garnet_api_client_secret,
+            description: 'Authorization header used by trusted Garnet API clients',
+            generateSecretString: {
+                excludePunctuation: true
+            }
+        })
+
         const api_auth_jwt_generator_lambda_path = `${__dirname}/lambda/apiAuthJwt`
         const api_auth_jwt_generator_lambda = new Function(this, 'ApiAuthJwtGeneratorLambda', {
             functionName: garnet_nomenclature.garnet_api_auth_jwt_lambda,
@@ -48,6 +56,7 @@ export class GarnetApiAuthJwt extends Construct {
             architecture: Architecture.ARM_64,
             environment: {
                 SECRET_ARN: props.secret_api_jwt.secretArn,
+                TOKEN_SECRET_ARN: api_token_secret.secretArn,
                 JWT_SUB: garnet_nomenclature.garnet_api_auth_sub, 
                 JWT_ISS: garnet_nomenclature.garnet_api_auth_issuer,
                 JWT_AUD: garnet_nomenclature.garnet_api_auth_audience
@@ -57,6 +66,7 @@ export class GarnetApiAuthJwt extends Construct {
         api_auth_jwt_generator_lambda.node.addDependency(api_auth_jwt_generator_logs)
 
         props.secret_api_jwt.grantRead(api_auth_jwt_generator_lambda)
+        api_token_secret.grantWrite(api_auth_jwt_generator_lambda)
 
         const api_auth_jwt_generator_provider_logs = new LogGroup(this, 'LambdaJwtAuthProviderLogs', {
             retention: RetentionDays.ONE_MONTH,
@@ -69,11 +79,14 @@ export class GarnetApiAuthJwt extends Construct {
         }) 
         api_auth_jwt_generator_provider.node.addDependency(api_auth_jwt_generator_provider_logs)
 
-        const api_auth_jwt_generator_resource = new CustomResource(this, 'ApiJwtAuthResource', {
-        serviceToken: api_auth_jwt_generator_provider.serviceToken
+        new CustomResource(this, 'ApiJwtAuthResource', {
+            serviceToken: api_auth_jwt_generator_provider.serviceToken,
+            properties: {
+                TokenSecretArn: api_token_secret.secretArn
+            }
         })
-        
-        this.garnet_api_token = api_auth_jwt_generator_resource.getAttString('token')
+
+        this.garnet_api_token_secret = api_token_secret
 
 
         // Logs for the lambda authorizer

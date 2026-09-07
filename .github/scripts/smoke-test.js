@@ -10,12 +10,57 @@
 const fs = require('fs')
 const path = require('path')
 const { randomUUID } = require('crypto')
+const { execFileSync } = require('child_process')
 
 const CORE_CONTEXT =
   'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.9.jsonld'
 const EXPANDED_STATUS = 'https://uri.etsi.org/ngsi-ld/status'
 
 const excerpt = body => body.replace(/\s+/g, ' ').slice(0, 240)
+
+const load_api_token = (
+  secret_arn,
+  {
+    env = process.env,
+    exec_file = execFileSync
+  } = {}
+) => {
+  const secret_string = String(exec_file(
+    'aws',
+    [
+      'secretsmanager',
+      'get-secret-value',
+      '--secret-id',
+      secret_arn,
+      '--query',
+      'SecretString',
+      '--output',
+      'text'
+    ],
+    {
+      encoding: 'utf8',
+      env,
+      stdio: ['ignore', 'pipe', 'pipe']
+    }
+  )).trim()
+
+  let secret
+  try {
+    secret = JSON.parse(secret_string)
+  } catch {
+    throw new Error('Garnet API client secret is not valid JSON')
+  }
+  if (
+    !secret ||
+    typeof secret.Authorization !== 'string' ||
+    secret.Authorization.length === 0
+  ) {
+    throw new Error(
+      'Garnet API client secret has no non-empty Authorization value'
+    )
+  }
+  return secret.Authorization
+}
 
 const request = async (
   url,
@@ -236,7 +281,8 @@ const check = async (
 const main = async ({
   env = process.env,
   cwd = process.cwd(),
-  request_fn
+  request_fn,
+  token_loader = load_api_token
 } = {}) => {
   const outputs_path =
     env.SMOKE_OUTPUTS_PATH || path.join(cwd, 'cdk-outputs.json')
@@ -263,11 +309,17 @@ const main = async ({
   }
 
   const endpoint = outputs.GarnetEndpoint || outputs.garnet_endpoint
-  const token = outputs.GarnetApiToken
+  const token_secret_arn = outputs.GarnetApiTokenSecretArn
   if (!endpoint) throw new Error('GarnetEndpoint missing from stack outputs')
+  if (!token_secret_arn) {
+    throw new Error(
+      'GarnetApiTokenSecretArn missing from stack outputs'
+    )
+  }
+  const token = token_loader(token_secret_arn, { env })
 
   const base = endpoint.replace(/\/$/, '')
-  const auth = token ? { Authorization: token } : {}
+  const auth = { Authorization: token }
   const run_id =
     (env.SMOKE_RUN_ID || `${Date.now()}-${randomUUID()}`)
       .replace(/[^A-Za-z0-9._~-]/g, '-')
@@ -312,16 +364,14 @@ const main = async ({
     check_options
   ))
 
-  if (token) {
-    results.push(await check('authorizer rejects a bad token', async () => {
-      expect_authorizer_rejection(
-        await send(
-          `${base}/ngsi-ld/v1/entities?type=SmokeTestProbe&local=true`,
-          { headers: { Authorization: 'not-a-valid-token' } }
-        )
+  results.push(await check('authorizer rejects a bad token', async () => {
+    expect_authorizer_rejection(
+      await send(
+        `${base}/ngsi-ld/v1/entities?type=SmokeTestProbe&local=true`,
+        { headers: { Authorization: 'not-a-valid-token' } }
       )
-    }, check_options))
-  }
+    )
+  }, check_options))
 
   const failures = results.filter(result => !result).length
   console.log(`\n${results.length - failures}/${results.length} checks passed`)
@@ -343,6 +393,7 @@ module.exports = {
   expect_authorizer_rejection,
   expect_entity_value,
   expect_status,
+  load_api_token,
   main,
   request,
   run_entity_round_trip

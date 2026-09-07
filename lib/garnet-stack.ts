@@ -142,10 +142,9 @@ export class GarnetStack extends Stack {
       value: garnet_api.broker_api_endpoint,
       description: 'Garnet Unified API'
     })
-    new CfnOutput(this, 'GarnetApiToken', {
-      value: garnet_api.garnet_api_token,
-      description: `Authentication token for Garnet API. Use in HTTP headers as: Authorization: <token>. 
-                    Example: curl -H "Authorization: <token>" <garnet-endpoint>`
+    new CfnOutput(this, 'GarnetApiTokenSecretArn', {
+      value: garnet_api.garnet_api_token_secret.secretArn,
+      description: 'Secrets Manager ARN containing the Garnet API Authorization header'
     })
     new CfnOutput(this, 'GarnetPrivateSubEndpoint', {
       value: garnet_privatesub.private_sub_endpoint,

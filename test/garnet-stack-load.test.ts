@@ -34,6 +34,7 @@ describe("Garnet load deployment outputs", () => {
     const template = Template.fromStack(stack)
 
     for (const output of [
+      "GarnetApiTokenSecretArn",
       "GarnetLoadCluster",
       "GarnetLoadGeneratorTask",
       "GarnetLoadAggregateTask",
@@ -44,5 +45,6 @@ describe("Garnet load deployment outputs", () => {
     ]) {
       template.hasOutput(output, {})
     }
+    expect(template.toJSON().Outputs).not.toHaveProperty("GarnetApiToken")
   })
 })

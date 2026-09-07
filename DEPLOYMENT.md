@@ -35,7 +35,7 @@ Synth runs as a matrix over `concentrated` and `distributed` because both are su
 
 Authentication is OIDC role assumption via `aws-actions/configure-aws-credentials`. Credentials are minted per run and expire with it; there are no long-lived access keys in the repository or in GitHub secrets. See [Setting up the pipeline](#setting-up-the-pipeline).
 
-After every deploy, [smoke-test.js](.github/scripts/smoke-test.js) calls the deployed API. This matters because a green `cdk deploy` only means CloudFormation converged — it does not mean the broker answers NGSI-LD requests. The smoke test performs an authenticated NGSI-LD create, local read, Attribute update, verified reread, delete and confirmed 404 through API Gateway → VPC link → ALB → broker → Aurora. It also requires the authorizer to return 401 or 403 for a forged token and cleans up after partial failures.
+After every deploy, [smoke-test.js](.github/scripts/smoke-test.js) calls the deployed API. This matters because a green `cdk deploy` only means CloudFormation converged — it does not mean the broker answers NGSI-LD requests. The smoke test retrieves its client Authorization header from the `GarnetApiTokenSecretArn` Secrets Manager output, then performs an authenticated NGSI-LD create, local read, Attribute update, verified reread, delete and confirmed 404 through API Gateway → VPC link → ALB → broker → Aurora. The credential itself never enters CloudFormation outputs or deployment artifacts. The test also requires the authorizer to return 401 or 403 for a forged token and cleans up after partial failures.
 
 ## Environments
 
@@ -200,7 +200,7 @@ One-time, per AWS account:
    ```
    "token.actions.githubusercontent.com:sub": "repo:<org>/<repo>:environment:prod"
    ```
-3. **Grant the role permissions.** CDK deploys via CloudFormation; the simplest correct setup is to let it assume the CDK bootstrap roles rather than granting broad permissions directly.
+3. **Grant the role permissions.** CDK deploys via CloudFormation; the simplest correct setup is to let it assume the CDK bootstrap roles rather than granting broad permissions directly. The post-deploy smoke test runs under the deploy role itself, so also grant it `secretsmanager:GetSecretValue` on `arn:aws:secretsmanager:<region>:<account>:secret:garnet/secret/api-client-*`.
 4. **Bootstrap CDK** in the account and region: `npx cdk bootstrap aws://<account>/<region>`.
 5. **Create the GitHub Environments** (`dev`, `stage`, `prod`), add the variables from [Environments](#environments), and add required reviewers to `stage` and `prod`. The approval gate is configured on the Environment, not in the workflow.
 6. **Protect `main`**: require the `CI` status check. It aggregates every CI job, so branch protection does not need updating when a job is added.

@@ -114,6 +114,7 @@ export const garnet_nomenclature = {
     // SECRET 
     garnet_secret: `garnet/secret/brokerdb`,
     garnet_api_jwt_secret: `garnet/secret/api`,
+    garnet_api_client_secret: `garnet/secret/api-client`,
 
     // SECURITY GROUPS
     garnet_broker_sg_database: `garnet-broker-database-sg`,
@@ -165,7 +166,6 @@ export const azlist: any = {
     "sa-east-1": ["sae1-az1", "sae1-az2", "sae1-az3"],
     "us-gov-west-1": ["usgw1-az1", "usgw1-az2", "usgw1-az3"]
 }
-
 
 
 

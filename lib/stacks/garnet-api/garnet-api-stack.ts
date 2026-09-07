@@ -5,7 +5,7 @@ import { Vpc } from "aws-cdk-lib/aws-ec2"
 import { GarnetApiGateway } from "./apigateway/api-gateway-construct"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { GarnetApiAuthJwt } from "./apiauth/api-auth-construct"
-import { Secret } from "aws-cdk-lib/aws-secretsmanager"
+import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Queue } from "aws-cdk-lib/aws-sqs"
 
 
@@ -25,7 +25,7 @@ export class GarnetApi extends NestedStack {
     public readonly private_sub_endpoint: string
     public readonly api_ref: string
     public readonly broker_api_endpoint: string
-    public readonly garnet_api_token : string
+    public readonly garnet_api_token_secret: ISecret
 
     constructor(scope: Construct, id: string, props: GarnetApiProps) {
       super(scope, id, props)
@@ -52,7 +52,7 @@ export class GarnetApi extends NestedStack {
 
       this.api_ref = api_gateway_construct.api_ref
       this.broker_api_endpoint = `https://${api_gateway_construct.api_ref}.execute-api.${Aws.REGION}.amazonaws.com`
-      this.garnet_api_token = api_auth_construct.garnet_api_token
+      this.garnet_api_token_secret = api_auth_construct.garnet_api_token_secret
       
     new CfnOutput(this, "garnet_endpoint", {
       value: `https://${api_gateway_construct.api_ref}.execute-api.${Aws.REGION}.amazonaws.com`,
