@@ -43,7 +43,10 @@ export class GarnetBrokerDatabase extends Construct {
             allowAllOutbound: true
         })
         const parameter_group = new ParameterGroup(this, "ParameterGroup", {
-            engine
+            engine,
+            parameters: {
+                "rds.force_ssl": "1"
+            }
         })
 
         this.cluster = new DatabaseCluster(this, "Cluster", {

@@ -73,6 +73,11 @@ describe("Garnet Broker AWS runtime", () => {
       EngineVersion: "16.11",
       DatabaseName: "scorpio"
     })
+    template.hasResourceProperties("AWS::RDS::DBClusterParameterGroup", {
+      Parameters: {
+        "rds.force_ssl": "1"
+      }
+    })
   })
 
   it("creates every long-lived role and both one-shot tasks on ARM64", () => {
@@ -130,6 +135,7 @@ describe("Garnet Broker AWS runtime", () => {
       SNAPSHOT_WORKERS: "0",
       BROKER_WORKERS: "2",
       DB_POOL_MAX_REQUIRED: "true",
+      DBSSL: "require",
       DB_POOL_MAX: "16",
       READ_CONSISTENCY: "eventual",
       READ_DB_POOL_MAX: "8"

@@ -156,6 +156,7 @@ export class GarnetBrokerRuntime extends Construct {
             DBHOST: props.database.clusterEndpoint.hostname,
             DBPORT: Token.asString(props.database.clusterEndpoint.port),
             DBNAME: garnet_constant.dbname,
+            DBSSL: "require",
             DB_POOL_MAX_REQUIRED: "true",
             DB_STATEMENT_TIMEOUT_MS: "10000",
             DB_MAX_PARALLEL_WORKERS_PER_GATHER: "0",
