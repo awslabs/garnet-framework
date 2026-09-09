@@ -23,14 +23,20 @@ describe("Garnet load deployment outputs", () => {
       }
     }))
 
-    const { GarnetStack } = require("../lib/garnet-stack")
+    const {
+      GarnetFrameworkStack
+    } = require("../lib/garnet-framework-stack")
     const app = new App()
-    const stack = new GarnetStack(app, "Garnet", {
-      env: {
-        account: "111111111111",
-        region: "eu-west-3"
+    const stack = new GarnetFrameworkStack(
+      app,
+      "GarnetFramework",
+      {
+        env: {
+          account: "111111111111",
+          region: "eu-west-3"
+        }
       }
-    })
+    )
     const template = Template.fromStack(stack)
 
     for (const output of [

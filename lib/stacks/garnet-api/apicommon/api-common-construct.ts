@@ -14,24 +14,18 @@ import { Construct } from "constructs";
 import {
   garnet_broker,
   garnet_constant,
-  garnet_nomenclature,
+  garnet_resource_name,
 } from "../../../../constants";
-import { deployment_params } from "../../../../architecture";
-import { Queue } from "aws-cdk-lib/aws-sqs";
 
 export interface GarnetApiCommonProps {
   readonly api_ref: string;
   readonly vpc: Vpc;
   dns_context_broker: string;
-  garnet_ingestion_sqs: Queue;
-  garnet_private_endpoint: string;
 }
 
 export class GarnetApiCommon extends Construct {
   constructor(scope: Construct, id: string, props: GarnetApiCommonProps) {
     super(scope, id);
-
-    const sqs_ingestion = props.garnet_ingestion_sqs;
 
     // LAMBDA LAYER (SHARED LIBRARIES)
     const layer_lambda_path = `./lib/layers`;
@@ -57,7 +51,7 @@ export class GarnetApiCommon extends Construct {
     );
     const lambda_garnet_version_path = `${__dirname}/lambda/garnetVersion`;
     const lambda_garnet_version = new Function(this, "LambdaGarnetVersion", {
-      functionName: `garnet-api-version-lambda`,
+      functionName: garnet_resource_name("api-version"),
       vpc: props.vpc,
       description: "Garnet API - Function that returns the Garnet Version",
       runtime: Runtime.NODEJS_24_X,
@@ -70,24 +64,8 @@ export class GarnetApiCommon extends Construct {
       environment: {
         CONTEXT_BROKER: garnet_broker,
         GARNET_VERSION: garnet_constant.garnet_version,
-        GARNET_PRIVATE_ENDPOINT: props.garnet_private_endpoint,
-        GARNET_INGESTION_SQS_URL: sqs_ingestion.queueUrl,
-        GARNET_INGESTION_SQS_ARN: sqs_ingestion.queueArn,
         DNS_CONTEXT_BROKER: props.dns_context_broker,
-        GARNET_ARCHITECTURE: deployment_params.architecture,
-        GARNET_CONTAINERS:
-          deployment_params.architecture == "distributed"
-            ? JSON.stringify([
-                `${garnet_nomenclature.garnet_broker_atcontextserver}`,
-                `${garnet_nomenclature.garnet_broker_entitymanager}`,
-                `${garnet_nomenclature.garnet_broker_historyentitymanager}`,
-                `${garnet_nomenclature.garnet_broker_historyquerymanager}`,
-                `${garnet_nomenclature.garnet_broker_querymanager}`,
-                `${garnet_nomenclature.garnet_broker_registrymanager}`,
-                `${garnet_nomenclature.garnet_broker_registrysubscriptionmanager}`,
-                `${garnet_nomenclature.garnet_broker_subscriptionmanager}`,
-              ])
-            : JSON.stringify([`${garnet_nomenclature.garnet_broker_allinone}`]),
+        GARNET_ARCHITECTURE: "distributed",
       },
     });
     lambda_garnet_version.node.addDependency(lambda_garnet_version_log);

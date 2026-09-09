@@ -1,0 +1,108 @@
+import { App, Stack } from "aws-cdk-lib"
+import { Match, Template } from "aws-cdk-lib/assertions"
+import { GarnetLake } from "../lib/stacks/garnet-lake/garnet-lake-stack"
+
+describe("Garnet multi-tenant Iceberg lake", () => {
+  it("partitions immutable events by tenant and day", () => {
+    const app = new App()
+    const parent = new Stack(app, "Parent", {
+      env: {
+        account: "111111111111",
+        region: "eu-west-3"
+      }
+    })
+    const lake = new GarnetLake(parent, "Lake", {})
+    const template = Template.fromStack(lake)
+
+    template.resourceCountIs("AWS::S3::Bucket", 2)
+    template.hasResourceProperties("AWS::Glue::Database", {
+      DatabaseInput: {
+        Name: "garnet_framework"
+      }
+    })
+    template.hasResourceProperties("AWS::Glue::Table", {
+      Name: "entity_events",
+      OpenTableFormatInput: {
+        IcebergInput: {
+          MetadataOperation: "CREATE",
+          Version: "2",
+          IcebergTableInput: Match.objectLike({
+            PartitionSpec: {
+              SpecId: 0,
+              Fields: [
+                {
+                  FieldId: 1000,
+                  Name: "tenant",
+                  SourceId: 3,
+                  Transform: "identity"
+                },
+                {
+                  FieldId: 1001,
+                  Name: "committed_day",
+                  SourceId: 5,
+                  Transform: "day"
+                }
+              ]
+            },
+            Schema: Match.objectLike({
+              IdentifierFieldIds: [2]
+            }),
+            Properties: Match.objectLike({
+              "write.object-storage.partitioned-paths": "true"
+            })
+          })
+        }
+      }
+    })
+    template.hasResourceProperties("AWS::Athena::WorkGroup", {
+      Name: "garnet-framework-lake",
+      WorkGroupConfiguration: Match.objectLike({
+        EnforceWorkGroupConfiguration: true
+      })
+    })
+    template.hasResourceProperties(
+      "AWS::KinesisFirehose::DeliveryStream",
+      {
+        DeliveryStreamName: "garnet-framework-datalake",
+        DeliveryStreamType: "DirectPut",
+        IcebergDestinationConfiguration: Match.objectLike({
+          AppendOnly: true,
+          DestinationTableConfigurationList: [{
+            DestinationDatabaseName: Match.anyValue(),
+            DestinationTableName: "entity_events",
+            S3ErrorOutputPrefix:
+              "failed/table=!{firehose:error-output-type}/"
+          }],
+          ProcessingConfiguration: {
+            Enabled: true,
+            Processors: Match.arrayWith([
+              Match.objectLike({
+                Type: "RecordDeAggregation"
+              }),
+              Match.objectLike({
+                Type: "Lambda"
+              })
+            ])
+          },
+          S3BackupMode: "FailedDataOnly"
+        })
+      }
+    )
+    template.hasResourceProperties("AWS::Lambda::Function", {
+      FunctionName: "garnet-framework-lake-transform",
+      Architectures: ["arm64"],
+      Runtime: "nodejs24.x"
+    })
+    template.hasResourceProperties("AWS::IAM::Policy", {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Action: "lakeformation:GetDataAccess",
+            Effect: "Allow",
+            Resource: "*"
+          })
+        ])
+      }
+    })
+  })
+})

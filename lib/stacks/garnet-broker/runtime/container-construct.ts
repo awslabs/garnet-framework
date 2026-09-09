@@ -4,6 +4,8 @@ import {
     RemovalPolicy,
     Token
 } from "aws-cdk-lib"
+import { CfnScalingPolicy } from
+    "aws-cdk-lib/aws-applicationautoscaling"
 import { Alarm, TreatMissingData } from "aws-cdk-lib/aws-cloudwatch"
 import {
     Peer,
@@ -13,19 +15,26 @@ import {
     Vpc
 } from "aws-cdk-lib/aws-ec2"
 import {
+    AlternateTarget,
     Cluster,
     ContainerImage,
     ContainerInsights,
     CpuArchitecture,
+    DeploymentStrategy,
     FargateTaskDefinition,
+    ListenerRuleConfiguration,
     LogDrivers,
     OperatingSystemFamily,
     Secret as EcsSecret
 } from "aws-cdk-lib/aws-ecs"
 import {
+    ApplicationListenerRule,
     ApplicationLoadBalancer,
     ApplicationProtocol,
-    ApplicationTargetGroup
+    ApplicationTargetGroup,
+    ListenerAction,
+    ListenerCondition,
+    TargetType
 } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { Rule, Schedule } from "aws-cdk-lib/aws-events"
 import { EcsTask } from "aws-cdk-lib/aws-events-targets"
@@ -41,11 +50,23 @@ import {
 } from "aws-cdk-lib/aws-sqs"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
-import { garnet_constant } from "../../../../constants"
+import {
+    DEPLOYMENT_STRATEGY,
+    deployment_params
+} from "../../../../architecture"
+import {
+    garnet_constant,
+    garnet_resource_name
+} from "../../../../constants"
 import { GarnetMigration } from "../migration/migration-construct"
 import { GarnetLoad } from "../load/load-construct"
-import { GARNET_SERVICE_CAPACITY } from "./runtime-profile"
+import {
+    GARNET_API_REQUESTS_PER_TARGET_MINUTE,
+    GARNET_SERVICE_CAPACITY
+} from "./runtime-profile"
 import { scale_on_queue_backlog } from "./queue-scaling"
+import { scale_on_worker_utilization } from "./worker-scaling"
+import { GarnetApiDeploymentGuard } from "./api-deployment-guard"
 import {
     GarnetServiceResult,
     GarnetTaskFactory
@@ -64,6 +85,7 @@ export interface GarnetBrokerRuntimeProps {
     load_image: string
     public_origin: string
     notification_delivery_allow_origins: string
+    private_notification_origin: string
     context_allow_hosts: string
 }
 
@@ -101,19 +123,21 @@ export class GarnetBrokerRuntime extends Construct {
 
         this.cluster = new Cluster(this, "Cluster", {
             vpc: props.vpc,
-            clusterName: "garnet-broker-cluster-garnet",
+            clusterName: garnet_resource_name("broker-cluster"),
             containerInsightsV2: ContainerInsights.ENHANCED,
             defaultCloudMapNamespace: {
-                name: "garnet.local"
+                name: "garnet-framework.local"
             }
         })
 
         const event_dlq = new Queue(this, "EntityEventDeadLetterQueue", {
+            queueName: garnet_resource_name("entity-events-dlq.fifo"),
             fifo: true,
             encryption: QueueEncryption.SQS_MANAGED,
             retentionPeriod: Duration.days(14)
         })
         this.event_queue = new Queue(this, "EntityEventQueue", {
+            queueName: garnet_resource_name("entity-events.fifo"),
             fifo: true,
             encryption: QueueEncryption.SQS_MANAGED,
             contentBasedDeduplication: false,
@@ -189,7 +213,7 @@ export class GarnetBrokerRuntime extends Construct {
             this,
             "MigrationTaskDefinition",
             {
-                family: "garnet-broker-migration",
+                family: garnet_resource_name("broker-migration"),
                 cpu: 512,
                 memoryLimitMiB: 1024,
                 runtimePlatform: {
@@ -287,6 +311,9 @@ export class GarnetBrokerRuntime extends Construct {
                     props.federation_state_secret
                 )
         }
+        const blue_green =
+            deployment_params.deployment_strategy ===
+                DEPLOYMENT_STRATEGY.BlueGreen
         const api = add(factory.create_service({
             id: "Api",
             name: "api",
@@ -324,7 +351,15 @@ export class GarnetBrokerRuntime extends Construct {
                 number: 8080
             },
             service_connect_client: true,
-            cpu_autoscaling: false
+            cpu_autoscaling: blue_green,
+            deployment_strategy: blue_green
+                ? DeploymentStrategy.BLUE_GREEN
+                : undefined,
+            bake_time: blue_green
+                ? Duration.minutes(
+                    deployment_params.deployment_bake_time_minutes
+                )
+                : undefined
         }))
         api.service.node.addDependency(federation.service)
 
@@ -384,16 +419,36 @@ export class GarnetBrokerRuntime extends Construct {
             })
         )
 
-        add(factory.create_service({
+        const notification_origins = [
+            ...props.notification_delivery_allow_origins
+                .split(",")
+                .map((origin) => origin.trim())
+                .filter((origin) => origin !== ""),
+            props.private_notification_origin
+        ]
+        const delivery = add(factory.create_service({
             id: "Delivery",
             name: "delivery",
             entry_point: "/garnet-delivery",
             capacity: GARNET_SERVICE_CAPACITY.delivery,
             environment: {
                 NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
-                    props.notification_delivery_allow_origins
+                    [...new Set(notification_origins)].join(","),
+                WORKER_METRICS: "emf",
+                WORKER_METRICS_NAMESPACE: "Garnet/Broker",
+                WORKER_METRICS_SERVICE: "garnet-delivery",
+                WORKER_METRICS_INTERVAL_MS: "60000"
             }
         }))
+        if (delivery.scaling === undefined) {
+            throw new Error("Garnet delivery requires task-count scaling")
+        }
+        scale_on_worker_utilization({
+            id: "DeliveryUtilizationScaling",
+            scaling: delivery.scaling,
+            service_name: "garnet-delivery",
+            target_utilization_percent: 70
+        })
         add(factory.create_service({
             id: "Scheduler",
             name: "notification-scheduler",
@@ -447,18 +502,18 @@ export class GarnetBrokerRuntime extends Construct {
             vpc: props.vpc,
             internetFacing: false,
             securityGroup: sg_alb,
-            loadBalancerName: "garnet-broker-alb-garnet",
+            loadBalancerName: garnet_resource_name("broker-alb"),
             idleTimeout: Duration.seconds(60),
             dropInvalidHeaderFields: true
         })
-        const target_group = new ApplicationTargetGroup(
+        const production_target = new ApplicationTargetGroup(
             this,
-            "ApiTarget",
+            "ApiProductionTarget",
             {
                 vpc: props.vpc,
-                targets: [api.service],
                 port: 8080,
                 protocol: ApplicationProtocol.HTTP,
+                targetType: TargetType.IP,
                 healthCheck: {
                     path: "/health",
                     port: "8080",
@@ -468,14 +523,112 @@ export class GarnetBrokerRuntime extends Construct {
                 }
             }
         )
-        this.fargate_alb.addListener("Listener", {
-            port: 80,
-            defaultTargetGroups: [target_group]
-        })
-        target_group.setAttribute(
+        production_target.setAttribute(
             "deregistration_delay.timeout_seconds",
             "30"
         )
+        const production_listener = this.fargate_alb.addListener(
+            "ProductionListener",
+            {
+            port: 80,
+                defaultAction: ListenerAction.fixedResponse(404, {
+                    messageBody: "Not Found"
+                })
+            }
+        )
+        const production_rule = new ApplicationListenerRule(
+            this,
+            "ProductionRule",
+            {
+                listener: production_listener,
+                priority: 1,
+                conditions: [ListenerCondition.pathPatterns(["/*"])],
+                targetGroups: [production_target]
+            }
+        )
+        let alternate_target: ApplicationTargetGroup | undefined
+        if (blue_green) {
+            alternate_target = new ApplicationTargetGroup(
+                this,
+                "ApiTestTarget",
+                {
+                    vpc: props.vpc,
+                    port: 8080,
+                    protocol: ApplicationProtocol.HTTP,
+                    targetType: TargetType.IP,
+                    healthCheck: {
+                        path: "/health",
+                        port: "8080",
+                        healthyHttpCodes: "200",
+                        interval: Duration.seconds(30),
+                        timeout: Duration.seconds(5)
+                    },
+                    deregistrationDelay: Duration.seconds(30)
+                }
+            )
+            const test_listener = this.fargate_alb.addListener(
+                "TestListener",
+                {
+                    port:
+                        deployment_params.deployment_test_listener_port,
+                    defaultAction: ListenerAction.fixedResponse(404, {
+                        messageBody: "Not Found"
+                    })
+                }
+            )
+            const test_rule = new ApplicationListenerRule(
+                this,
+                "TestRule",
+                {
+                    listener: test_listener,
+                    priority: 1,
+                    conditions: [ListenerCondition.pathPatterns(["/*"])],
+                    targetGroups: [alternate_target]
+                }
+            )
+            production_target.addTarget(
+                api.service.loadBalancerTarget({
+                    containerName: "garnet-api",
+                    containerPort: 8080,
+                    alternateTarget: new AlternateTarget(
+                        "ApiAlternateTarget",
+                        {
+                            alternateTargetGroup: alternate_target,
+                            productionListener:
+                                ListenerRuleConfiguration
+                                    .applicationListenerRule(
+                                        production_rule
+                                    ),
+                            testListener:
+                                ListenerRuleConfiguration
+                                    .applicationListenerRule(test_rule)
+                        }
+                    )
+                })
+            )
+            new GarnetApiDeploymentGuard(
+                this,
+                "ApiDeploymentGuard",
+                {
+                    vpc: props.vpc,
+                    service: api.service,
+                    load_balancer: this.fargate_alb,
+                    load_balancer_security_group: sg_alb,
+                    test_listener_port:
+                        deployment_params
+                            .deployment_test_listener_port,
+                    production_target,
+                    test_target: alternate_target
+                }
+            )
+        } else {
+            production_target.addTarget(
+                api.service.loadBalancerTarget({
+                    containerName: "garnet-api",
+                    containerPort: 8080
+                })
+            )
+        }
 
         if (props.load_image.trim() !== "") {
             this.load = new GarnetLoad(this, "Load", {
@@ -492,12 +645,130 @@ export class GarnetBrokerRuntime extends Construct {
         if (api.scaling === undefined) {
             throw new Error("Garnet API requires task-count scaling")
         }
-        api.scaling.scaleOnRequestCount("ApiRequestScaling", {
-            requestsPerTarget: 750,
-            targetGroup: target_group,
-            scaleInCooldown: Duration.seconds(180),
-            scaleOutCooldown: Duration.seconds(30)
-        })
+        if (alternate_target === undefined) {
+            api.scaling.scaleOnRequestCount("ApiRequestScaling", {
+                // ALBRequestCountPerTarget is measured over one minute.
+                requestsPerTarget:
+                    GARNET_API_REQUESTS_PER_TARGET_MINUTE,
+                targetGroup: production_target,
+                scaleInCooldown: Duration.seconds(180),
+                scaleOutCooldown: Duration.seconds(30)
+            })
+        } else {
+            const target = api.scaling.scalableTargetRef
+            new CfnScalingPolicy(
+                this,
+                "ApiBlueGreenRequestScaling",
+                {
+                    policyName: garnet_resource_name(
+                        "api-bluegreen-request-scaling"
+                    ),
+                    policyType: "TargetTrackingScaling",
+                    resourceId: target.resourceId,
+                    scalableDimension: target.scalableDimension,
+                    serviceNamespace: target.serviceNamespace,
+                    targetTrackingScalingPolicyConfiguration: {
+                        targetValue:
+                            GARNET_API_REQUESTS_PER_TARGET_MINUTE,
+                        scaleInCooldown: 180,
+                        scaleOutCooldown: 30,
+                        customizedMetricSpecification: {
+                            metrics: [
+                                {
+                                    id: "requests_per_task",
+                                    expression:
+                                        "IF(running > 0, " +
+                                        "(production_requests + " +
+                                        "alternate_requests) / running, 0)",
+                                    label:
+                                        "Garnet API requests per running task",
+                                    returnData: true
+                                },
+                                {
+                                    id: "production_requests",
+                                    returnData: false,
+                                    metricStat: {
+                                        metric: {
+                                            namespace:
+                                                "AWS/ApplicationELB",
+                                            metricName: "RequestCount",
+                                            dimensions: [
+                                                {
+                                                    name: "LoadBalancer",
+                                                    value:
+                                                        production_target
+                                                            .firstLoadBalancerFullName
+                                                },
+                                                {
+                                                    name: "TargetGroup",
+                                                    value:
+                                                        production_target
+                                                            .targetGroupFullName
+                                                }
+                                            ]
+                                        },
+                                        stat: "Sum"
+                                    }
+                                },
+                                {
+                                    id: "alternate_requests",
+                                    returnData: false,
+                                    metricStat: {
+                                        metric: {
+                                            namespace:
+                                                "AWS/ApplicationELB",
+                                            metricName: "RequestCount",
+                                            dimensions: [
+                                                {
+                                                    name: "LoadBalancer",
+                                                    value:
+                                                        alternate_target
+                                                            .firstLoadBalancerFullName
+                                                },
+                                                {
+                                                    name: "TargetGroup",
+                                                    value:
+                                                        alternate_target
+                                                            .targetGroupFullName
+                                                }
+                                            ]
+                                        },
+                                        stat: "Sum"
+                                    }
+                                },
+                                {
+                                    id: "running",
+                                    returnData: false,
+                                    metricStat: {
+                                        metric: {
+                                            namespace:
+                                                "ECS/ContainerInsights",
+                                            metricName:
+                                                "RunningTaskCount",
+                                            dimensions: [
+                                                {
+                                                    name: "ClusterName",
+                                                    value:
+                                                        this.cluster
+                                                            .clusterName
+                                                },
+                                                {
+                                                    name: "ServiceName",
+                                                    value:
+                                                        api.service
+                                                            .serviceName
+                                                }
+                                            ]
+                                        },
+                                        stat: "Average"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                }
+            )
+        }
 
         const maintenance_log = new LogGroup(this, "MaintenanceLogs", {
             retention: RetentionDays.ONE_MONTH,
@@ -507,7 +778,7 @@ export class GarnetBrokerRuntime extends Construct {
             this,
             "MaintenanceTaskDefinition",
             {
-                family: "garnet-broker-maintenance",
+                family: garnet_resource_name("broker-maintenance"),
                 cpu: 512,
                 memoryLimitMiB: 1024,
                 runtimePlatform: {
@@ -547,7 +818,7 @@ export class GarnetBrokerRuntime extends Construct {
         maintenance_rule.node.addDependency(migration.resource)
 
         new Alarm(this, "ApiUnhealthyHostAlarm", {
-            metric: target_group.metrics.unhealthyHostCount(),
+            metric: production_target.metrics.unhealthyHostCount(),
             threshold: 1,
             evaluationPeriods: 3,
             datapointsToAlarm: 2,

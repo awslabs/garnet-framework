@@ -28,7 +28,8 @@ import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import {
     garnet_constant,
-    garnet_nomenclature
+    garnet_nomenclature,
+    garnet_resource_name
 } from "../../../../constants"
 
 export interface GarnetLoadProps {
@@ -130,7 +131,7 @@ export class GarnetLoad extends Construct {
             this,
             "GeneratorTask",
             {
-                family: "garnet-load-generator",
+                family: garnet_resource_name("load-generator"),
                 cpu: 4096,
                 memoryLimitMiB: 8192,
                 runtimePlatform: {
@@ -170,7 +171,7 @@ export class GarnetLoad extends Construct {
             this,
             "AggregateTask",
             {
-                family: "garnet-load-aggregate",
+                family: garnet_resource_name("load-aggregate"),
                 cpu: 1024,
                 memoryLimitMiB: 2048,
                 runtimePlatform: {

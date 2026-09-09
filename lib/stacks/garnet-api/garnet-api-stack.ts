@@ -6,15 +6,12 @@ import { GarnetApiGateway } from "./apigateway/api-gateway-construct"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { GarnetApiAuthJwt } from "./apiauth/api-auth-construct"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
-import { Queue } from "aws-cdk-lib/aws-sqs"
 
 
 
 export interface GarnetApiProps extends NestedStackProps {
      readonly vpc: Vpc,
      readonly dns_context_broker: string,
-     readonly garnet_ingestion_sqs: Queue, 
-     readonly garnet_private_endpoint: string
      readonly fargate_alb: ApplicationLoadBalancer
      readonly secret_api_jwt: Secret
      
@@ -44,9 +41,7 @@ export class GarnetApi extends NestedStack {
       const api_common_construct = new GarnetApiCommon(this, 'GarnetApiCommon', {
             api_ref: api_gateway_construct.api_ref, 
             vpc: props.vpc,
-            dns_context_broker: props.dns_context_broker, 
-            garnet_ingestion_sqs: props.garnet_ingestion_sqs,
-            garnet_private_endpoint: props.garnet_private_endpoint
+            dns_context_broker: props.dns_context_broker
       })
 
 

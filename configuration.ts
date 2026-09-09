@@ -1,17 +1,5 @@
-import { ARCHITECTURE, DEPLOYMENT_STRATEGY } from "./architecture"
-import { BROKER_ENGINE } from "./broker-engine"
-
 // GARNET PARAMETERS
 export const Parameters = {
-    /**
-     * Context broker implementation.
-     *
-     * Scorpio remains the default until Garnet's AWS soak and release comparison gates pass.
-     * Garnet uses the distributed architecture and requires a digest-pinned multi-architecture
-     * image below.
-     */
-    broker_engine: BROKER_ENGINE.Scorpio,
-
     /**
      * Immutable Garnet Broker image, for example:
      * public.ecr.aws/example/garnet-broker@sha256:<64 hexadecimal characters>
@@ -56,29 +44,25 @@ export const Parameters = {
     aws_region: "us-east-1",  
 
     /**
-     * Choose between Concentrated (single container) or Distributed (microservices) architecture.
-     * You can fine-tune the deployment parameters in architecture.ts
-     * - Concentrated: All services in one container, suitable for development and testing
-     * - Distributed: 8 specialized m
-     * icroservices, recommended for production deployments
-    */
-    architecture: ARCHITECTURE.Concentrated,
+     * Production uses one NAT gateway per Availability Zone. Set this to 1
+     * only for disposable test environments that accept an egress AZ
+     * dependency and cross-AZ traffic.
+     */
+    nat_gateway_count: 2 as 1 | 2,
 
     /**
-     * How the broker services are rolled out.
-     * - Rolling (default): tasks are replaced in place. A failing deployment is
-     *   detected by the circuit breaker and rolled back automatically.
-     * - BlueGreen: a second task set is started alongside the current one. You can
-     *   validate it on the test listener (see deployment_test_listener_port) before
-     *   any production traffic moves, then traffic shifts and the old task set is
-     *   kept for deployment_bake_time_minutes so rollback is near-instant.
-     *
-     * IMPORTANT: both task sets share a single Aurora cluster. Use Rolling for any
-     * Scorpio release that carries a database schema migration, because rolling back
-     * to the previous task set would leave it running against a migrated schema.
-     * See DEPLOYMENT.md for the full trade-off.
+     * Production data-safety defaults. Disable deletion protection only for a
+     * disposable environment that is expected to be destroyed by CDK.
      */
-    deployment_strategy: DEPLOYMENT_STRATEGY.Rolling,
+    database_deletion_protection: true,
+    database_backup_retention_days: 35,
+
+    /**
+     * Rolling updates every Garnet service with an ECS circuit breaker.
+     * Blue/green retains that worker rollout and adds a test target, traffic
+     * switch, and bake window for the externally routed API service.
+     */
+    deployment_strategy: "rolling" as "rolling" | "bluegreen",
 
     /**
      * How long the previous task set is retained after traffic shifts, giving you a
@@ -92,6 +76,13 @@ export const Parameters = {
      * so it can be validated in place. Blue/green only, never internet facing.
      */
     deployment_test_listener_port: 8080,
+
+    /**
+     * Tenant bound to the bootstrap API credential stored in Secrets Manager.
+     * Production tenant onboarding should issue one tenant-scoped credential
+     * per client rather than sharing this bootstrap credential.
+     */
+    garnet_bootstrap_tenant: "default",
 
     // API Authorization
     authorization: true

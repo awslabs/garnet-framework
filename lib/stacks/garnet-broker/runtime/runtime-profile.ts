@@ -7,12 +7,14 @@ export interface GarnetServiceCapacity {
     reader_database_pool?: number
 }
 
+export const GARNET_API_REQUESTS_PER_TARGET_MINUTE = 15_000
+
 export const GARNET_SERVICE_CAPACITY = {
     api: {
         cpu: 2048,
         memory_mib: 4096,
         min_tasks: 2,
-        max_tasks: 32,
+        max_tasks: 64,
         database_pool: 16,
         reader_database_pool: 8
     },

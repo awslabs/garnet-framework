@@ -8,13 +8,49 @@ inputs:
   aws-region:
     description: Region to deploy into
     required: true
-  architecture:
-    description: concentrated or distributed
+  broker-image:
+    description: Immutable Garnet Broker image reference
     required: true
+  load-image:
+    description: Optional immutable Garnet load-runner image
+    required: false
+    default: ''
+  public-origin:
+    description: Public broker origin for distributed callbacks
+    required: false
+    default: ''
+  notification-origins:
+    description: Additional exact notification callback origins
+    required: false
+    default: ''
+  context-hosts:
+    description: Approved remote JSON-LD Context hosts
+    required: false
+    default: ''
+  eventual-entity-reads:
+    description: Use the Aurora reader endpoint for eligible Entity reads
+    required: false
+    default: 'false'
   deployment-strategy:
     description: rolling or bluegreen
     required: false
     default: rolling
+  bootstrap-tenant:
+    description: Tenant bound to the bootstrap API credential
+    required: false
+    default: default
+  nat-gateway-count:
+    description: One for disposable tests or two for zone-independent egress
+    required: false
+    default: '2'
+  database-deletion-protection:
+    description: Protect the Aurora cluster from deletion
+    required: false
+    default: 'true'
+  database-backup-retention-days:
+    description: Aurora continuous-backup retention from 1 to 35 days
+    required: false
+    default: '35'
   node-version:
     description: Node version used for the build
     required: false
@@ -23,8 +59,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v6
-
     - uses: actions/setup-node@v6
       with:
         node-version: ${{ inputs.node-version }}
@@ -49,10 +83,19 @@ runs:
     - name: Apply deployment configuration
       shell: bash
       env:
-        GARNET_ARCHITECTURE: ${{ inputs.architecture }}
+        GARNET_BROKER_IMAGE: ${{ inputs.broker-image }}
+        GARNET_LOAD_IMAGE: ${{ inputs.load-image }}
+        GARNET_BROKER_PUBLIC_ORIGIN: ${{ inputs.public-origin }}
+        GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: ${{ inputs.notification-origins }}
+        GARNET_CONTEXT_ALLOW_HOSTS: ${{ inputs.context-hosts }}
+        GARNET_EVENTUAL_ENTITY_READS: ${{ inputs.eventual-entity-reads }}
         GARNET_DEPLOYMENT_STRATEGY: ${{ inputs.deployment-strategy }}
+        GARNET_BOOTSTRAP_TENANT: ${{ inputs.bootstrap-tenant }}
+        GARNET_NAT_GATEWAY_COUNT: ${{ inputs.nat-gateway-count }}
+        GARNET_DATABASE_DELETION_PROTECTION: ${{ inputs.database-deletion-protection }}
+        GARNET_DATABASE_BACKUP_RETENTION_DAYS: ${{ inputs.database-backup-retention-days }}
         GARNET_REGION: ${{ inputs.aws-region }}
-      run: node .github/scripts/apply-configuration.js
+      run: node .github/scripts/configure-garnet.js
 
     - name: Show what will change
       shell: bash
@@ -86,7 +129,7 @@ runs:
           echo "| --- | --- |"
           node -e "
             const o = require('./cdk-outputs.json');
-            const stack = o.Garnet || {};
+            const stack = o.GarnetFramework || {};
             const redact = k => /Token|Secret/i.test(k);
             for (const [k, v] of Object.entries(stack)) {
               console.log('| ' + k + ' | ' + (redact(k) ? '(redacted)' : String(v)) + ' |');
@@ -97,6 +140,6 @@ runs:
     - name: Upload deployment outputs
       uses: actions/upload-artifact@v5
       with:
-        name: cdk-outputs-${{ inputs.architecture }}-${{ github.run_id }}
+        name: cdk-outputs-${{ github.run_id }}
         path: cdk-outputs.json
         retention-days: 30

@@ -233,3 +233,16 @@ This new version fixes some bugs, introduces new features and potential breaking
 ## [1.0.0] - 2023-11-02
 
 Initial commit of the Garnet Framework.
+# Unreleased
+
+- Added the separate `GarnetFramework` stack for Garnet Broker, with
+  `garnet-framework-*` physical resource names and a collision regression test
+  against the maintenance stack.
+- Added native ECS API blue/green validation, rollback alarms and retained
+  rolling circuit breakers for workers.
+- Replaced the JSON S3 event archive with a tenant/day-partitioned Iceberg v2
+  event table delivered through Firehose.
+- Added tenant-aware SQS ingestion and tenant-isolated private notification
+  topics.
+- Removed the dormant Scorpio deployment and obsolete custom-resource
+  implementations.

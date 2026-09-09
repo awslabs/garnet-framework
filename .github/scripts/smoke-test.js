@@ -286,7 +286,7 @@ const main = async ({
 } = {}) => {
   const outputs_path =
     env.SMOKE_OUTPUTS_PATH || path.join(cwd, 'cdk-outputs.json')
-  const stack_name = env.SMOKE_STACK_NAME || 'Garnet'
+  const stack_name = env.SMOKE_STACK_NAME || 'GarnetFramework'
   const timeout_ms = Number(env.SMOKE_TIMEOUT_MS || 15000)
   const retries = Number(env.SMOKE_RETRIES || 5)
   const retry_delay_ms = Number(env.SMOKE_RETRY_DELAY_MS || 10000)

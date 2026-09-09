@@ -14,12 +14,6 @@ on:
         required: true
         type: choice
         options: [dev, stage, prod]
-      architecture:
-        description: Architecture to deploy (must match the environment's existing stack)
-        required: true
-        default: concentrated
-        type: choice
-        options: [concentrated, distributed]
 
 # Never run two deploys at the same environment concurrently. Not cancelling in
 # progress: interrupting cdk deploy can leave a stack in UPDATE_IN_PROGRESS.
@@ -63,13 +57,23 @@ jobs:
       id-token: write   # required to mint the OIDC token
       contents: read
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/deploy
         # Repo/environment configuration, not secrets in the code
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-          architecture: ${{ vars.GARNET_ARCHITECTURE }}
+          broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
+          load-image: ${{ vars.GARNET_LOAD_IMAGE }}
+          public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}
+          notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
+          context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
+          eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
+          nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
+          database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
+          database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
           node-version: ${{ env.NODE_VERSION }}
 
   deploy-stage:
@@ -83,12 +87,22 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/deploy
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-          architecture: ${{ vars.GARNET_ARCHITECTURE }}
+          broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
+          load-image: ${{ vars.GARNET_LOAD_IMAGE }}
+          public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}
+          notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
+          context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
+          eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
+          nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
+          database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
+          database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
           node-version: ${{ env.NODE_VERSION }}
 
   deploy-prod:
@@ -101,12 +115,22 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/deploy
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-          architecture: ${{ vars.GARNET_ARCHITECTURE }}
+          broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
+          load-image: ${{ vars.GARNET_LOAD_IMAGE }}
+          public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}
+          notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
+          context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
+          eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
+          nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
+          database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
+          database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
           node-version: ${{ env.NODE_VERSION }}
 
   # Single-environment path for workflow_dispatch, so a hotfix or a re-deploy
@@ -122,10 +146,20 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - uses: actions/checkout@v6
       - uses: ./.github/actions/deploy
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
-          architecture: ${{ github.event.inputs.architecture }}
+          broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
+          load-image: ${{ vars.GARNET_LOAD_IMAGE }}
+          public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}
+          notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
+          context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
+          eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
+          nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
+          database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
+          database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
           node-version: ${{ env.NODE_VERSION }}

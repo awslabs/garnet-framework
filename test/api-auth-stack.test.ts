@@ -28,7 +28,7 @@ describe('API client credential infrastructure', () => {
 
     template.resourceCountIs('AWS::SecretsManager::Secret', 2)
     template.hasResourceProperties('AWS::SecretsManager::Secret', {
-      Name: 'garnet/secret/api-client',
+      Name: 'garnet-framework/secret/api-client',
       Description: 'Authorization header used by trusted Garnet API clients'
     })
   })
@@ -61,7 +61,9 @@ describe('API client credential infrastructure', () => {
     const template = synth_auth()
 
     template.hasResourceProperties('AWS::CloudFormation::CustomResource', {
-      TokenSecretArn: Match.anyValue()
+      TokenSecretArn: Match.anyValue(),
+      Tenant: 'default',
+      TokenSchemaVersion: 'tenant-v1'
     })
   })
 })

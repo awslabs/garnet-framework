@@ -3,144 +3,75 @@
 // List of AZs that support VPC links for HTTP APIs as https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability
 
 import { Aws } from "aws-cdk-lib"
-import { Parameters } from "./configuration"
-import { BROKER_ENGINE } from "./broker-engine"
 const {version} = require('./package.json')
 
-const garnet_scorpio_version = "6.0.10"
+export const garnet_stack_name = "GarnetFramework"
+export const garnet_resource_prefix = "garnet-framework"
+export const garnet_resource_name = (name: string): string =>
+    `${garnet_resource_prefix}-${name}`
 
-export const garnet_bucket =  `garnet-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}` // DO NOT CHANGE
+export const garnet_bucket =
+    `${garnet_resource_prefix}-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}`
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
-export const garnet_broker =
-    Parameters.broker_engine == BROKER_ENGINE.Garnet ? "Garnet" : "Scorpio"
+export const garnet_broker = "Garnet Broker"
 
 export const garnet_constant = {
     garnet_version: version,
-    shadow_prefix: "Garnet",
-    dbname: 'scorpio',
-    iotDomainName: 'garnet-iot-domain', 
-    gluedbName: 'garnetdb'
-}
-
-export const garnet_scorpio_images = {
-    allInOne: `public.ecr.aws/garnet/scorpio:${garnet_scorpio_version}`,
-    at_context_server: `public.ecr.aws/garnet/scorpio/at-context-server:${garnet_scorpio_version}`,
-    entity_manager: `public.ecr.aws/garnet/scorpio/entity-manager:${garnet_scorpio_version}`, 
-    history_entity_manager: `public.ecr.aws/garnet/scorpio/history-entity-manager:${garnet_scorpio_version}`,
-    history_query_manager: `public.ecr.aws/garnet/scorpio/history-query-manager:${garnet_scorpio_version}`,
-    query_manager: `public.ecr.aws/garnet/scorpio/query-manager:${garnet_scorpio_version}`, 
-    registry_manager: `public.ecr.aws/garnet/scorpio/registry-manager:${garnet_scorpio_version}`,
-    registry_subscription_manager: `public.ecr.aws/garnet/scorpio/registry-subscription-manager:${garnet_scorpio_version}`,
-    subscription_manager: `public.ecr.aws/garnet/scorpio/subscription-manager:${garnet_scorpio_version}`
-}
-
-export const scorpiobroker_sqs_object = {
-    "SCORPIO_TOPICS_ENTITY": `garnet-scorpiobroker-${Parameters.architecture}-entity`, 
-    "SCORPIO_TOPICS_REGISTRY": `garnet-scorpiobroker-${Parameters.architecture}-registry`,
-    "SCORPIO_TOPICS_TEMPORAL": `garnet-scorpiobroker-${Parameters.architecture}-temporal`,
-    "SCORPIO_TOPICS_INTERNALNOTIFICATION": `garnet-scorpiobroker-internalnotification`,
-    "SCORPIO_TOPICS_INTERNALREGSUB": `garnet-scorpiobroker-internalregsub`,
-    "SCORPIO_TOPICS_PRIVATE_NOTIFICATION": `garnet-scorpiobroker-private-notification`
-
+    dbname: "garnet",
+    gluedbName: "garnet_framework"
 }
 
 export const garnet_nomenclature = {
-    // DEPRECATED 
-    garnet_iot_rule: `garnet_iot_rule`, 
-    garnet_iot_update_shadow_lambda: `garnet-iot-update-shadow-lambda`, 
-    garnet_iot_update_broker_lambda: `garnet-iot-update-broker-lambda`,
-
-
-    // GARNET MODEL 
     aws_iot_thing: "AwsIotThing",
     aws_iot_thing_group: "AwsIotThingGroup",
-    aws_iot_lorawan_thing: "AwsIotLorawanThing",
-    aws_iot_lorawan_gateway: "AwsIotLorawanGateway", 
     
-    //GARNET INGESTION LAMBDA
-    garnet_ingestion_update_broker_lambda: `garnet-ingestion-update-broker-lambda`,
-    garnet_lake_transform_lambda: `garnet-lake-transform-lambda`, 
-    garnet_iot_lifecycle_lambda: `garnet-iot-thing-lifecycle-lambda`,
-    garnet_iot_presence_lambda: `garnet-iot-presence-lambda`,
-    garnet_iot_group_membership_lambda: `garnet-iot-group-membership-lambda`,
-    garnet_iot_group_hierarchy_lambda: `garnet-iot-group-hierarchy-lambda`,
-    garnet_iot_group_lifecycle_lambda: `garnet-iot-group-lifecycle-lambda`,
-    garnet_iot_authorizer_lambda: `garnet-iot-authorizer-lambda`,
-    garnet_private_sub_lambda: `garnet-private-sub-lambda`, 
-    garnet_private_sub_sqs_lambda: `garnet-private-sub-sqs-lambda`, 
-    garnet_lake_rule:`garnet_lake_rule`,
-    garnet_subscriptions_rule: `garnet_subscriptions_rule`,
-    garnet_iot_presence_rule: `garnet_iot_presence_rule`,
+    garnet_ingestion_update_broker_lambda:
+        garnet_resource_name("ingestion-update-broker"),
+    garnet_lake_transform_lambda:
+        garnet_resource_name("lake-transform"),
+    garnet_iot_lifecycle_lambda:
+        garnet_resource_name("iot-thing-lifecycle"),
+    garnet_iot_presence_lambda:
+        garnet_resource_name("iot-presence"),
+    garnet_iot_group_membership_lambda:
+        garnet_resource_name("iot-group-membership"),
+    garnet_iot_group_lifecycle_lambda:
+        garnet_resource_name("iot-group-lifecycle"),
+    garnet_private_sub_lambda:
+        garnet_resource_name("private-subscription"),
+    garnet_subscriptions_rule: "garnet_framework_subscriptions",
+    garnet_iot_presence_rule: "garnet_framework_iot_presence",
     
     // GARNET API AUTH
-    garnet_api_auth_jwt_lambda: `garnet-api-auth-jwt-lambda`,
-    garnet_api_authorizer_lambda: `garnet-api-authorizer-lambda`,
+    garnet_api_auth_jwt_lambda:
+        garnet_resource_name("api-auth-jwt"),
+    garnet_api_authorizer_lambda:
+        garnet_resource_name("api-authorizer"),
     
     garnet_api_auth_audience: `garnet-api`, 
     garnet_api_auth_issuer: `garnet-framework`, 
     garnet_api_auth_sub: `garnet:default-user`, 
 
-    // GARNET IOT SQS
-    garnet_iot_queue: `garnet-iot-sqs-${Aws.REGION}`, // DEPRECATED 
-    garnet_ingestion_queue: `garnet-ingestion-queue-${Aws.REGION}`, // DEPRECATED
-    garnet_ingestion_dlq: `garnet-ingestion-dlq-${Aws.REGION}`,
-    garnet_iot_contextbroker_queue: `garnet-iot-sqs-contextbroker-${Aws.REGION}`,
-    garnet_iot_presence_queue: `garnet-iot-presence-${Aws.REGION}`,
-    garnet_iot_group_queue: `garnet-iot-presence-${Aws.REGION}`,
+    garnet_ingestion_queue:
+        `${garnet_resource_prefix}-ingestion-${Aws.REGION}`,
+    garnet_ingestion_dlq:
+        `${garnet_resource_prefix}-ingestion-dlq-${Aws.REGION}`,
+    garnet_iot_presence_queue:
+        `${garnet_resource_prefix}-iot-presence-${Aws.REGION}`,
 
-    // GARNET FIREHOSE 
-    garnet_lake_firehose_stream: `garnet-datalake-firehose-stream`,
-    garnet_sub_firehose_stream: `garnet-subs-firehose-stream`, 
+    garnet_lake_firehose_stream:
+        garnet_resource_name("datalake"),
+    garnet_sub_firehose_stream:
+        garnet_resource_name("subscriptions"),
     garnet_lake_firehose_interval: 60, // seconds
     garnet_lake_buffer_size: 64, // MB
 
-    // GARNET BROKER CLUSTER
-    garnet_broker_cluster: `garnet-broker-cluster`,
-    
-    // GARNET BROKER SERVICES 
-    garnet_broker_entitymanager: `garnet-broker-entity-manager`,
-    garnet_broker_querymanager: `garnet-broker-query-manager`, 
-    garnet_broker_subscriptionmanager: `garnet-broker-subscription-manager`,
-    garnet_broker_historyentitymanager: `garnet-broker-history-entity-manager`,
-    garnet_broker_historyquerymanager: `garnet-broker-history-querymanager`, 
-    garnet_broker_atcontextserver: `garnet-broker-at-context-server`,
-    garnet_broker_registrymanager: `garnet-broker-registry-manager`,
-    garnet_broker_registrysubscriptionmanager: `garnet-broker-registry-subscription-manager`, 
-    garnet_broker_allinone: `garnet-broker-all-in-one`, 
+    garnet_api_jwt_secret: `${garnet_resource_prefix}/secret/api`,
+    garnet_api_client_secret:
+        `${garnet_resource_prefix}/secret/api-client`,
 
-    // GARNET LOAD BALANCER 
-    garnet_load_balancer: `garnet-broker-alb`, 
-
-    // SECRET 
-    garnet_secret: `garnet/secret/brokerdb`,
-    garnet_api_jwt_secret: `garnet/secret/api`,
-    garnet_api_client_secret: `garnet/secret/api-client`,
-
-    // SECURITY GROUPS
-    garnet_broker_sg_database: `garnet-broker-database-sg`,
-    garnet_broker_sg_rds: `garnet-broker-rds-proxy-sg`,
-    garnet_broker_sg_alb: `garnet-broker-alb-sg`,
-    garnet_broker_sg_fargate: `garnet-broker-fargate-sg`,
-
-  // GARNET DB 
-  garnet_proxy_rds: `garnet-proxy-rds`,
-  garnet_db_cluster_id: `garnet-aurora-cluster`,
-
-  // GARNET PRIVATE SUB
-
-  garnet_scorpiobroker_private_notification_queue: scorpiobroker_sqs_object.SCORPIO_TOPICS_PRIVATE_NOTIFICATION,
-  garnet_scorpiobroker_private_notification_lambda: `${scorpiobroker_sqs_object.SCORPIO_TOPICS_PRIVATE_NOTIFICATION}-lambda`,
-
-
-  // GARNET UTILS 
-
-  garnet_utils_clean_ecs_taks_lambda :`garnet-utils-clean-ecstasks-lambda`,
-  garnet_utils_scorpio_sqs_lambda :`garnet-utils-scorpio-cleansqs-lambda`,
-  garnet_utils_az_lambda :`garnet-utils-getaz-lambda`,
-  garnet_utils_bucket_create_lambda: `garnet-utils-bucket-create-lambda`,
-  garnet_utils_bucket_check_lambda: `garnet-utils-bucket-check-lambda`,
-  garnet_utils_bucket_provider: `garnet-utils-bucket-provider-lambda`,
-  garnet_utils_sqs_notification_provider: `garnet-utils-sqs-notification-provider-lambda`,
+    garnet_utils_az_lambda:
+        garnet_resource_name("utils-get-az"),
 }
 
 
@@ -166,8 +97,3 @@ export const azlist: any = {
     "sa-east-1": ["sae1-az1", "sae1-az2", "sae1-az3"],
     "us-gov-west-1": ["usgw1-az1", "usgw1-az2", "usgw1-az3"]
 }
-
-
-
-
-

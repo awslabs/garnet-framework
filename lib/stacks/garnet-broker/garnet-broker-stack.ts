@@ -15,6 +15,7 @@ export interface GarnetBrokerProps extends NestedStackProps {
     load_image: string
     public_origin: string
     notification_delivery_allow_origins: string
+    private_notification_origin: string
     context_allow_hosts: string
     eventual_entity_reads: boolean
 }
@@ -23,6 +24,9 @@ export class GarnetBroker extends NestedStack {
     public readonly dns_context_broker: string
     public readonly fargate_alb: ApplicationLoadBalancer
     public readonly load?: GarnetLoad
+    public readonly cluster_name: string
+    public readonly database_cluster_identifier: string
+    public readonly event_queue_name: string
 
     constructor(scope: Construct, id: string, props: GarnetBrokerProps) {
         super(scope, id, props)
@@ -51,6 +55,8 @@ export class GarnetBroker extends NestedStack {
             public_origin: props.public_origin,
             notification_delivery_allow_origins:
                 props.notification_delivery_allow_origins,
+            private_notification_origin:
+                props.private_notification_origin,
             context_allow_hosts: props.context_allow_hosts
         })
         federation_state.allow_connections_from(runtime.sg_broker)
@@ -58,6 +64,10 @@ export class GarnetBroker extends NestedStack {
         this.fargate_alb = runtime.fargate_alb
         this.dns_context_broker = runtime.fargate_alb.loadBalancerDnsName
         this.load = runtime.load
+        this.cluster_name = runtime.cluster.clusterName
+        this.database_cluster_identifier =
+            database.cluster.clusterIdentifier
+        this.event_queue_name = runtime.event_queue.queueName
 
         new CfnOutput(this, "BrokerLoadBalancer", {
             value: this.dns_context_broker

@@ -13,7 +13,10 @@ import {
 import { ISecret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import { deployment_params } from "../../../../architecture"
-import { garnet_constant } from "../../../../constants"
+import {
+    garnet_constant,
+    garnet_resource_name
+} from "../../../../constants"
 
 export interface GarnetBrokerDatabaseProps {
     vpc: Vpc
@@ -54,7 +57,7 @@ export class GarnetBrokerDatabase extends Construct {
             parameterGroup: parameter_group,
             credentials: Credentials.fromGeneratedSecret("garnetadmin"),
             defaultDatabaseName: garnet_constant.dbname,
-            clusterIdentifier: "garnet-broker-aurora",
+            clusterIdentifier: garnet_resource_name("broker-aurora"),
             vpc: props.vpc,
             vpcSubnets: {
                 subnetType: SubnetType.PRIVATE_ISOLATED
@@ -74,15 +77,22 @@ export class GarnetBrokerDatabase extends Construct {
             serverlessV2MinCapacity: deployment_params.aurora_min_capacity,
             serverlessV2MaxCapacity: deployment_params.aurora_max_capacity,
             storageType: deployment_params.aurora_storage_type,
+            backup: {
+                retention: Duration.days(
+                    deployment_params.database_backup_retention_days
+                )
+            },
             cloudwatchLogsExports: ["postgresql"],
             cloudwatchLogsRetention: 30,
-            deletionProtection: false,
+            deletionProtection:
+                deployment_params.database_deletion_protection,
             removalPolicy: RemovalPolicy.SNAPSHOT
         })
         this.secret = this.cluster.secret!
 
         new Alarm(this, "AcuUtilizationAlarm", {
-            alarmName: `garnet-broker-aurora-acu-${Aws.REGION}`,
+            alarmName:
+                `${garnet_resource_name("broker-aurora-acu")}-${Aws.REGION}`,
             alarmDescription:
                 "Garnet Broker Aurora capacity is saturated; inspect endpoint latency and scale limits.",
             metric: this.cluster.metricACUUtilization(),
@@ -92,7 +102,8 @@ export class GarnetBrokerDatabase extends Construct {
             treatMissingData: TreatMissingData.NOT_BREACHING
         })
         new Alarm(this, "ReplicaLagAlarm", {
-            alarmName: `garnet-broker-aurora-replica-lag-${Aws.REGION}`,
+            alarmName:
+                `${garnet_resource_name("broker-aurora-replica-lag")}-${Aws.REGION}`,
             alarmDescription:
                 "Garnet eventual Entity reads exceed the accepted Aurora replica-lag bound.",
             metric: this.cluster.metric("AuroraReplicaLagMaximum", {

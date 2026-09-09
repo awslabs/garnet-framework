@@ -1,45 +1,39 @@
-import { Aws, CustomResource, Duration,NestedStack, NestedStackProps, RemovalPolicy, Stack } from "aws-cdk-lib"
-
-
-
-
-import { Provider } from "aws-cdk-lib/custom-resources"
-import { garnet_bucket, garnet_constant, garnet_nomenclature } from "../../../constants"
-import { GarnetBucket } from "./bucket/bucket-construct"
-import { GarnetDataLakeAthena } from "./athena/athena-construct"
-import { GarnetDataLakeStream } from "./stream/firehose-stream-construct"
+import {
+  NestedStack,
+  NestedStackProps,
+  Stack
+} from "aws-cdk-lib"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
+import {
+  GARNET_EVENT_TABLE,
+  GarnetDataLakeAthena
+} from "./athena/athena-construct"
+import { GarnetBucket } from "./bucket/bucket-construct"
+import { GarnetDataLakeStream } from "./stream/firehose-stream-construct"
 
-
-
-export interface GarnetLakeProps extends NestedStackProps{
-   
-  }
-
+export interface GarnetLakeProps extends NestedStackProps {}
 
 export class GarnetLake extends NestedStack {
-      public readonly delivery_stream: CfnDeliveryStream
-      public readonly bucket_name: string
-    
-    constructor(scope: Stack, id: string, props: GarnetLakeProps) {
-        super(scope, id)
+  public readonly delivery_stream: CfnDeliveryStream
+  public readonly bucket_name: string
 
+  constructor(scope: Stack, id: string, props: GarnetLakeProps) {
+    super(scope, id, props)
 
-      const bucket = new GarnetBucket(this, 'GarnetBucket', {})
+    const buckets = new GarnetBucket(this, "Buckets")
+    const catalog = new GarnetDataLakeAthena(this, "Catalog", {
+      data_bucket: buckets.bucket,
+      results_bucket: buckets.athena_bucket
+    })
+    const stream = new GarnetDataLakeStream(this, "Stream", {
+      bucket: buckets.bucket,
+      database_name: catalog.database.ref,
+      table_name: GARNET_EVENT_TABLE
+    })
+    stream.node.addDependency(catalog.event_table)
 
-      
-
-      const athena = new GarnetDataLakeAthena(this, 'LakeAthena', {})
-      const lake_stream = new GarnetDataLakeStream(this, 'LakeStream', {
-        bucket_name: bucket.bucket_name
-      })
-
-      lake_stream.node.addDependency(bucket)
-
-      this.bucket_name = bucket.bucket_name
-      this.delivery_stream = lake_stream.datalake_kinesis_firehose_delivery_stream
+    this.bucket_name = buckets.bucket_name
+    this.delivery_stream =
+      stream.datalake_kinesis_firehose_delivery_stream
   }
-  
-
-
 }

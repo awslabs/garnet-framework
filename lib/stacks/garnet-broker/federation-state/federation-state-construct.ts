@@ -12,6 +12,7 @@ import {
 } from "aws-cdk-lib/aws-elasticache"
 import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
+import { garnet_resource_name } from "../../../../constants"
 
 const FEDERATION_STATE_PORT = 6379
 
@@ -67,7 +68,8 @@ export class GarnetFederationState extends Construct {
             this,
             "ReplicationGroup",
             {
-                replicationGroupId: "garnet-federation-state",
+                replicationGroupId:
+                    garnet_resource_name("federation-state"),
                 replicationGroupDescription:
                     "Replica-safe NGSI-LD cacheDuration and cooldown state",
                 engine: "valkey",

@@ -6,6 +6,7 @@ import {
     ContainerDefinition,
     ContainerImage,
     CpuArchitecture,
+    DeploymentStrategy,
     FargatePlatformVersion,
     FargateService,
     FargateTaskDefinition,
@@ -17,6 +18,7 @@ import {
 } from "aws-cdk-lib/aws-ecs"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Construct } from "constructs"
+import { garnet_resource_name } from "../../../../constants"
 import { GarnetServiceCapacity } from "./runtime-profile"
 
 export interface GarnetServiceSpec {
@@ -33,6 +35,8 @@ export interface GarnetServiceSpec {
     }
     service_connect_client?: boolean
     cpu_autoscaling?: boolean
+    deployment_strategy?: DeploymentStrategy
+    bake_time?: Duration
 }
 
 export interface GarnetServiceResult {
@@ -68,7 +72,7 @@ export class GarnetTaskFactory extends Construct {
             this,
             `${spec.id}TaskDefinition`,
             {
-                family: `garnet-${spec.name}`,
+                family: garnet_resource_name(`broker-${spec.name}`),
                 cpu: spec.capacity.cpu,
                 memoryLimitMiB: spec.capacity.memory_mib,
                 runtimePlatform: {
@@ -130,16 +134,26 @@ export class GarnetTaskFactory extends Construct {
             vpcSubnets: {
                 subnetType: SubnetType.PRIVATE_WITH_EGRESS
             },
-            circuitBreaker: {
-                enable: true,
-                rollback: true
-            },
+            ...(spec.deployment_strategy === undefined
+                ? {
+                    circuitBreaker: {
+                        enable: true,
+                        rollback: true
+                    }
+                }
+                : {}),
             minHealthyPercent: 100,
             maxHealthyPercent: 200,
             healthCheckGracePeriod:
                 spec.port === undefined ? undefined : Duration.seconds(90),
             enableECSManagedTags: true,
             propagateTags: PropagatedTagSource.SERVICE,
+            ...(spec.deployment_strategy === undefined
+                ? {}
+                : {
+                    deploymentStrategy: spec.deployment_strategy,
+                    bakeTime: spec.bake_time
+                }),
             ...(
                 namespace === undefined ||
                 (!spec.service_connect_client &&

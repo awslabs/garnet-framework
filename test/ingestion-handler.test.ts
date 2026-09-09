@@ -74,6 +74,45 @@ describe('ingestion updateContextBroker handler', () => {
     expect(content_types).toEqual(['application/json', 'application/ld+json'])
   })
 
+  it('keeps tenant batches isolated and forwards NGSILD-Tenant', async () => {
+    const event = {
+      Records: [
+        record('default', entity('urn:ngsi-ld:Device:1')),
+        record('tenant', {
+          tenant: 'factory-a',
+          entity: entity('urn:ngsi-ld:Device:2')
+        })
+      ]
+    }
+
+    const result = await load_handler()(event, {})
+
+    expect(result).toEqual({ batchItemFailures: [] })
+    expect(post).toHaveBeenCalledTimes(2)
+    const headers = post.mock.calls.map((call: any) => call[2].headers)
+    expect(headers).toEqual(expect.arrayContaining([
+      { 'Content-Type': 'application/json' },
+      {
+        'Content-Type': 'application/json',
+        'NGSILD-Tenant': 'factory-a'
+      }
+    ]))
+  })
+
+  it('rejects tenant values that could inject an HTTP header', async () => {
+    const result = await load_handler()({
+      Records: [record('bad-tenant', {
+        tenant: 'factory-a\r\nx-unsafe: yes',
+        entity: entity('urn:ngsi-ld:Device:1')
+      })]
+    }, {})
+
+    expect(result).toEqual({
+      batchItemFailures: [{ itemIdentifier: 'bad-tenant' }]
+    })
+    expect(post).not.toHaveBeenCalled()
+  })
+
   it('fails only the malformed record and still upserts the valid one', async () => {
     const event = {
       Records: [

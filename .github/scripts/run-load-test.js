@@ -182,7 +182,8 @@ const main = async () => {
   const outputs_path =
     process.env.SMOKE_OUTPUTS_PATH ||
     path.join(process.cwd(), 'cdk-outputs.json')
-  const stack_name = process.env.SMOKE_STACK_NAME || 'Garnet'
+  const stack_name =
+    process.env.SMOKE_STACK_NAME || 'GarnetFramework'
   if (!fs.existsSync(outputs_path)) {
     throw new Error(`No ${outputs_path}; deploy the stack first`)
   }

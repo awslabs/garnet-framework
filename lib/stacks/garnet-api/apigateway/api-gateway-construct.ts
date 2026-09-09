@@ -9,6 +9,7 @@ import { ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { Aws, Duration } from "aws-cdk-lib"
 import { AuthorizationType, CfnAuthorizer } from "aws-cdk-lib/aws-apigateway"
 import { Parameters } from "../../../../configuration"
+import { garnet_resource_name } from "../../../../constants"
 
 export interface GarnetApiGatewayProps {
     readonly vpc: Vpc,
@@ -32,26 +33,43 @@ export class GarnetApiGateway extends Construct{
         }
 
         const sg_vpc_link = new SecurityGroup(this, 'SgVpcLink', {
-            securityGroupName: `garnet-vpclink-sg`,
+            securityGroupName: garnet_resource_name("api-vpc-link-sg"),
             vpc: props.vpc
         })
 
 
     
         const vpc_link = new CfnVpcLink(this, 'VpcLink', {
-            name: `garnet-vpc-link`, 
+            name: garnet_resource_name("api-vpc-link"),
             subnetIds: props.vpc.privateSubnets.map( (m) => m.subnetId),
             securityGroupIds: [sg_vpc_link.securityGroupId]
         })
 
         // Create HTTP API with CORS and default authorizer
         const api = new HttpApi(this, 'HttpApi', {
-            apiName: 'garnet-api',
+            apiName: garnet_resource_name("api"),
             corsPreflight: {
             maxAge: Duration.seconds(5),
-            exposeHeaders: ['*'],
-            allowHeaders: ['*', 'Authorization', 'Content-Type'],
-            allowMethods: [CorsHttpMethod.GET, CorsHttpMethod.OPTIONS],
+            exposeHeaders: [
+                'Content-Type',
+                'Link',
+                'Location',
+                'NGSILD-Results-Count'
+            ],
+            allowHeaders: [
+                'Authorization',
+                'Content-Type',
+                'Link',
+                'NGSILD-Tenant',
+                'NGSILD-Path'
+            ],
+            allowMethods: [
+                CorsHttpMethod.GET,
+                CorsHttpMethod.POST,
+                CorsHttpMethod.PATCH,
+                CorsHttpMethod.DELETE,
+                CorsHttpMethod.OPTIONS
+            ],
             allowOrigins: ['*']
             },
             createDefaultStage: true
@@ -68,6 +86,10 @@ export class GarnetApiGateway extends Construct{
             connectionId: vpc_link.ref, 
             integrationUri: props.fargate_alb.listeners[0].listenerArn,
             payloadFormatVersion: "1.0",
+            requestParameters: {
+                "overwrite:header.NGSILD-Tenant":
+                    "$context.authorizer.tenant"
+            }
         })
 
 
@@ -75,7 +97,7 @@ export class GarnetApiGateway extends Construct{
 
         // Create CORS preflight Lambda function first
         const corsLambda = new LambdaFunction(this, 'CorsPreflightHandler', {
-            functionName: 'garnet-api-cors-preflight',
+            functionName: garnet_resource_name("api-cors-preflight"),
             runtime: Runtime.NODEJS_24_X,
             handler: 'index.handler',
             code: Code.fromInline(`
@@ -84,8 +106,8 @@ exports.handler  = async (event) => {
         statusCode: 200,
         headers: {
             "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
-            "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+            "Access-Control-Allow-Headers": "Authorization,Content-Type,Link,NGSILD-Tenant,NGSILD-Path",
+            "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
         },
         body: ''
     }

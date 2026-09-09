@@ -16,6 +16,12 @@ It is designed to be easily deployable on the AWS infrastructure using the [AWS 
 
 Through its knowledge graph capabilities, Garnet transforms fragmented data into interconnected knowledge that evolves in near real-time with your operations—providing the essential context your applications and AI systems need.
 
+This branch deploys Garnet Broker through the separate `GarnetFramework`
+CloudFormation stack. It does not modify or reuse the maintenance stack's
+database. The runtime is distributed and ARM64, supports rolling or API
+blue/green deployment, and writes immutable broker events to a tenant/day
+partitioned Iceberg lake.
+
 ## Getting Started 
 
 Explore the [documentation website of Garnet Framework](https://garnet-framework.tech/docs) to get started. 
@@ -41,4 +47,3 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
-

@@ -6,6 +6,7 @@ import { Construct } from "constructs"
 import { garnet_nomenclature } from "../../../../constants"
 import { Provider } from "aws-cdk-lib/custom-resources"
 import { ServicePrincipal } from "aws-cdk-lib/aws-iam"
+import { Parameters } from "../../../../configuration"
 
 export interface GarnetApiAuthJwtProps {
     secret_api_jwt: Secret
@@ -17,6 +18,16 @@ export class GarnetApiAuthJwt extends Construct {
     constructor(scope: Construct, id: string, props: GarnetApiAuthJwtProps){
         super(scope, id)
 
+        const bootstrap_tenant =
+            Parameters.garnet_bootstrap_tenant.trim()
+        if (
+            bootstrap_tenant === "" ||
+            /[\0\r\n]/.test(bootstrap_tenant)
+        ) {
+            throw new Error(
+                "garnet_bootstrap_tenant must be a non-empty HTTP header value"
+            )
+        }
 
 
 
@@ -59,7 +70,8 @@ export class GarnetApiAuthJwt extends Construct {
                 TOKEN_SECRET_ARN: api_token_secret.secretArn,
                 JWT_SUB: garnet_nomenclature.garnet_api_auth_sub, 
                 JWT_ISS: garnet_nomenclature.garnet_api_auth_issuer,
-                JWT_AUD: garnet_nomenclature.garnet_api_auth_audience
+                JWT_AUD: garnet_nomenclature.garnet_api_auth_audience,
+                JWT_TENANT: bootstrap_tenant
             }
         })
 
@@ -82,7 +94,9 @@ export class GarnetApiAuthJwt extends Construct {
         new CustomResource(this, 'ApiJwtAuthResource', {
             serviceToken: api_auth_jwt_generator_provider.serviceToken,
             properties: {
-                TokenSecretArn: api_token_secret.secretArn
+                TokenSecretArn: api_token_secret.secretArn,
+                Tenant: bootstrap_tenant,
+                TokenSchemaVersion: "tenant-v1"
             }
         })
 

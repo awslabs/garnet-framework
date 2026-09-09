@@ -95,7 +95,7 @@ export class GarnetIotGroup extends Construct {
 
         // IOT RULE FOR GROUP MEMBERSHIP EVENTS
         const iot_rule_group_membership = new CfnTopicRule(this, "GarnetIoTGroupMembershipRule", {
-          ruleName: `garnet_iot_thing_group_membership_rule`,
+          ruleName: "garnet_framework_iot_group_membership",
           topicRulePayload: {
             awsIotSqlVersion: "2016-03-23",
             ruleDisabled: false,
@@ -156,7 +156,7 @@ export class GarnetIotGroup extends Construct {
 
         // IOT RULE FOR GROUP LIFECYCLE EVENTS
         const iot_rule_group_lifecycle = new CfnTopicRule(this, "GarnetIoTGroupLifecycleRule", {
-          ruleName: `garnet_iot_thing_group_lifecycle_rule`,
+          ruleName: "garnet_framework_iot_group_lifecycle",
           topicRulePayload: {
             awsIotSqlVersion: "2016-03-23",
             ruleDisabled: false,

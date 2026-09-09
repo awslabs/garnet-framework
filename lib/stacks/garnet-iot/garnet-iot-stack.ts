@@ -2,10 +2,10 @@ import { NestedStack, NestedStackProps, RemovalPolicy} from "aws-cdk-lib";
 import { Construct } from "constructs"
 import { GarnetIotGroup } from "./iot-group/iot-group-construct";
 import { GarnetIotThing } from "./iot-thing/iot-thing-construct";
-import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Vpc } from "aws-cdk-lib/aws-ec2";
 import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
+import { garnet_resource_name } from "../../../constants";
 
 export interface GarnetIotProps extends NestedStackProps {
     vpc: Vpc, 
@@ -50,18 +50,22 @@ export class GarnetIot extends NestedStack {
          removalPolicy: RemovalPolicy.DESTROY
          })
  
-       const iotgroup_event = new AwsCustomResource(this, 'GarnetIoTEventConfig', {
-       functionName: `garnet-iot-event-config`,
+       new AwsCustomResource(this, 'GarnetIoTEventConfig', {
+       functionName: garnet_resource_name("iot-event-config"),
          onCreate: {
            service: 'Iot',
            action: 'UpdateEventConfigurations',
-           physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
+           physicalResourceId: PhysicalResourceId.of(
+             "garnet-framework-iot-event-configuration"
+           ),
            parameters: event_param
          },
          onUpdate: {
            service: 'Iot',
            action: 'UpdateEventConfigurations',
-           physicalResourceId: PhysicalResourceId.of(Date.now().toString()),
+           physicalResourceId: PhysicalResourceId.of(
+             "garnet-framework-iot-event-configuration"
+           ),
            parameters: event_param
          },
          logGroup: garnet_iot_custom_thinggroup_event_log,
@@ -74,11 +78,11 @@ export class GarnetIot extends NestedStack {
 
 
 
-      const iot_group_construct = new GarnetIotGroup(this, 'GarnetIotGroup', {
+      new GarnetIotGroup(this, 'GarnetIotGroup', {
         vpc: props.vpc,
         dns_context_broker: props.dns_context_broker
       })
-      const iot_presence_construct = new GarnetIotThing(this, 'GarnetIotThing',{
+      new GarnetIotThing(this, 'GarnetIotThing',{
         vpc: props.vpc,
         dns_context_broker: props.dns_context_broker
       })

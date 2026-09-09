@@ -50,6 +50,8 @@ const synth_broker = (
     load_image: LOAD_IMAGE,
     public_origin: "https://broker.example",
     notification_delivery_allow_origins: "https://callbacks.example",
+    private_notification_origin:
+      "https://private.example.execute-api.eu-west-3.amazonaws.com",
     context_allow_hosts: "uri.etsi.org",
     eventual_entity_reads
   })
@@ -66,7 +68,14 @@ describe("Garnet Broker AWS runtime", () => {
     template.hasResourceProperties("AWS::RDS::DBCluster", {
       Engine: "aurora-postgresql",
       EngineVersion: "16.11",
-      DatabaseName: "scorpio"
+      DatabaseName: "garnet",
+      DBClusterIdentifier: "garnet-framework-broker-aurora",
+      BackupRetentionPeriod: 35,
+      DeletionProtection: true,
+      ServerlessV2ScalingConfiguration: {
+        MinCapacity: 2,
+        MaxCapacity: 256
+      }
     })
     template.hasResourceProperties("AWS::RDS::DBClusterParameterGroup", {
       Parameters: {
@@ -137,7 +146,7 @@ describe("Garnet Broker AWS runtime", () => {
         .map((entry: any) => [entry.Name, entry.Value])
     )
     expect(environment).toMatchObject({
-      LOAD_DATABASE_NAME: "scorpio",
+      LOAD_DATABASE_NAME: "garnet",
       LOAD_DATABASE_SSL_MODE: "require",
       LOAD_ENVIRONMENT: "aws-ecs-internal",
       LOAD_GENERATOR_VCPUS: "4",
@@ -154,7 +163,7 @@ describe("Garnet Broker AWS runtime", () => {
       "LOAD_HEADERS_JSON"
     ]))
     expect(JSON.stringify(generator.Properties.ContainerDefinitions[0]))
-      .toContain("garnet/secret/api-client")
+      .toContain("garnet-framework/secret/api-client")
 
     template.resourceCountIs("AWS::S3::Bucket", 1)
     template.hasResourceProperties("AWS::S3::Bucket", {
@@ -218,6 +227,83 @@ describe("Garnet Broker AWS runtime", () => {
         .map((entry: any) => [entry.Name, entry.Value])
     )
     expect(snapshot_environment).not.toHaveProperty("READ_DBHOST")
+
+    const delivery = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-delivery"
+      )
+    const delivery_environment = Object.fromEntries(
+      delivery.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+    expect(delivery_environment).toMatchObject({
+      NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
+        "https://callbacks.example," +
+        "https://private.example.execute-api.eu-west-3.amazonaws.com",
+      WORKER_METRICS: "emf",
+      WORKER_METRICS_NAMESPACE: "Garnet/Broker",
+      WORKER_METRICS_SERVICE: "garnet-delivery",
+      WORKER_METRICS_INTERVAL_MS: "60000"
+    })
+  })
+
+  it("scales delivery from bounded worker saturation rather than CPU alone", () => {
+    const template = synth_broker()
+
+    template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "TargetTrackingScaling",
+        TargetTrackingScalingPolicyConfiguration: {
+          CustomizedMetricSpecification: {
+            Dimensions: [{
+              Name: "Service",
+              Value: "garnet-delivery"
+            }],
+            MetricName: "WorkerUtilizationMax",
+            Namespace: "Garnet/Broker",
+            Statistic: "Average"
+          },
+          ScaleInCooldown: 180,
+          ScaleOutCooldown: 30,
+          TargetValue: 70
+        }
+      }
+    )
+  })
+
+  it("treats ALB request scaling as requests per target per minute", () => {
+    const template = synth_broker()
+
+    template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "TargetTrackingScaling",
+        TargetTrackingScalingPolicyConfiguration: {
+          PredefinedMetricSpecification: {
+            PredefinedMetricType:
+              "ALBRequestCountPerTarget"
+          },
+          ScaleInCooldown: 180,
+          ScaleOutCooldown: 30,
+          TargetValue: 15000
+        }
+      }
+    )
+    const scalableTargets = Object.values(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalableTarget"
+      )
+    ) as any[]
+    const apiTarget = scalableTargets.find((resource) =>
+      resource.Properties.MaxCapacity === 64
+    )
+    expect(apiTarget).toBeDefined()
+    expect(apiTarget.Properties).toMatchObject({
+      MinCapacity: 2,
+      MaxCapacity: 64
+    })
   })
 
   it("keeps eventual Entity reads opt-in", () => {
@@ -313,6 +399,7 @@ describe("Garnet Broker AWS runtime", () => {
     template.hasResourceProperties(
       "AWS::ElastiCache::ReplicationGroup",
       {
+        ReplicationGroupId: "garnet-framework-federation-state",
         Engine: "valkey",
         EngineVersion: "8.2",
         CacheNodeType: "cache.t4g.small",
@@ -392,8 +479,22 @@ describe("Garnet Broker AWS runtime", () => {
         Port: 80,
         Protocol: "HTTP",
         DefaultActions: [{
+          Type: "fixed-response"
+        }]
+      }
+    )
+    template.hasResourceProperties(
+      "AWS::ElasticLoadBalancingV2::ListenerRule",
+      {
+        Actions: [{
           Type: "forward",
           TargetGroupArn: Match.anyValue()
+        }],
+        Conditions: [{
+          Field: "path-pattern",
+          PathPatternConfig: {
+            Values: ["/*"]
+          }
         }]
       }
     )
@@ -426,6 +527,8 @@ describe("Garnet Broker AWS runtime", () => {
       load_image: "",
       public_origin: "",
       notification_delivery_allow_origins: "",
+      private_notification_origin:
+        "https://private.example.execute-api.eu-west-3.amazonaws.com",
       context_allow_hosts: "",
       eventual_entity_reads: false
     })).toThrow(/digest-pinned/)
@@ -446,6 +549,8 @@ describe("Garnet Broker AWS runtime", () => {
       load_image: "public.ecr.aws/garnet/load:latest",
       public_origin: "",
       notification_delivery_allow_origins: "",
+      private_notification_origin:
+        "https://private.example.execute-api.eu-west-3.amazonaws.com",
       context_allow_hosts: "",
       eventual_entity_reads: false
     })).toThrow(/load image must be immutable and digest-pinned/)

@@ -1,6 +1,11 @@
-import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
+import {
+  GatewayVpcEndpointAwsService,
+  SubnetType,
+  Vpc
+} from "aws-cdk-lib/aws-ec2"
 import { Construct } from "constructs"
-import { garnet_broker } from "../../../../constants"
+import { garnet_resource_name } from "../../../../constants"
+import { deployment_params } from "../../../../architecture"
 
 
 export interface GarnetNetworkingProps {
@@ -13,27 +18,31 @@ export class GarnetNetworking extends Construct {
   constructor(scope: Construct, id: string, props: GarnetNetworkingProps) {
     super(scope, id)
 
-    const broker_id = garnet_broker
-
     // VPC
-    const vpc = new Vpc(this, `VpcGarnet${broker_id}`, {
-      natGateways: 1,
+    const vpc = new Vpc(this, "VpcGarnetFramework", {
+      natGateways: deployment_params.nat_gateway_count,
       availabilityZones: [`${props.az1}`,`${props.az2}`],
-      vpcName: `garnet-vpc-${broker_id.toLowerCase()}`,
+      vpcName: garnet_resource_name("vpc"),
       subnetConfiguration: [
         {
           subnetType: SubnetType.PRIVATE_WITH_EGRESS,
-          name: `garnet-subnet-egress-${broker_id.toLowerCase()}`,
+          name: garnet_resource_name("subnet-egress"),
         },
         {
           subnetType: SubnetType.PRIVATE_ISOLATED,
-          name: `garnet-subnet-isolated-${broker_id.toLowerCase()}`,
+          name: garnet_resource_name("subnet-isolated"),
         },
         {
           subnetType: SubnetType.PUBLIC,
-          name: `garnet-subnet-public-${broker_id.toLowerCase()}`,
+          name: garnet_resource_name("subnet-public"),
         }
       ]
+    })
+    vpc.addGatewayEndpoint("S3Endpoint", {
+      service: GatewayVpcEndpointAwsService.S3,
+      subnets: [{
+        subnetType: SubnetType.PRIVATE_WITH_EGRESS
+      }]
     })
 
     this.vpc = vpc;

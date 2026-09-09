@@ -1,24 +1,20 @@
-import { CfnElement, CfnOutput, Names, Stack, StackProps } from 'aws-cdk-lib'
+import { CfnElement, CfnOutput, Stack, StackProps } from 'aws-cdk-lib'
 import { Construct } from 'constructs'
-import { GarnetScorpio } from './stacks/garnet-scorpio/garnet-scorpio-stack'
 import { GarnetIngestionStack} from './stacks/garnet-ingestion/garnet-ingestion-stack'
 import { garnet_constant } from '../constants'
 import { GarnetCommon } from './stacks/garnet-common/garnet-common-stack'
 import { GarnetOps } from './stacks/garnet-ops/garnet-ops-stack'
 import {
-  ARCHITECTURE,
-  DEPLOYMENT_STRATEGY,
   deployment_params
 } from '../architecture'
 import { GarnetLake } from './stacks/garnet-lake/garnet-lake-stack'
 import { GarnetIot } from './stacks/garnet-iot/garnet-iot-stack'
-import { GarnetPrivateSub } from './stacks/garnet-privatesub/garnet-privatesub-stack'
+import { GarnetPrivateSub } from './stacks/garnet-privatesub/private-notification-stack'
 import { GarnetApi } from './stacks/garnet-api/garnet-api-stack'
 import { Parameters } from '../configuration'
-import { BROKER_ENGINE } from '../broker-engine'
 import { GarnetBroker } from './stacks/garnet-broker/garnet-broker-stack'
 
-export class GarnetStack extends Stack {
+export class GarnetFrameworkStack extends Stack {
 
 
   getLogicalId(element: CfnElement): string {
@@ -31,46 +27,29 @@ export class GarnetStack extends Stack {
 
   constructor(scope: Construct, id: string, props?: StackProps) {
     super(scope, id, props)
-    if (
-      Parameters.broker_engine == BROKER_ENGINE.Garnet &&
-      Parameters.architecture != ARCHITECTURE.Distributed
-    ) {
-      throw new Error(
-        'The Garnet broker engine requires the distributed architecture'
-      )
-    }
-    if (
-      Parameters.broker_engine == BROKER_ENGINE.Garnet &&
-      Parameters.deployment_strategy != DEPLOYMENT_STRATEGY.Rolling
-    ) {
-      throw new Error(
-        'The Garnet broker engine currently requires rolling deployment'
-      )
-    }
     const garnet_datalake = new GarnetLake(this, 'GarnetLake', {}) 
 
     const garnet_common = new GarnetCommon(this, 'CommonContructs', {})
-   
 
-    const garnet_broker_stack =
-      Parameters.broker_engine == BROKER_ENGINE.Garnet
-        ? new GarnetBroker(this, 'GarnetBroker', {
-            vpc: garnet_common.vpc,
-            delivery_stream: garnet_datalake.delivery_stream,
-            image: Parameters.garnet_broker_image,
-            load_image: Parameters.garnet_load_image,
-            public_origin: Parameters.garnet_broker_public_origin,
-            notification_delivery_allow_origins:
-              Parameters.garnet_notification_delivery_allow_origins,
-            context_allow_hosts: Parameters.garnet_context_allow_hosts,
-            eventual_entity_reads:
-              Parameters.garnet_eventual_entity_reads
-          })
-        : new GarnetScorpio(this, 'ScorpioBroker', {
-            vpc: garnet_common.vpc,
-            secret: garnet_common.secret,
-            delivery_stream: garnet_datalake.delivery_stream
-          })
+    const garnet_privatesub = new GarnetPrivateSub(this, 'GarnetPrivateSub', {
+      vpc: garnet_common.vpc,
+      bucket_name: garnet_datalake.bucket_name
+    })
+
+    const garnet_broker_stack = new GarnetBroker(this, 'GarnetBroker', {
+      vpc: garnet_common.vpc,
+      delivery_stream: garnet_datalake.delivery_stream,
+      image: Parameters.garnet_broker_image,
+      load_image: Parameters.garnet_load_image,
+      public_origin: Parameters.garnet_broker_public_origin,
+      notification_delivery_allow_origins:
+        Parameters.garnet_notification_delivery_allow_origins,
+      private_notification_origin:
+        garnet_privatesub.notification_origin,
+      context_allow_hosts: Parameters.garnet_context_allow_hosts,
+      eventual_entity_reads:
+        Parameters.garnet_eventual_entity_reads
+    })
     
     const garnet_ingestion_stack = new GarnetIngestionStack(this, 'GarnetIngestion', {
       dns_context_broker: garnet_broker_stack.dns_context_broker, 
@@ -83,21 +62,20 @@ export class GarnetStack extends Stack {
       dns_context_broker: garnet_broker_stack.dns_context_broker,
     })
 
-    const garnet_privatesub = new GarnetPrivateSub(this, 'GarnetPrivateSub', {
-      vpc: garnet_common.vpc, 
-      bucket_name: garnet_datalake.bucket_name
-    })
-
     const garnet_api = new GarnetApi(this, 'GarnetApi', {
       vpc: garnet_common.vpc, 
-      garnet_ingestion_sqs: garnet_ingestion_stack.sqs_garnet_ingestion,
       dns_context_broker: garnet_broker_stack.dns_context_broker,
-      garnet_private_endpoint: garnet_privatesub.private_sub_endpoint,
       fargate_alb: garnet_broker_stack.fargate_alb,
       secret_api_jwt: garnet_common.secret_api_jwt
   })
 
-    const garnet_ops_stack = new GarnetOps(this, 'GarnetOps', {})
+    new GarnetOps(this, 'GarnetOps', {
+      broker_cluster_name: garnet_broker_stack.cluster_name,
+      database_cluster_identifier:
+        garnet_broker_stack.database_cluster_identifier,
+      entity_event_queue_name:
+        garnet_broker_stack.event_queue_name
+    })
 
     new CfnOutput(this, 'GarnetVersion', {
       value: garnet_constant.garnet_version,
@@ -107,15 +85,12 @@ export class GarnetStack extends Stack {
       value: deployment_params.architecture,
       description: 'Architecture deployed'
     })
-    new CfnOutput(this, 'GarnetBrokerEngine', {
-      value: Parameters.broker_engine,
-      description: 'Context broker implementation'
+    new CfnOutput(this, 'GarnetDeploymentStrategy', {
+      value: Parameters.deployment_strategy,
+      description: 'Garnet API deployment strategy'
     })
-    if (
-      Parameters.broker_engine == BROKER_ENGINE.Garnet &&
-      (garnet_broker_stack as GarnetBroker).load !== undefined
-    ) {
-      const load = (garnet_broker_stack as GarnetBroker).load!
+    if (garnet_broker_stack.load !== undefined) {
+      const load = garnet_broker_stack.load
       new CfnOutput(this, 'GarnetLoadCluster', {
         value: load.cluster_name
       })

@@ -108,35 +108,16 @@ jobs:
     needs: [test, security]
     strategy:
       fail-fast: false
-      # Scorpio supports both layouts. Garnet deliberately supports only the
-      # independently scalable distributed layout, so gate that complete stack
-      # as a separate profile instead of merely changing the architecture enum.
       matrix:
         include:
-          - profile: scorpio-concentrated
-            engine: scorpio
-            architecture: concentrated
-            broker_image: ""
-            load_image: ""
-            public_origin: ""
-            notification_origins: ""
-            context_hosts: ""
-          - profile: scorpio-distributed
-            engine: scorpio
-            architecture: distributed
-            broker_image: ""
-            load_image: ""
-            public_origin: ""
-            notification_origins: ""
-            context_hosts: ""
-          - profile: garnet-distributed
-            engine: garnet
-            architecture: distributed
+          - profile: garnet-rolling
+            strategy: rolling
             broker_image: public.ecr.aws/garnet/broker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             load_image: public.ecr.aws/garnet/load@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-            public_origin: https://broker.example
-            notification_origins: https://callbacks.example
-            context_hosts: uri.etsi.org,contexts.example
+          - profile: garnet-bluegreen
+            strategy: bluegreen
+            broker_image: public.ecr.aws/garnet/broker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+            load_image: public.ecr.aws/garnet/load@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -147,16 +128,14 @@ jobs:
       - run: npm ci --prefix lib/layers/nodejs
 
       - name: Configure ${{ matrix.profile }}
-        run: node .github/scripts/apply-configuration.js
+        run: node .github/scripts/configure-garnet.js
         env:
-          GARNET_BROKER_ENGINE: ${{ matrix.engine }}
           GARNET_BROKER_IMAGE: ${{ matrix.broker_image }}
           GARNET_LOAD_IMAGE: ${{ matrix.load_image }}
-          GARNET_BROKER_PUBLIC_ORIGIN: ${{ matrix.public_origin }}
-          GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: ${{ matrix.notification_origins }}
-          GARNET_CONTEXT_ALLOW_HOSTS: ${{ matrix.context_hosts }}
-          GARNET_ARCHITECTURE: ${{ matrix.architecture }}
-          GARNET_DEPLOYMENT_STRATEGY: rolling
+          GARNET_BROKER_PUBLIC_ORIGIN: https://broker.example
+          GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: https://callbacks.example
+          GARNET_CONTEXT_ALLOW_HOSTS: uri.etsi.org,contexts.example
+          GARNET_DEPLOYMENT_STRATEGY: ${{ matrix.strategy }}
           GARNET_REGION: us-east-1
 
       # No AWS credentials needed: a region is enough to resolve the template.

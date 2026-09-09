@@ -17,7 +17,8 @@ describe('API client token provisioner', () => {
       TOKEN_SECRET_ARN: 'client-token-secret-arn',
       JWT_SUB: 'garnet-client',
       JWT_ISS: 'garnet',
-      JWT_AUD: 'garnet-api'
+      JWT_AUD: 'garnet-api',
+      JWT_TENANT: 'factory-a'
     }
   })
 
@@ -65,8 +66,11 @@ describe('API client token provisioner', () => {
     expect(sign).toHaveBeenCalledWith({
       sub: 'garnet-client',
       iss: 'garnet',
-      aud: 'garnet-api'
-    }, 'signing-key')
+      aud: 'garnet-api',
+      tenant: 'factory-a'
+    }, 'signing-key', {
+      algorithm: 'HS256'
+    })
     expect(send).toHaveBeenCalledTimes(2)
     expect(send.mock.calls[1]![0]).toEqual(expect.objectContaining({
       operation: 'put',

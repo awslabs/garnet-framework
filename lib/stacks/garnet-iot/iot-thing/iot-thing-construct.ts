@@ -164,7 +164,7 @@ export class GarnetIotThing extends Construct {
 
         // IOT RULE FOR THING LIFECYCLE EVENTS
         const iot_rule_thing_lifecycle = new CfnTopicRule(this, "GarnetIotThingLifecycleRule", {
-          ruleName: `garnet_iot_thing_lifecycle_rule`,
+          ruleName: "garnet_framework_iot_thing_lifecycle",
           topicRulePayload: {
             awsIotSqlVersion: "2016-03-23",
             ruleDisabled: false,
