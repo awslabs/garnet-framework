@@ -188,17 +188,49 @@ When `GARNET_LOAD_IMAGE` is configured, the stack includes idle ARM64 generator
 and aggregate task definitions. Run them with:
 
 ```bash
-LOAD_RUN_ID=AwsQualification1 \
+LOAD_RUN_ID=GarnetRelease20260910R10000T1 \
 LOAD_QUALIFICATION=1 \
 LOAD_GENERATOR_COUNT=4 \
 LOAD_RATE=10000 \
 LOAD_DURATION_SECONDS=3600 \
 LOAD_WARMUP_SECONDS=60 \
+LOAD_TELEMETRY_GROUP_ID=GarnetRelease20260910 \
+LOAD_EXTERNAL_TELEMETRY_ID=GarnetRelease20260910-10000-1 \
 GARNET_COMMIT="$(git rev-parse HEAD)" \
 npm run load:aws
 ```
 
 Set explicit latency, error and cost budgets before treating the run as a pass.
+Every qualification now waits for the required CloudWatch datapoints and writes
+one raw telemetry artifact locally under `results/aws-evidence/` and to the
+Object-Locked load-report prefix. The artifact binds the exact aggregate S3
+object version and ETag to the deployed image and Region, and retains the API
+EMF metrics, ECS service CPU and memory, Aurora
+capacity/connections/latency, and Entity-event SQS metrics returned by
+`GetMetricData`.
+
+Use one telemetry group for every rate/trial belonging to the same native
+deployment, and a distinct external telemetry id for each run. After the
+required independent trials complete, merge their retained local artifacts:
+
+```bash
+npm run evidence:merge -- \
+  results/aws-evidence/garnet-release-telemetry.json \
+  results/aws-evidence/GarnetRelease20260910R5000T1-telemetry-evidence.json \
+  results/aws-evidence/GarnetRelease20260910R5000T2-telemetry-evidence.json \
+  results/aws-evidence/GarnetRelease20260910R5000T3-telemetry-evidence.json
+```
+
+The merged file preserves every raw per-run collection and is the
+`telemetryArtifact` supplied to the broker's best-native comparison manifest.
+Aurora failure injection and API-visible zero-loss reconciliation remain a
+separate, explicit durability run; load collection does not trigger a database
+failover.
+
+The AWS identity launching qualification needs the existing ECS task
+permissions plus `cloudwatch:GetMetricData`, `rds:DescribeDBClusters`,
+`sts:GetCallerIdentity`, and read/write access to the load-report prefix. The
+collector rejects a caller account that differs from the deployed stack output.
 
 ## Data retention and destruction
 
@@ -208,10 +240,14 @@ Set explicit latency, error and cost budgets before treating the run as a pass.
   disposable environment before destroying it.
 - Data-lake and Athena-result buckets use `RemovalPolicy.RETAIN`.
 - Iceberg table metadata uses `RemovalPolicy.RETAIN`.
-- load reports use a retained, versioned private bucket.
+- load reports and qualification evidence use a retained, versioned private
+  bucket with a 90-day S3 Object Lock compliance default. Protected object
+  versions cannot be overwritten or deleted during that period.
 
 `cdk destroy` therefore does not erase retained data. Inventory snapshots and
-buckets explicitly after destroying a test environment.
+buckets explicitly after destroying a test environment. Enabling S3 Object
+Lock is a one-way bucket setting; compliance retention cannot be shortened or
+bypassed, including by the root user, until the protected version expires.
 
 ## Current verification
 

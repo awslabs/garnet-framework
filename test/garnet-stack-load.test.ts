@@ -47,7 +47,13 @@ describe("Garnet load deployment outputs", () => {
       "GarnetLoadSecurityGroup",
       "GarnetLoadSubnets",
       "GarnetLoadReportBucket",
-      "GarnetLoadBrokerUrl"
+      "GarnetLoadBrokerUrl",
+      "GarnetAwsRegion",
+      "GarnetAwsAccount",
+      "GarnetBrokerImage",
+      "GarnetBrokerCluster",
+      "GarnetDatabaseCluster",
+      "GarnetEntityEventQueueName"
     ]) {
       template.hasOutput(output, {})
     }

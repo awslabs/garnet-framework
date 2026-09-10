@@ -106,12 +106,40 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
     'LOAD_WARMUP_SECONDS',
     2
   )
+  const telemetry_wait_seconds = positive_integer(
+    env,
+    'LOAD_TELEMETRY_WAIT_SECONDS',
+    900,
+    3600
+  )
   const start_delay_seconds = positive_number(
     env,
     'LOAD_START_DELAY_SECONDS',
     fixture_entities >= 50000 ? 900 : 120
   )
   const run_id = load_run_id(setting(env, 'LOAD_RUN_ID'), now)
+  const telemetry_group_id = setting(env, 'LOAD_TELEMETRY_GROUP_ID')
+  const telemetry_trial_id = setting(env, 'LOAD_EXTERNAL_TELEMETRY_ID')
+  if (qualification) {
+    if (telemetry_group_id === undefined) {
+      throw new Error(
+        'LOAD_TELEMETRY_GROUP_ID is required for qualification'
+      )
+    }
+    if (telemetry_trial_id === undefined) {
+      throw new Error(
+        'LOAD_EXTERNAL_TELEMETRY_ID is required for qualification'
+      )
+    }
+    if (
+      telemetry_trial_id !== telemetry_group_id &&
+      !telemetry_trial_id.startsWith(`${telemetry_group_id}-`)
+    ) {
+      throw new Error(
+        'LOAD_EXTERNAL_TELEMETRY_ID shall belong to LOAD_TELEMETRY_GROUP_ID'
+      )
+    }
+  }
   const configured_start = setting(env, 'LOAD_START_AT')
   const start_at = configured_start === undefined
     ? new Date(now.getTime() + start_delay_seconds * 1000)
@@ -178,6 +206,36 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
     outputs,
     'GarnetLoadReportBucket'
   )
+  const report_key =
+    `garnet-load/${run_id}/aggregate.json`
+  const telemetry = qualification
+    ? {
+        group_id: telemetry_group_id,
+        trial_id: telemetry_trial_id,
+        run_id,
+        aws_region: required_output(outputs, 'GarnetAwsRegion'),
+        aws_account: required_output(outputs, 'GarnetAwsAccount'),
+        image: required_output(outputs, 'GarnetBrokerImage'),
+        broker_cluster: required_output(
+          outputs,
+          'GarnetBrokerCluster'
+        ),
+        database_cluster: required_output(
+          outputs,
+          'GarnetDatabaseCluster'
+        ),
+        event_queue: required_output(
+          outputs,
+          'GarnetEntityEventQueueName'
+        ),
+        report_bucket,
+        report_key,
+        report_uri: `s3://${report_bucket}/${report_key}`,
+        artifact_key:
+          `garnet-load/${run_id}/telemetry-evidence.json`,
+        wait_timeout_ms: telemetry_wait_seconds * 1000
+      }
+    : undefined
 
   return {
     cluster: required_output(outputs, 'GarnetLoadCluster'),
@@ -195,10 +253,11 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
       }]
     },
     qualification,
+    telemetry,
     run_id,
     started_by: `garnet-${run_id}`.slice(0, 36),
     report_uri:
-      `s3://${report_bucket}/garnet-load/${run_id}/aggregate.json`,
+      `s3://${report_bucket}/${report_key}`,
     wait_timeout_ms:
       (
         actual_start_delay_seconds +

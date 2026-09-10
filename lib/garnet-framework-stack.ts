@@ -1,4 +1,10 @@
-import { CfnElement, CfnOutput, Stack, StackProps } from 'aws-cdk-lib'
+import {
+  Aws,
+  CfnElement,
+  CfnOutput,
+  Stack,
+  StackProps
+} from 'aws-cdk-lib'
 import { Construct } from 'constructs'
 import { GarnetIngestionStack} from './stacks/garnet-ingestion/garnet-ingestion-stack'
 import { garnet_constant } from '../constants'
@@ -88,6 +94,30 @@ export class GarnetFrameworkStack extends Stack {
     new CfnOutput(this, 'GarnetDeploymentStrategy', {
       value: Parameters.deployment_strategy,
       description: 'Garnet API deployment strategy'
+    })
+    new CfnOutput(this, 'GarnetAwsRegion', {
+      value: Aws.REGION,
+      description: 'AWS Region containing the Garnet deployment'
+    })
+    new CfnOutput(this, 'GarnetAwsAccount', {
+      value: Aws.ACCOUNT_ID,
+      description: 'AWS account containing the Garnet deployment'
+    })
+    new CfnOutput(this, 'GarnetBrokerImage', {
+      value: Parameters.garnet_broker_image,
+      description: 'Immutable Garnet Broker image used by every service'
+    })
+    new CfnOutput(this, 'GarnetBrokerCluster', {
+      value: garnet_broker_stack.cluster_name,
+      description: 'ECS cluster containing Garnet Broker services'
+    })
+    new CfnOutput(this, 'GarnetDatabaseCluster', {
+      value: garnet_broker_stack.database_cluster_identifier,
+      description: 'Aurora cluster used by Garnet Broker'
+    })
+    new CfnOutput(this, 'GarnetEntityEventQueueName', {
+      value: garnet_broker_stack.event_queue_name,
+      description: 'SQS Entity-event wake-up queue'
     })
     if (garnet_broker_stack.load !== undefined) {
       const load = garnet_broker_stack.load

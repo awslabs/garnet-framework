@@ -1,5 +1,6 @@
 import {
     Aws,
+    Duration,
     RemovalPolicy,
     Token
 } from "aws-cdk-lib"
@@ -22,7 +23,8 @@ import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
 import {
     BlockPublicAccess,
     Bucket,
-    BucketEncryption
+    BucketEncryption,
+    ObjectLockRetention
 } from "aws-cdk-lib/aws-s3"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
@@ -91,6 +93,9 @@ export class GarnetLoad extends Construct {
             encryption: BucketEncryption.S3_MANAGED,
             enforceSSL: true,
             versioned: true,
+            objectLockEnabled: true,
+            objectLockDefaultRetention:
+                ObjectLockRetention.compliance(Duration.days(90)),
             removalPolicy: RemovalPolicy.RETAIN
         })
         const log_group = new LogGroup(this, "Logs", {

@@ -182,6 +182,16 @@ describe("Garnet Broker AWS runtime", () => {
       },
       VersioningConfiguration: {
         Status: "Enabled"
+      },
+      ObjectLockEnabled: true,
+      ObjectLockConfiguration: {
+        ObjectLockEnabled: "Enabled",
+        Rule: {
+          DefaultRetention: {
+            Mode: "COMPLIANCE",
+            Days: 90
+          }
+        }
       }
     })
     template.resourceCountIs("AWS::ECS::Service", 9)
