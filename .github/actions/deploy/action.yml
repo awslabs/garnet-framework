@@ -35,6 +35,9 @@ inputs:
     description: rolling or bluegreen
     required: false
     default: rolling
+  schema-compatibility:
+    description: unchanged or backward-compatible; writer-drain releases are blocked
+    required: true
   bootstrap-tenant:
     description: Tenant bound to the bootstrap API credential
     required: false
@@ -90,6 +93,7 @@ runs:
         GARNET_CONTEXT_ALLOW_HOSTS: ${{ inputs.context-hosts }}
         GARNET_EVENTUAL_ENTITY_READS: ${{ inputs.eventual-entity-reads }}
         GARNET_DEPLOYMENT_STRATEGY: ${{ inputs.deployment-strategy }}
+        GARNET_SCHEMA_COMPATIBILITY: ${{ inputs.schema-compatibility }}
         GARNET_BOOTSTRAP_TENANT: ${{ inputs.bootstrap-tenant }}
         GARNET_NAT_GATEWAY_COUNT: ${{ inputs.nat-gateway-count }}
         GARNET_DATABASE_DELETION_PROTECTION: ${{ inputs.database-deletion-protection }}

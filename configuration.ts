@@ -7,6 +7,14 @@ export const Parameters = {
     garnet_broker_image: "",
 
     /**
+     * Required release declaration. "unchanged" verifies that the target image
+     * needs no database migration. "backward-compatible" allows the migrator
+     * to run while the previous task revision is still alive.
+     */
+    garnet_schema_compatibility: "unchanged" as
+        "unchanged" | "backward-compatible",
+
+    /**
      * Optional immutable load-runner image built from test/load/Dockerfile.
      * When set, the stack creates idle on-demand ECS task definitions and an
      * S3 evidence bucket; no load tasks run during deployment.

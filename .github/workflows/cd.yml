@@ -70,6 +70,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
@@ -99,6 +100,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
@@ -127,6 +129,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
@@ -158,6 +161,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
+          schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}

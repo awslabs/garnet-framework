@@ -467,6 +467,11 @@ describe("Garnet Broker AWS runtime", () => {
       template.findResources("AWS::CloudFormation::CustomResource")
     expect(Object.keys(custom_resources)).toHaveLength(1)
     const [migration_resource_id] = Object.keys(custom_resources)
+    expect(
+      custom_resources[migration_resource_id!].Properties
+    ).toMatchObject({
+      SchemaCompatibility: "unchanged"
+    })
 
     const services = template.findResources("AWS::ECS::Service")
     for (const service of Object.values(services) as any[]) {

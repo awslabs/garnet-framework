@@ -97,6 +97,10 @@ export class GarnetFrameworkStack extends Stack {
       value: Parameters.deployment_strategy,
       description: 'Garnet API deployment strategy'
     })
+    new CfnOutput(this, 'GarnetSchemaCompatibility', {
+      value: Parameters.garnet_schema_compatibility,
+      description: 'Database compatibility declared for this release'
+    })
     new CfnOutput(this, 'GarnetAwsRegion', {
       value: Aws.REGION,
       description: 'AWS Region containing the Garnet deployment'

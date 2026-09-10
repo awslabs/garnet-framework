@@ -240,6 +240,9 @@ Initial commit of the Garnet Framework.
   against the maintenance stack.
 - Added native ECS API blue/green validation, rollback alarms and retained
   rolling circuit breakers for workers.
+- Added an enforced schema-compatibility declaration: unchanged releases only
+  verify the current schema, backward-compatible releases may migrate, and
+  writer-drain changes are blocked from automated deployment.
 - Replaced the JSON S3 event archive with a tenant/day-partitioned Iceberg v2
   event table delivered through Firehose.
 - Added tenant-aware SQS ingestion and tenant-isolated private notification

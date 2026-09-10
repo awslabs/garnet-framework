@@ -10,13 +10,20 @@ const source = fs.readFileSync(
 )
 const image =
   `public.ecr.aws/garnet/broker@sha256:${"a".repeat(64)}`
+const deploymentEnvironment = (
+  overrides: Record<string, string> = {}
+): Record<string, string> => ({
+  GARNET_BROKER_IMAGE: image,
+  GARNET_SCHEMA_COMPATIBILITY: "unchanged",
+  ...overrides
+})
 
 describe("Garnet-only deployment configuration", () => {
   it("configures immutable images, networking, reads and blue/green", () => {
     const load =
       `public.ecr.aws/garnet/load@sha256:${"b".repeat(64)}`
-    const result = apply_configuration(source, {
-      GARNET_BROKER_IMAGE: image,
+    const result = apply_configuration(source, deploymentEnvironment({
+      GARNET_SCHEMA_COMPATIBILITY: "backward-compatible",
       GARNET_LOAD_IMAGE: load,
       GARNET_BROKER_PUBLIC_ORIGIN: " HTTPS://Broker.Example:443 ",
       GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
@@ -30,7 +37,7 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_DATABASE_BACKUP_RETENTION_DAYS: "7",
       GARNET_DEPLOYMENT_STRATEGY: "bluegreen",
       GARNET_REGION: "eu-west-3"
-    })
+    }))
 
     expect(result).toMatchObject({
       broker_image: image,
@@ -44,10 +51,14 @@ describe("Garnet-only deployment configuration", () => {
       nat_gateway_count: 1,
       database_deletion_protection: false,
       backup_retention_days: 7,
-      strategy: "bluegreen"
+      strategy: "bluegreen",
+      schema_compatibility: "backward-compatible"
     })
     expect(result.source).toContain(`garnet_broker_image: "${image}"`)
     expect(result.source).toContain('deployment_strategy: "bluegreen"')
+    expect(result.source).toContain(
+      'garnet_schema_compatibility: "backward-compatible"'
+    )
     expect(result.source).toContain(
       "garnet_eventual_entity_reads: true"
     )
@@ -79,11 +90,13 @@ describe("Garnet-only deployment configuration", () => {
         'garnet_broker_public_origin: ""',
         'garnet_broker_public_origin: "https://old.example"'
       )
-    const result = apply_configuration(configured, {
-      GARNET_BROKER_IMAGE: image
-    })
+    const result = apply_configuration(
+      configured,
+      deploymentEnvironment()
+    )
 
     expect(result.strategy).toBe("rolling")
+    expect(result.schema_compatibility).toBe("unchanged")
     expect(result.eventual_reads).toBe(false)
     expect(result.bootstrap_tenant).toBe("default")
     expect(result.nat_gateway_count).toBe(2)
@@ -97,39 +110,39 @@ describe("Garnet-only deployment configuration", () => {
 
   it("rejects mutable images and malformed environment controls", () => {
     expect(() => apply_configuration(source, {
+      ...deploymentEnvironment(),
       GARNET_BROKER_IMAGE: "public.ecr.aws/garnet/broker:latest"
     })).toThrow(/digest-pinned/)
 
     for (const value of ["canary", "other"]) {
-      expect(() => apply_configuration(source, {
-        GARNET_BROKER_IMAGE: image,
+      expect(() => apply_configuration(source, deploymentEnvironment({
         GARNET_DEPLOYMENT_STRATEGY: value
-      })).toThrow(/rolling or bluegreen/)
+      }))).toThrow(/rolling or bluegreen/)
     }
-    expect(() => apply_configuration(source, {
-      GARNET_BROKER_IMAGE: image,
+    expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_EVENTUAL_ENTITY_READS: "sometimes"
-    })).toThrow(/true or false/)
-    expect(() => apply_configuration(source, {
-      GARNET_BROKER_IMAGE: image,
+    }))).toThrow(/true or false/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_BROKER_PUBLIC_ORIGIN: "https://broker.example/path"
-    })).toThrow(/exact HTTP/)
-    expect(() => apply_configuration(source, {
-      GARNET_BROKER_IMAGE: image,
+    }))).toThrow(/exact HTTP/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_CONTEXT_ALLOW_HOSTS: "*.example"
-    })).toThrow(/exact URL hosts/)
-    expect(() => apply_configuration(source, {
-      GARNET_BROKER_IMAGE: image,
+    }))).toThrow(/exact URL hosts/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_NAT_GATEWAY_COUNT: "3"
-    })).toThrow(/between 1 and 2/)
-    expect(() => apply_configuration(source, {
-      GARNET_BROKER_IMAGE: image,
+    }))).toThrow(/between 1 and 2/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_DATABASE_BACKUP_RETENTION_DAYS: "0"
-    })).toThrow(/between 1 and 35/)
-    expect(() => apply_configuration(source, {
-      GARNET_BROKER_IMAGE: image,
+    }))).toThrow(/between 1 and 35/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_BOOTSTRAP_TENANT: "unsafe\nvalue"
-    })).toThrow(/safe tenant/)
+    }))).toThrow(/safe tenant/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_SCHEMA_COMPATIBILITY: "writer-drain"
+    }))).toThrow(/maintenance deployment/)
+    expect(() => apply_configuration(source, {
+      GARNET_BROKER_IMAGE: image
+    })).toThrow(/explicitly set/)
   })
 
   it("fails loudly when the configuration contract changes", () => {
@@ -137,8 +150,9 @@ describe("Garnet-only deployment configuration", () => {
       "garnet_broker_image:",
       "broker_image:"
     )
-    expect(() => apply_configuration(renamed, {
-      GARNET_BROKER_IMAGE: image
-    })).toThrow(/Could not find garnet_broker_image/)
+    expect(() => apply_configuration(
+      renamed,
+      deploymentEnvironment()
+    )).toThrow(/Could not find garnet_broker_image/)
   })
 })

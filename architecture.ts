@@ -10,6 +10,11 @@ export const enum DEPLOYMENT_STRATEGY {
     BlueGreen = "bluegreen"
 }
 
+export const enum SCHEMA_COMPATIBILITY {
+    Unchanged = "unchanged",
+    BackwardCompatible = "backward-compatible"
+}
+
 type DeploymentParams = {
     architecture: ARCHITECTURE,
     /**
@@ -17,6 +22,7 @@ type DeploymentParams = {
      * externally routed API an alternate target group and traffic switch.
      */
     deployment_strategy: DEPLOYMENT_STRATEGY,
+    schema_compatibility: SCHEMA_COMPATIBILITY,
     /**
      * How long the previous task set is kept after traffic shifts, so a
      * regression can be rolled back without a redeploy. Blue/green only.
@@ -48,6 +54,9 @@ export const deployment_params: DeploymentParams = {
 
         deployment_strategy:
             Parameters.deployment_strategy as DEPLOYMENT_STRATEGY,
+        schema_compatibility:
+            Parameters.garnet_schema_compatibility as
+                SCHEMA_COMPATIBILITY,
         deployment_bake_time_minutes: Parameters.deployment_bake_time_minutes,
         deployment_test_listener_port:
             Parameters.deployment_test_listener_port,

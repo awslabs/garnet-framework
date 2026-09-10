@@ -136,6 +136,7 @@ jobs:
           GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: https://callbacks.example
           GARNET_CONTEXT_ALLOW_HOSTS: uri.etsi.org,contexts.example
           GARNET_DEPLOYMENT_STRATEGY: ${{ matrix.strategy }}
+          GARNET_SCHEMA_COMPATIBILITY: unchanged
           GARNET_REGION: us-east-1
 
       # No AWS credentials needed: a region is enough to resolve the template.

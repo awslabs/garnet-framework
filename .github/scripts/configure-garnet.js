@@ -7,6 +7,10 @@ const { URL } = require('node:url')
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'configuration.ts')
 const DIGEST_IMAGE = /^[^@\s]+@sha256:[0-9a-f]{64}$/
 const STRATEGIES = new Set(['rolling', 'bluegreen'])
+const SCHEMA_COMPATIBILITIES = new Set([
+  'unchanged',
+  'backward-compatible'
+])
 
 const optional = (env, name) => (env[name] || '').trim()
 
@@ -127,6 +131,15 @@ const apply_configuration = (source, env) => {
       'GARNET_DEPLOYMENT_STRATEGY must be rolling or bluegreen'
     )
   }
+  const schema_compatibility =
+    optional(env, 'GARNET_SCHEMA_COMPATIBILITY').toLowerCase()
+  if (!SCHEMA_COMPATIBILITIES.has(schema_compatibility)) {
+    throw new Error(
+      'GARNET_SCHEMA_COMPATIBILITY must be explicitly set to ' +
+        'unchanged or backward-compatible; writer-drain migrations ' +
+        'require a separate maintenance deployment'
+    )
+  }
   const eventual_reads = boolean_setting(
     env,
     'GARNET_EVENTUAL_ENTITY_READS',
@@ -193,6 +206,12 @@ const apply_configuration = (source, env) => {
   }
   out = replace_setting(
     out,
+    /garnet_schema_compatibility: "(?:unchanged|backward-compatible)"/,
+    `garnet_schema_compatibility: "${schema_compatibility}"`,
+    'garnet_schema_compatibility'
+  )
+  out = replace_setting(
+    out,
     /garnet_eventual_entity_reads: (?:true|false)/,
     `garnet_eventual_entity_reads: ${eventual_reads}`,
     'garnet_eventual_entity_reads'
@@ -249,7 +268,8 @@ const apply_configuration = (source, env) => {
     nat_gateway_count,
     database_deletion_protection,
     backup_retention_days,
-    strategy
+    strategy,
+    schema_compatibility
   }
 }
 
@@ -259,6 +279,7 @@ const main = () => {
   fs.writeFileSync(CONFIG_PATH, result.source)
   console.log(
     `Configured Garnet: strategy=${result.strategy}` +
+    ` schema=${result.schema_compatibility}` +
     ` eventual-reads=${result.eventual_reads}` +
     ` tenant=${result.bootstrap_tenant}` +
     ` nat-gateways=${result.nat_gateway_count}` +

@@ -228,7 +228,8 @@ export class GarnetBrokerRuntime extends Construct {
             entryPoint: ["/garnet-migrate"],
             environment: {
                 ...common_environment,
-                DB_POOL_MAX: "1"
+                DB_POOL_MAX: "1",
+                DB_MIGRATION_MODE: "apply"
             },
             secrets: common_secrets,
             logging: LogDrivers.awsLogs({
@@ -241,7 +242,9 @@ export class GarnetBrokerRuntime extends Construct {
             task_definition: migration_task,
             vpc: props.vpc,
             security_group: this.sg_broker,
-            release_id: props.image.split("@sha256:")[1]
+            release_id: props.image.split("@sha256:")[1],
+            schema_compatibility:
+                deployment_params.schema_compatibility
         })
 
         const factory = new GarnetTaskFactory(this, "Services", {

@@ -45,6 +45,7 @@ CI and CD use `.github/scripts/configure-garnet.js`. The deployment inputs are:
 | `GARNET_LOAD_IMAGE` | no | Digest-pinned AWS load-runner image |
 | `GARNET_REGION` | yes in CI/CD | Target region |
 | `GARNET_DEPLOYMENT_STRATEGY` | no | `rolling` or `bluegreen`; default `rolling` |
+| `GARNET_SCHEMA_COMPATIBILITY` | yes | `unchanged` or `backward-compatible`; writer-drain releases are rejected |
 | `GARNET_BROKER_PUBLIC_ORIGIN` | distributed callbacks | Exact public HTTP(S) origin |
 | `GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS` | no | Exact comma-separated callback origins |
 | `GARNET_CONTEXT_ALLOW_HOSTS` | no | Exact comma-separated JSON-LD hosts |
@@ -107,6 +108,21 @@ migration reversible. `/garnet-migrate` runs before services start. Every schema
 change used with blue/green must remain backward compatible with the previous
 API revision through the complete bake window. Destructive migrations require a
 separate expand/migrate/contract release sequence.
+
+The deployment pipeline enforces that declaration. On initial stack creation,
+the migration task may initialize the empty database. On an image update:
+
+- `unchanged` runs the target image in `verify-current` mode and fails the
+  deployment if that image expects any schema change;
+- `backward-compatible` permits the migration before service replacement;
+- a writer-drain migration is not accepted by the automated action. Drain old
+  writers and use a separately reviewed maintenance procedure instead.
+
+This prevents a release labelled `unchanged` from silently applying a v35- or
+v37-class writer-boundary migration while the previous task revision is still
+running. The compatibility declaration remains a release-engineering
+assertion: review must establish that a migration labelled
+`backward-compatible` supports both revisions throughout the bake window.
 
 The blue/green topology and rollback controls are synthesis- and unit-tested.
 They are not called production-qualified until a real AWS deployment has

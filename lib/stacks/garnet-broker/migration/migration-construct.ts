@@ -12,6 +12,7 @@ export interface GarnetMigrationProps {
     vpc: Vpc
     security_group: SecurityGroup
     release_id: string
+    schema_compatibility: "unchanged" | "backward-compatible"
 }
 
 /**
@@ -31,81 +32,28 @@ export class GarnetMigration extends Construct {
             CLUSTER_ARN: props.cluster.clusterArn,
             TASK_DEFINITION_ARN: props.task_definition.taskDefinitionArn,
             SUBNET_IDS: subnets.join(","),
-            SECURITY_GROUP_IDS: props.security_group.securityGroupId
+            SECURITY_GROUP_IDS: props.security_group.securityGroupId,
+            CONTAINER_NAME: "MigrationContainer"
         }
         const on_event = new Function(this, "OnEvent", {
-            runtime: Runtime.NODEJS_22_X,
+            runtime: Runtime.NODEJS_24_X,
             handler: "index.handler",
             timeout: Duration.minutes(1),
             environment: common_environment,
-            code: Code.fromInline(`
-const { ECSClient, RunTaskCommand } = require("@aws-sdk/client-ecs")
-const client = new ECSClient({})
-
-exports.handler = async (event) => {
-  if (event.RequestType === "Delete") {
-    return { PhysicalResourceId: event.PhysicalResourceId || "garnet-migration" }
-  }
-  const response = await client.send(new RunTaskCommand({
-    cluster: process.env.CLUSTER_ARN,
-    taskDefinition: process.env.TASK_DEFINITION_ARN,
-    launchType: "FARGATE",
-    platformVersion: "LATEST",
-    count: 1,
-    startedBy: "garnet-cloudformation-migration",
-    networkConfiguration: {
-      awsvpcConfiguration: {
-        subnets: process.env.SUBNET_IDS.split(","),
-        securityGroups: process.env.SECURITY_GROUP_IDS.split(","),
-        assignPublicIp: "DISABLED"
-      }
-    }
-  }))
-  if (response.failures && response.failures.length > 0) {
-    throw new Error("migration task did not start: " + JSON.stringify(response.failures))
-  }
-  const taskArn = response.tasks && response.tasks[0] && response.tasks[0].taskArn
-  if (!taskArn) throw new Error("ECS did not return a migration task ARN")
-  return {
-    PhysicalResourceId: "garnet-migration-" + event.ResourceProperties.ReleaseId,
-    Data: { TaskArn: taskArn }
-  }
-}
-            `)
+            code: Code.fromAsset(
+                `${__dirname}/lambda/on-event`
+            )
         })
         const is_complete = new Function(this, "IsComplete", {
-            runtime: Runtime.NODEJS_22_X,
+            runtime: Runtime.NODEJS_24_X,
             handler: "index.handler",
             timeout: Duration.minutes(1),
             environment: {
                 CLUSTER_ARN: props.cluster.clusterArn
             },
-            code: Code.fromInline(`
-const { DescribeTasksCommand, ECSClient } = require("@aws-sdk/client-ecs")
-const client = new ECSClient({})
-
-exports.handler = async (event) => {
-  if (event.RequestType === "Delete") return { IsComplete: true }
-  const taskArn = event.Data && event.Data.TaskArn
-  if (!taskArn) throw new Error("migration provider lost the ECS task ARN")
-  const response = await client.send(new DescribeTasksCommand({
-    cluster: process.env.CLUSTER_ARN,
-    tasks: [taskArn]
-  }))
-  const task = response.tasks && response.tasks[0]
-  if (!task) throw new Error("migration task is no longer visible to ECS")
-  if (task.lastStatus !== "STOPPED") return { IsComplete: false }
-  const failed = (task.containers || []).find((container) => container.exitCode !== 0)
-  if (failed) {
-    throw new Error(
-      "migration failed in " + (failed.name || "container") +
-      " with exit code " + failed.exitCode +
-      (failed.reason ? ": " + failed.reason : "")
-    )
-  }
-  return { IsComplete: true }
-}
-            `)
+            code: Code.fromAsset(
+                `${__dirname}/lambda/is-complete`
+            )
         })
 
         on_event.addToRolePolicy(new PolicyStatement({
@@ -133,7 +81,8 @@ exports.handler = async (event) => {
         this.resource = new CustomResource(this, "Resource", {
             serviceToken: provider.serviceToken,
             properties: {
-                ReleaseId: props.release_id
+                ReleaseId: props.release_id,
+                SchemaCompatibility: props.schema_compatibility
             }
         })
         this.resource.node.addDependency(props.task_definition)
