@@ -16,6 +16,7 @@ export interface GarnetLakeProps extends NestedStackProps {}
 
 export class GarnetLake extends NestedStack {
   public readonly delivery_stream: CfnDeliveryStream
+  public readonly delivery_stream_name: string
   public readonly bucket_name: string
 
   constructor(scope: Stack, id: string, props: GarnetLakeProps) {
@@ -42,5 +43,7 @@ export class GarnetLake extends NestedStack {
     this.bucket_name = buckets.bucket_name
     this.delivery_stream =
       stream.datalake_kinesis_firehose_delivery_stream
+    this.delivery_stream_name =
+      this.delivery_stream.deliveryStreamName!
   }
 }

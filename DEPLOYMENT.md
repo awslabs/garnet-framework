@@ -150,6 +150,13 @@ in a table partition so streaming small files do not accumulate indefinitely.
 Snapshot expiry and orphan-file deletion remain disabled: those are explicit
 data-retention decisions rather than performance defaults.
 
+The operations stack graphs delivered/failed Iceberg rows, delivery freshness,
+throttled records, and active partitions against Firehose's current partition
+limit. Alarms fire on any failed row, throttled record, or partition-limit
+breach, and after two minutes with the oldest buffered record above five
+minutes. Alarm actions are environment policy and are not hard-coded by the
+framework.
+
 ## Scale model
 
 The production network spans two Availability Zones with one NAT gateway per

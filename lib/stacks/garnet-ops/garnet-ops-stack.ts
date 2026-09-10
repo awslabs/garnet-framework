@@ -13,11 +13,13 @@ import {
 } from "aws-cdk-lib/aws-cloudwatch"
 import { Construct } from "constructs"
 import { garnet_resource_name } from "../../../constants"
+import { GarnetLakeObservability } from "./lake-observability"
 
 export interface GarnetOpsProps extends NestedStackProps {
     broker_cluster_name: string
     database_cluster_identifier: string
     entity_event_queue_name: string
+    lake_delivery_stream_name: string
 }
 
 const period = Duration.minutes(1)
@@ -47,6 +49,14 @@ export class GarnetOps extends NestedStack {
             dashboardName:
                 `${garnet_resource_name("ops")}-${Aws.REGION}`
         })
+        const lake = new GarnetLakeObservability(
+            this,
+            "LakeObservability",
+            {
+                delivery_stream_name:
+                    props.lake_delivery_stream_name
+            }
+        )
         dashboard.addWidgets(new Row(
             new SingleValueWidget({
                 title: "Garnet API",
@@ -203,6 +213,10 @@ export class GarnetOps extends NestedStack {
                     period
                 }))
             })
+        ))
+        dashboard.addWidgets(new Row(
+            lake.delivery_widget,
+            lake.partition_widget
         ))
     }
 }

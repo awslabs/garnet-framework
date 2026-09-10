@@ -80,7 +80,9 @@ export class GarnetFrameworkStack extends Stack {
       database_cluster_identifier:
         garnet_broker_stack.database_cluster_identifier,
       entity_event_queue_name:
-        garnet_broker_stack.event_queue_name
+        garnet_broker_stack.event_queue_name,
+      lake_delivery_stream_name:
+        garnet_datalake.delivery_stream_name
     })
 
     new CfnOutput(this, 'GarnetVersion', {
