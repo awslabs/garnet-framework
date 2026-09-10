@@ -224,13 +224,40 @@ npm run evidence:merge -- \
 The merged file preserves every raw per-run collection and is the
 `telemetryArtifact` supplied to the broker's best-native comparison manifest.
 Aurora failure injection and API-visible zero-loss reconciliation remain a
-separate, explicit durability run; load collection does not trigger a database
+separate, explicit durability run; load collection never triggers a database
 failover.
+
+Run the destructive failover qualification only against an environment where
+an Aurora writer transition is authorized:
+
+```bash
+DURABILITY_RUN_ID=GarnetRelease20260910Failover1 \
+DURABILITY_EVIDENCE_ID=GarnetRelease20260910-failover \
+npm run durability:aws
+```
+
+The command creates bounded probe Entities in the API credential's tenant, acknowledges
+mutations before and during the failover, waits for the Aurora writer to
+change, acknowledges further mutations after API recovery, and then reads back
+every expected value. It correlates the exact `FailoverDBCluster` management
+event through CloudTrail, writes broker durability artifact schema 2 with
+request start/completion intervals, and uploads the file to the same
+Object-Locked evidence bucket. Probe Entities are deleted after evidence
+retention; cleanup failures are reported without rewriting retained proof.
+
+The defaults use 12 mutations, three before failover, a 15-minute total
+deadline, and a five-minute CloudTrail convergence window. Override
+`DURABILITY_MUTATIONS`, `DURABILITY_PRE_FAULT_MUTATIONS`,
+`DURABILITY_TIMEOUT_SECONDS`, and the bounded request/retry intervals only
+when the qualification plan requires it.
 
 The AWS identity launching qualification needs the existing ECS task
 permissions plus `cloudwatch:GetMetricData`, `rds:DescribeDBClusters`,
 `sts:GetCallerIdentity`, and read/write access to the load-report prefix. The
 collector rejects a caller account that differs from the deployed stack output.
+The durability command additionally needs `rds:FailoverDBCluster`,
+`cloudtrail:LookupEvents`, `secretsmanager:GetSecretValue`, and
+`s3:PutObject` for that retained prefix.
 
 ## Data retention and destruction
 
