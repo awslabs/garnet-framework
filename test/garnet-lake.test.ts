@@ -60,6 +60,19 @@ describe("Garnet multi-tenant Iceberg lake", () => {
         EnforceWorkGroupConfiguration: true
       })
     })
+    template.hasResourceProperties("AWS::Glue::TableOptimizer", {
+      Type: "compaction",
+      TableName: "entity_events",
+      TableOptimizerConfiguration: Match.objectLike({
+        Enabled: true,
+        CompactionConfiguration: {
+          IcebergConfiguration: {
+            Strategy: "binpack",
+            MinInputFiles: 10
+          }
+        }
+      })
+    })
     template.hasResourceProperties(
       "AWS::KinesisFirehose::DeliveryStream",
       {

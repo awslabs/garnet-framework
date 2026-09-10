@@ -9,6 +9,7 @@ import {
   GarnetDataLakeAthena
 } from "./athena/athena-construct"
 import { GarnetBucket } from "./bucket/bucket-construct"
+import { GarnetTableCompaction } from "./optimization/table-compaction-construct"
 import { GarnetDataLakeStream } from "./stream/firehose-stream-construct"
 
 export interface GarnetLakeProps extends NestedStackProps {}
@@ -24,6 +25,12 @@ export class GarnetLake extends NestedStack {
     const catalog = new GarnetDataLakeAthena(this, "Catalog", {
       data_bucket: buckets.bucket,
       results_bucket: buckets.athena_bucket
+    })
+    new GarnetTableCompaction(this, "TableCompaction", {
+      bucket: buckets.bucket,
+      database_name: catalog.database.ref,
+      table: catalog.event_table,
+      table_name: GARNET_EVENT_TABLE
     })
     const stream = new GarnetDataLakeStream(this, "Stream", {
       bucket: buckets.bucket,

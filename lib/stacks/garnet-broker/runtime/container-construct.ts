@@ -1,4 +1,5 @@
 import {
+    Annotations,
     Aws,
     Duration,
     RemovalPolicy,
@@ -362,6 +363,13 @@ export class GarnetBrokerRuntime extends Construct {
                 : undefined
         }))
         api.service.node.addDependency(federation.service)
+        if (blue_green) {
+            Annotations.of(api.service).acknowledgeWarning(
+                "@aws-cdk/aws-ecs:shouldUseCircuitBreaker",
+                "ECS blue/green uses deployment alarms with rollback; " +
+                    "the rolling deployment circuit breaker is inapplicable."
+            )
+        }
 
         const relay = add(factory.create_service({
             id: "Relay",

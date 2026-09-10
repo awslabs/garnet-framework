@@ -145,7 +145,10 @@ Firehose uses append-only Iceberg delivery because Entity events are immutable
 and append-only mode can scale automatically. `event_id` is retained as the
 stable deduplication key for downstream consumers. The broker packs at most 500
 logical events into one physical Firehose record, matching Firehose
-deaggregation limits.
+deaggregation limits. AWS Glue binpack compaction starts after ten input files
+in a table partition so streaming small files do not accumulate indefinitely.
+Snapshot expiry and orphan-file deletion remain disabled: those are explicit
+data-retention decisions rather than performance defaults.
 
 ## Scale model
 
@@ -267,6 +270,8 @@ The durability command additionally needs `rds:FailoverDBCluster`,
   disposable environment before destroying it.
 - Data-lake and Athena-result buckets use `RemovalPolicy.RETAIN`.
 - Iceberg table metadata uses `RemovalPolicy.RETAIN`.
+- Iceberg compaction may rewrite physical files but does not expire snapshots
+  or enable orphan-file deletion.
 - load reports and qualification evidence use a retained, versioned private
   bucket with a 90-day S3 Object Lock compliance default. Protected object
   versions cannot be overwritten or deleted during that period.
