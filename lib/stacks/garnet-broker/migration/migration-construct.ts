@@ -49,7 +49,8 @@ export class GarnetMigration extends Construct {
             handler: "index.handler",
             timeout: Duration.minutes(1),
             environment: {
-                CLUSTER_ARN: props.cluster.clusterArn
+                CLUSTER_ARN: props.cluster.clusterArn,
+                CONTAINER_NAME: "MigrationContainer"
             },
             code: Code.fromAsset(
                 `${__dirname}/lambda/is-complete`

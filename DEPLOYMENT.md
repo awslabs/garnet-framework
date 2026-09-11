@@ -130,6 +130,12 @@ the migration task may initialize the empty database. On an image update:
 - a writer-drain migration is not accepted by the automated action. Drain old
   writers and use a separately reviewed maintenance procedure instead.
 
+CloudFormation retries reuse the request id as the ECS idempotency token, so
+one deployment operation cannot launch concurrent migration tasks. The gate
+advances only after the named migration container stops with exit code zero;
+task-start, image-pull, missing-container and ECS describe failures block the
+deployment.
+
 This prevents a release labelled `unchanged` from silently applying a v35- or
 v37-class writer-boundary migration while the previous task revision is still
 running. The compatibility declaration remains a release-engineering

@@ -557,6 +557,20 @@ describe("Garnet Broker AWS runtime", () => {
           .toEqual({ Enable: true, Rollback: true })
       }
     }
+
+    const functions = Object.values(
+      template.findResources("AWS::Lambda::Function")
+    ) as any[]
+    const completion_handler = functions.find((resource) => {
+      const variables =
+        resource.Properties.Environment?.Variables ?? {}
+      return (
+        variables.CLUSTER_ARN !== undefined &&
+        variables.TASK_DEFINITION_ARN === undefined &&
+        variables.CONTAINER_NAME === "MigrationContainer"
+      )
+    })
+    expect(completion_handler).toBeDefined()
   })
 
   it("health-checks the public API through the production path", () => {
