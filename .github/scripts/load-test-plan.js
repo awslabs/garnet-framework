@@ -262,6 +262,10 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
           outputs,
           'GarnetDatabaseCluster'
         ),
+        database_topology: required_output(
+          outputs,
+          'GarnetDatabaseTopology'
+        ),
         event_queue: required_output(
           outputs,
           'GarnetEntityEventQueueName'

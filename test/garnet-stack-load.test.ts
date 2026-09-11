@@ -19,7 +19,8 @@ describe("Garnet load deployment outputs", () => {
           `public.ecr.aws/garnet/broker@sha256:${"a".repeat(64)}`,
         garnet_load_image:
           `public.ecr.aws/garnet/load@sha256:${"b".repeat(64)}`,
-        garnet_broker_public_origin: "https://broker.example"
+        garnet_broker_public_origin: "https://broker.example",
+        garnet_eventual_entity_reads: true
       }
     }))
 
@@ -82,6 +83,7 @@ describe("Garnet load deployment outputs", () => {
       "GarnetBrokerImage",
       "GarnetBrokerCluster",
       "GarnetDatabaseCluster",
+      "GarnetDatabaseTopology",
       "GarnetEntityEventQueueName",
       "GarnetApiId",
       "GarnetApiStage",
@@ -89,6 +91,9 @@ describe("Garnet load deployment outputs", () => {
     ]) {
       template.hasOutput(output, {})
     }
+    template.hasOutput("GarnetDatabaseTopology", {
+      Value: "writer-reader"
+    })
     expect(template.toJSON().Outputs).not.toHaveProperty("GarnetApiToken")
   })
 })

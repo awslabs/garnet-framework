@@ -121,6 +121,13 @@ export class GarnetFrameworkStack extends Stack {
       value: garnet_broker_stack.database_cluster_identifier,
       description: 'Aurora cluster used by Garnet Broker'
     })
+    new CfnOutput(this, 'GarnetDatabaseTopology', {
+      value: Parameters.garnet_eventual_entity_reads
+        ? 'writer-reader'
+        : 'shared',
+      description:
+        'Database topology required by native qualification telemetry'
+    })
     new CfnOutput(this, 'GarnetEntityEventQueueName', {
       value: garnet_broker_stack.event_queue_name,
       description: 'SQS Entity-event wake-up queue'

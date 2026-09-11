@@ -4,9 +4,9 @@ const {
   qualification_window
 } = require("../.github/scripts/telemetry-evidence.js")
 const {
-  REQUIRED_METRIC_IDS,
   metric_data_queries,
-  metric_data_reasons
+  metric_data_reasons,
+  telemetry_metrics
 } = require("../.github/scripts/telemetry-metrics.js")
 
 export {}
@@ -23,6 +23,7 @@ const telemetry = {
   image: IMAGE,
   broker_cluster: "garnet-broker-cluster",
   database_cluster: "garnet-broker-aurora",
+  database_topology: "writer-reader",
   event_queue: "garnet-entity-events.fifo",
   api_id: "api-123",
   api_stage: "$default",
@@ -153,17 +154,19 @@ describe("AWS qualification telemetry evidence", () => {
     expect(metric_data_reasons(
       metrics.response,
       window,
-      metrics.queries
+      metrics.queries,
+      telemetry_metrics(telemetry.database_topology)
     )).toEqual([])
 
     const artifact = build()
 
     expect(artifact).toMatchObject({
-      schemaVersion: 2,
+      schemaVersion: 3,
       kind: "native-telemetry-evidence",
       evidenceId: "garnet-release",
       awsRegion: "eu-west-3",
       image: IMAGE,
+      databaseTopology: "writer-reader",
       startedAt: "2026-09-10T10:00:00.000Z",
       completedAt: "2026-09-10T11:05:00.000Z",
       trialTelemetryIds: ["garnet-release-5000-1"],
@@ -197,19 +200,34 @@ describe("AWS qualification telemetry evidence", () => {
         { Name: "Stage", Value: "$default" }
       ])
     })
+    expect(artifact.runs[0].metrics.map((metric: any) => metric.role))
+      .toEqual(expect.arrayContaining([
+        "database-writer-cpu-maximum-percent",
+        "database-reader-cpu-maximum-percent",
+        "database-replica-lag-maximum-milliseconds"
+      ]))
+    expect(
+      artifact.runs[0].metricDataQueries.some(
+        (query: any) => query.Id === "rds_writer_replica_lag"
+      )
+    ).toBe(false)
   })
 
   it("fails closed on missing samples, forged identity, or unaligned runs", () => {
     const metrics = complete_metrics()
     metrics.response.MetricDataResults =
       metrics.response.MetricDataResults.filter(
-        (result: any) => result.Id !== REQUIRED_METRIC_IDS[0]
+        (result: any) =>
+          result.Id !== telemetry_metrics(
+            telemetry.database_topology
+          )[0].queryId
       )
     const window = qualification_window(report)
     expect(metric_data_reasons(
       metrics.response,
       window,
-      metrics.queries
+      metrics.queries,
+      telemetry_metrics(telemetry.database_topology)
     )).toContain("ingress_requests has no valid datapoints")
     expect(() => build_telemetry_artifact({
       telemetry,
@@ -253,7 +271,8 @@ describe("AWS qualification telemetry evidence", () => {
     expect(metric_data_reasons(
       fractional.response,
       qualification_window(report),
-      fractional.queries
+      fractional.queries,
+      telemetry_metrics(telemetry.database_topology)
     )).toContain("ingress_requests does not contain integer counts")
 
     const excessive = complete_metrics()
@@ -263,7 +282,8 @@ describe("AWS qualification telemetry evidence", () => {
     expect(metric_data_reasons(
       excessive.response,
       qualification_window(report),
-      excessive.queries
+      excessive.queries,
+      telemetry_metrics(telemetry.database_topology)
     )).toContain("compute_cpu exceeds 100 percent")
 
     const duplicate = complete_metrics()
@@ -271,8 +291,35 @@ describe("AWS qualification telemetry evidence", () => {
     expect(metric_data_reasons(
       duplicate.response,
       qualification_window(report),
-      duplicate.queries
+      duplicate.queries,
+      telemetry_metrics(telemetry.database_topology)
     )).toContain("telemetry metric queries repeat ids")
+  })
+
+  it("uses only writer roles for a shared read topology", () => {
+    const artifact = build({
+      ...telemetry,
+      database_topology: "shared"
+    })
+
+    expect(artifact.databaseTopology).toBe("shared")
+    expect(artifact.runs[0].metrics).toHaveLength(7)
+    expect(artifact.runs[0].metrics.map((metric: any) => metric.role))
+      .not.toContain("database-reader-cpu-maximum-percent")
+    expect(artifact.runs[0].metricDataQueries.some(
+      (query: any) => query.Id === "rds_reader_0_cpu"
+    )).toBe(true)
+  })
+
+  it("requires a real reader for writer-reader evidence", () => {
+    expect(() => metric_data_queries(telemetry, {
+      DBClusterMembers: [{
+        DBInstanceIdentifier: "garnet-writer",
+        IsClusterWriter: true
+      }]
+    })).toThrow(
+      "writer-reader telemetry requires at least one Aurora reader"
+    )
   })
 
   it("merges independent trials into one canonical artifact", () => {
@@ -321,5 +368,12 @@ describe("AWS qualification telemetry evidence", () => {
     expect(() => merge_telemetry_artifacts([artifact])).toThrow(
       "reports failed or rejected application requests"
     )
+  })
+
+  it("does not merge evidence collected with another database topology", () => {
+    expect(() => merge_telemetry_artifacts([
+      build(),
+      build({ ...telemetry, database_topology: "shared" })
+    ])).toThrow("telemetry artifacts disagree on databaseTopology")
   })
 })

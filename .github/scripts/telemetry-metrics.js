@@ -10,7 +10,7 @@ const BROKER_SERVICES = [
   'garnet-snapshot'
 ]
 
-const TELEMETRY_METRICS = [
+const SHARED_TELEMETRY_METRICS = [
   {
     role: 'ingress-request-count',
     queryId: 'ingress_requests'
@@ -32,18 +32,29 @@ const TELEMETRY_METRICS = [
     queryId: 'compute_memory'
   },
   {
-    role: 'database-cpu-maximum-percent',
-    queryId: 'database_cpu'
+    role: 'database-writer-cpu-maximum-percent',
+    queryId: 'database_writer_cpu'
   },
   {
-    role: 'database-connections-maximum',
-    queryId: 'database_connections'
+    role: 'database-writer-connections-maximum',
+    queryId: 'database_writer_connections'
   }
 ]
 
-const REQUIRED_METRIC_IDS = TELEMETRY_METRICS.map(
-  metric => metric.queryId
-)
+const READER_TELEMETRY_METRICS = [
+  {
+    role: 'database-reader-cpu-maximum-percent',
+    queryId: 'database_reader_cpu'
+  },
+  {
+    role: 'database-reader-connections-maximum',
+    queryId: 'database_reader_connections'
+  },
+  {
+    role: 'database-replica-lag-maximum-milliseconds',
+    queryId: 'database_replica_lag'
+  }
+]
 
 const non_empty_string = (value, label) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -51,6 +62,22 @@ const non_empty_string = (value, label) => {
   }
   return value
 }
+
+const database_topology = value => {
+  if (value !== 'shared' && value !== 'writer-reader') {
+    throw new Error(
+      'database topology shall be shared or writer-reader'
+    )
+  }
+  return value
+}
+
+const telemetry_metrics = topology => [
+  ...SHARED_TELEMETRY_METRICS,
+  ...(database_topology(topology) === 'writer-reader'
+    ? READER_TELEMETRY_METRICS
+    : [])
+]
 
 const dimensions = values =>
   Object.entries(values).map(([Name, Value]) => ({
@@ -139,6 +166,7 @@ const database_members = cluster => {
 const maximum_expression = ids => `MAX([${ids.join(',')}])`
 
 const metric_data_queries = (telemetry, cluster) => {
+  const topology = database_topology(telemetry?.database_topology)
   const api_dimensions = {
     ApiId: telemetry.api_id,
     Stage: telemetry.api_stage
@@ -306,10 +334,18 @@ const metric_data_queries = (telemetry, cluster) => {
     )
   )
 
-  const database_cpu_ids = []
-  const database_connection_ids = []
+  const members = database_members(cluster)
+  const readers = members.slice(1)
+  if (topology === 'writer-reader' && readers.length === 0) {
+    throw new Error(
+      'writer-reader telemetry requires at least one Aurora reader'
+    )
+  }
+  const reader_cpu_ids = []
+  const reader_connection_ids = []
+  const reader_lag_ids = []
   let reader_index = 0
-  for (const member of database_members(cluster)) {
+  for (const member of members) {
     const role = member.writer
       ? 'writer'
       : `reader_${reader_index++}`
@@ -326,8 +362,7 @@ const metric_data_queries = (telemetry, cluster) => {
       ['read_iops', 'ReadIOPS', 'Maximum'],
       ['write_iops', 'WriteIOPS', 'Maximum'],
       ['read_latency', 'ReadLatency', 'Maximum'],
-      ['write_latency', 'WriteLatency', 'Maximum'],
-      ['replica_lag', 'AuroraReplicaLag', 'Maximum']
+      ['write_latency', 'WriteLatency', 'Maximum']
     ]) {
       const id = `rds_${role}_${suffix}`
       queries.push(metric_query(
@@ -337,20 +372,49 @@ const metric_data_queries = (telemetry, cluster) => {
         member_dimensions,
         stat
       ))
-      if (suffix === 'cpu') database_cpu_ids.push(id)
-      if (suffix === 'connections') database_connection_ids.push(id)
+      if (!member.writer && suffix === 'cpu') reader_cpu_ids.push(id)
+      if (!member.writer && suffix === 'connections') {
+        reader_connection_ids.push(id)
+      }
+    }
+    if (!member.writer) {
+      const lag_id = `rds_${role}_replica_lag`
+      reader_lag_ids.push(lag_id)
+      queries.push(metric_query(
+        lag_id,
+        'AWS/RDS',
+        'AuroraReplicaLag',
+        member_dimensions,
+        'Maximum'
+      ))
     }
   }
   queries.push(
     expression_query(
-      'database_cpu',
-      maximum_expression(database_cpu_ids)
+      'database_writer_cpu',
+      'rds_writer_cpu'
     ),
     expression_query(
-      'database_connections',
-      maximum_expression(database_connection_ids)
+      'database_writer_connections',
+      'rds_writer_connections'
     )
   )
+  if (topology === 'writer-reader') {
+    queries.push(
+      expression_query(
+        'database_reader_cpu',
+        maximum_expression(reader_cpu_ids)
+      ),
+      expression_query(
+        'database_reader_connections',
+        maximum_expression(reader_connection_ids)
+      ),
+      expression_query(
+        'database_replica_lag',
+        maximum_expression(reader_lag_ids)
+      )
+    )
+  }
   return queries
 }
 
@@ -375,7 +439,7 @@ const expected_timestamps = window => {
   )
 }
 
-const metric_data_reasons = (response, window, queries) => {
+const metric_data_reasons = (response, window, queries, metrics) => {
   const reasons = []
   if (Array.isArray(response?.Messages) && response.Messages.length > 0) {
     reasons.push('CloudWatch returned collection messages')
@@ -430,7 +494,8 @@ const metric_data_reasons = (response, window, queries) => {
     )
     .map(query => query.Id)
   const returned = new Set(returned_ids)
-  for (const id of REQUIRED_METRIC_IDS) {
+  const required_metric_ids = metrics.map(metric => metric.queryId)
+  for (const id of required_metric_ids) {
     if (!returned.has(id)) {
       reasons.push(`${id} is not returned by the telemetry query`)
     }
@@ -473,11 +538,11 @@ const metric_data_reasons = (response, window, queries) => {
       reasons.push(`${result.Id} does not contain integer counts`)
     }
     if (
-      [
-        'compute_cpu',
-        'compute_memory',
-        'database_cpu'
-      ].includes(result.Id) &&
+      metrics.some(
+        metric =>
+          metric.queryId === result.Id &&
+          metric.role.endsWith('-percent')
+      ) &&
       result.Values.some(value => value > 100)
     ) {
       reasons.push(`${result.Id} exceeds 100 percent`)
@@ -515,11 +580,11 @@ const metric_sum = (response, id) => {
 
 module.exports = {
   BROKER_SERVICES,
-  REQUIRED_METRIC_IDS,
-  TELEMETRY_METRICS,
   database_members,
+  database_topology,
   expected_timestamps,
   metric_data_queries,
   metric_data_reasons,
-  metric_sum
+  metric_sum,
+  telemetry_metrics
 }

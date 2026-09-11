@@ -12,7 +12,8 @@ const {
 } = require('./telemetry-evidence.js')
 const {
   metric_data_queries,
-  metric_data_reasons
+  metric_data_reasons,
+  telemetry_metrics
 } = require('./telemetry-metrics.js')
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
@@ -88,6 +89,7 @@ const collect_telemetry_evidence = async (
   }
   const cluster = clusters[0]
   const queries = metric_data_queries(telemetry, cluster)
+  const metrics = telemetry_metrics(telemetry.database_topology)
   const window = metric_window(report)
   const deadline = now() + telemetry.wait_timeout_ms
   let metric_response
@@ -116,7 +118,8 @@ const collect_telemetry_evidence = async (
         started_at: window.start_time,
         completed_at: window.end_time
       },
-      queries
+      queries,
+      metrics
     )
     if (reasons.length > 0 && now() >= deadline) {
       throw new Error(

@@ -1,8 +1,9 @@
 const {
-  TELEMETRY_METRICS,
+  database_topology,
   metric_data_queries,
   metric_data_reasons,
-  metric_sum
+  metric_sum,
+  telemetry_metrics
 } = require('./telemetry-metrics.js')
 
 const SHA256 = /^[0-9a-f]{64}$/i
@@ -187,11 +188,14 @@ const build_telemetry_artifact = ({
     )
   }
   const window = qualification_window(report)
+  const topology = database_topology(telemetry.database_topology)
+  const metrics = telemetry_metrics(topology)
   const queries = metric_data_queries(telemetry, cluster)
   const reasons = metric_data_reasons(
     metric_response,
     window,
-    queries
+    queries,
+    metrics
   )
   if (reasons.length > 0) {
     throw new Error(`telemetry metrics are incomplete: ${reasons.join('; ')}`)
@@ -234,17 +238,18 @@ const build_telemetry_artifact = ({
     pageCount: 1,
     nextTokenExhausted: true,
     messages: metric_response.Messages ?? [],
-    metrics: TELEMETRY_METRICS,
+    metrics,
     metricDataQueries: queries,
     metricDataResults: metric_response.MetricDataResults
   }
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'native-telemetry-evidence',
     evidenceId: telemetry.group_id,
     source: 'aws-cloudwatch-get-metric-data',
     awsRegion: telemetry.aws_region,
     image: telemetry.image,
+    databaseTopology: topology,
     startedAt: window.started_at,
     completedAt: collection_timestamp,
     trialTelemetryIds: [telemetry.trial_id],
@@ -252,10 +257,10 @@ const build_telemetry_artifact = ({
   }
 }
 
-const same_metrics = value =>
-  JSON.stringify(value) === JSON.stringify(TELEMETRY_METRICS)
+const same_metrics = (value, topology) =>
+  JSON.stringify(value) === JSON.stringify(telemetry_metrics(topology))
 
-const parse_run = (run, label) => {
+const parse_run = (run, label, topology) => {
   if (run === null || typeof run !== 'object' || Array.isArray(run)) {
     throw new Error(`${label} shall be an object`)
   }
@@ -280,7 +285,7 @@ const parse_run = (run, label) => {
   if (!Array.isArray(run.messages) || run.messages.length !== 0) {
     throw new Error(`${label}.messages shall be empty`)
   }
-  if (!same_metrics(run.metrics)) {
+  if (!same_metrics(run.metrics, topology)) {
     throw new Error(`${label}.metrics shall cover canonical telemetry roles`)
   }
   const metric_response = {
@@ -293,7 +298,8 @@ const parse_run = (run, label) => {
       started_at,
       completed_at
     },
-    run.metricDataQueries
+    run.metricDataQueries,
+    run.metrics
   )
   if (reasons.length > 0) {
     throw new Error(`${label} telemetry is incomplete: ${reasons.join('; ')}`)
@@ -334,10 +340,10 @@ const parse_artifact = (value, label) => {
     value === null ||
     typeof value !== 'object' ||
     Array.isArray(value) ||
-    value.schemaVersion !== 2 ||
+    value.schemaVersion !== 3 ||
     value.kind !== 'native-telemetry-evidence'
   ) {
-    throw new Error(`${label} is not native telemetry evidence schema 2`)
+    throw new Error(`${label} is not native telemetry evidence schema 3`)
   }
   if (value.source !== 'aws-cloudwatch-get-metric-data') {
     throw new Error(`${label}.source is not the AWS collector`)
@@ -351,13 +357,15 @@ const parse_artifact = (value, label) => {
     `${label}.awsRegion`
   )
   const image = non_empty_string(value.image, `${label}.image`)
+  const topology = database_topology(value.databaseTopology)
   const started_at = timestamp(value.startedAt, `${label}.startedAt`)
   const completed_at = timestamp(value.completedAt, `${label}.completedAt`)
   if (!Array.isArray(value.runs) || value.runs.length === 0) {
     throw new Error(`${label}.runs shall be a non-empty array`)
   }
   const runs = value.runs.map(
-    (run, index) => parse_run(run, `${label}.runs[${index}]`)
+    (run, index) =>
+      parse_run(run, `${label}.runs[${index}]`, topology)
   )
   const trial_ids = runs.map(run => run.trialTelemetryId)
   if (
@@ -385,12 +393,13 @@ const parse_artifact = (value, label) => {
     throw new Error(`${label} repeats a trial or run id`)
   }
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'native-telemetry-evidence',
     evidenceId: evidence_id,
     source: 'aws-cloudwatch-get-metric-data',
     awsRegion: aws_region,
     image,
+    databaseTopology: topology,
     startedAt: started_at,
     completedAt: completed_at,
     trialTelemetryIds: trial_ids,
@@ -411,7 +420,13 @@ const merge_telemetry_artifacts = artifacts => {
   )
   const first = parsed[0]
   for (const artifact of parsed.slice(1)) {
-    for (const field of ['evidenceId', 'awsRegion', 'image', 'source']) {
+    for (const field of [
+      'evidenceId',
+      'awsRegion',
+      'image',
+      'source',
+      'databaseTopology'
+    ]) {
       if (artifact[field] !== first[field]) {
         throw new Error(`telemetry artifacts disagree on ${field}`)
       }
@@ -443,12 +458,13 @@ const merge_telemetry_artifacts = artifacts => {
     }
   }
   return parse_artifact({
-    schemaVersion: 2,
+    schemaVersion: 3,
     kind: 'native-telemetry-evidence',
     evidenceId: first.evidenceId,
     source: first.source,
     awsRegion: first.awsRegion,
     image: first.image,
+    databaseTopology: first.databaseTopology,
     startedAt: runs[0].startedAt,
     completedAt: new Date(Math.max(
       ...runs.map(run => Date.parse(run.collectedAt))

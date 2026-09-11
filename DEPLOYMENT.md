@@ -277,25 +277,29 @@ same 60-second sample grid.
 
 Set explicit latency, error and cost budgets before treating the run as a pass.
 Every qualification waits for all required CloudWatch datapoints and writes one
-schema-2 native telemetry artifact locally under `results/aws-evidence/` and to
+schema-3 native telemetry artifact locally under `results/aws-evidence/` and to
 the Object-Locked load-report prefix. The artifact binds the aggregate report's
 S3 version, ETag and SHA-256 digest to the deployed image, AWS account and
 Region.
 
-The seven canonical comparison roles use API Gateway public-ingress request
-count, p99 latency in seconds and 5xx count; maximum CPU and memory across all
-broker ECS services; and maximum Aurora CPU and connections across the writer
-and readers. Public ingress requests and 5xx responses must reconcile exactly
-with the aggregate report. Keep unrelated clients, synthetic monitors and
-manual tests off the qualification API during the steady-state window.
+Every deployment records its database topology. A shared read/write deployment
+requires seven canonical roles: API Gateway public-ingress request count, p99
+latency in seconds and 5xx count; maximum CPU and memory across all broker ECS
+services; and writer CPU and connections. When eventual Entity reads use the
+Aurora reader endpoint, three additional roles become mandatory: maximum reader
+CPU, maximum reader connections and maximum `AuroraReplicaLag` in milliseconds.
+Public ingress requests and 5xx responses must reconcile exactly with the
+aggregate report. Keep unrelated clients, synthetic monitors and manual tests
+off the qualification API during the steady-state window.
 
 The same artifact retains every returned auxiliary one-minute series: API EMF
 requests/errors/rejections/p99, per-service ECS CPU and memory, delivery and
 snapshot worker utilization, SQS backlog/age/flow, Firehose Iceberg
-freshness/failures/throttling/partitions, and Aurora capacity, I/O, latency,
-throughput and replica lag. Missing, duplicate, negative, partial or out-of-order
-samples fail collection; the collector does not silently substitute a shorter
-window.
+freshness/failures/throttling/partitions, and per-instance Aurora CPU,
+connections, capacity, I/O, latency, throughput and reader lag. This preserves
+reader connection distribution instead of hiding it behind one aggregate.
+Missing, duplicate, negative, partial or out-of-order samples fail collection;
+the collector does not silently substitute a shorter window.
 
 Use one telemetry group for every rate/trial belonging to the same native
 deployment, and a distinct external telemetry id for each run. After the
@@ -309,7 +313,7 @@ npm run evidence:merge -- \
   results/aws-evidence/GarnetRelease20260910R5000T3-telemetry-evidence.json
 ```
 
-The merged schema-2 file preserves every per-run query and result and is
+The merged schema-3 file preserves every per-run query and result and is
 directly usable as the `telemetryArtifact` in the broker's best-native
 comparison manifest.
 Aurora failure injection and API-visible zero-loss reconciliation remain a

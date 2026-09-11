@@ -27,6 +27,7 @@ const OUTPUTS = {
     `public.ecr.aws/garnet/broker@sha256:${"a".repeat(64)}`,
   GarnetBrokerCluster: "garnet-broker-cluster",
   GarnetDatabaseCluster: "garnet-broker-aurora",
+  GarnetDatabaseTopology: "writer-reader",
   GarnetEntityEventQueueName: "garnet-entity-events.fifo",
   GarnetApiId: "api-123",
   GarnetApiStage: "$default",
@@ -103,6 +104,7 @@ describe("AWS load-test launcher", () => {
       aws_account: "111111111111",
       broker_cluster: "garnet-broker-cluster",
       database_cluster: "garnet-broker-aurora",
+      database_topology: "writer-reader",
       event_queue: "garnet-entity-events.fifo",
       api_id: "api-123",
       api_stage: "$default",
@@ -450,9 +452,10 @@ describe("AWS load-test launcher", () => {
         fs.readFileSync(result.path, "utf8")
       )
       expect(artifact).toMatchObject({
-        schemaVersion: 2,
+        schemaVersion: 3,
         kind: "native-telemetry-evidence",
         evidenceId: "garnet-release",
+        databaseTopology: "writer-reader",
         trialTelemetryIds: ["garnet-release-5000-1"],
         runs: [{
           runId: "evidence",

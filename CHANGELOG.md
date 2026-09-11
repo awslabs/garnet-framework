@@ -29,6 +29,8 @@ All notable changes to the Garnet Framework will be documented in this file.
   reader failover, deletion protection, 35-day backups and saturation alarms.
 - Added independent task autoscaling, AWS load qualification, retained evidence,
   failover exercises and Iceberg compaction monitoring.
+- Bound qualification evidence to the deployed database topology, with separate
+  writer and reader load, connection and replica-lag series.
 
 ## [1.6.0] - 2026-03-18
 
