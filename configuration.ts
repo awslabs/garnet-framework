@@ -66,11 +66,11 @@ export const Parameters = {
     database_backup_retention_days: 35,
 
     /**
-     * Rolling updates every Garnet service with an ECS circuit breaker.
-     * Blue/green retains that worker rollout and adds a test target, traffic
-     * switch, and bake window for the externally routed API service.
+     * Blue/green is the production default for the externally routed API.
+     * Workers still use rolling updates with ECS circuit breakers because two
+     * concurrent consumer revisions would not isolate side effects.
      */
-    deployment_strategy: "rolling" as "rolling" | "bluegreen",
+    deployment_strategy: "bluegreen" as "rolling" | "bluegreen",
 
     /**
      * How long the previous task set is retained after traffic shifts, giving you a

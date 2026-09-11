@@ -7,6 +7,12 @@ const action = readFileSync(
 )
 
 describe("deployment action", () => {
+  it("defaults production deployments to blue/green", () => {
+    expect(action).toMatch(
+      /deployment-strategy:[\s\S]*?default: bluegreen/
+    )
+  })
+
   it("diffs and deploys one environment-specific cloud assembly", () => {
     const synth = action.indexOf("run: npx cdk synth --quiet")
     const diff = action.indexOf(

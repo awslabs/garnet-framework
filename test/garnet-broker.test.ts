@@ -67,13 +67,13 @@ describe("Garnet Broker AWS runtime", () => {
     template.resourceCountIs("AWS::RDS::DBProxy", 0)
     template.hasResourceProperties("AWS::RDS::DBCluster", {
       Engine: "aurora-postgresql",
-      EngineVersion: "16.11",
+      EngineVersion: "16.14",
       DatabaseName: "garnet",
       DBClusterIdentifier: "garnet-framework-broker-aurora",
       BackupRetentionPeriod: 35,
       DeletionProtection: true,
       ServerlessV2ScalingConfiguration: {
-        MinCapacity: 2,
+        MinCapacity: 8,
         MaxCapacity: 256
       }
     })
@@ -283,22 +283,28 @@ describe("Garnet Broker AWS runtime", () => {
     )
   })
 
-  it("treats ALB request scaling as requests per target per minute", () => {
+  it("treats API request scaling as requests per task per minute", () => {
     const template = synth_broker()
 
     template.hasResourceProperties(
       "AWS::ApplicationAutoScaling::ScalingPolicy",
       {
         PolicyType: "TargetTrackingScaling",
-        TargetTrackingScalingPolicyConfiguration: {
-          PredefinedMetricSpecification: {
-            PredefinedMetricType:
-              "ALBRequestCountPerTarget"
-          },
+        TargetTrackingScalingPolicyConfiguration: Match.objectLike({
+          CustomizedMetricSpecification: Match.objectLike({
+            Metrics: Match.arrayWith([
+              Match.objectLike({
+                Expression:
+                  "IF(running > 0, " +
+                  "(production_requests + " +
+                  "alternate_requests) / running, 0)"
+              })
+            ])
+          }),
           ScaleInCooldown: 180,
           ScaleOutCooldown: 30,
           TargetValue: 15000
-        }
+        })
       }
     )
     const scalableTargets = Object.values(
@@ -478,10 +484,15 @@ describe("Garnet Broker AWS runtime", () => {
       expect(service.DependsOn).toEqual(
         expect.arrayContaining([migration_resource_id])
       )
-      expect(
+      const deployment =
         service.Properties.DeploymentConfiguration
-          .DeploymentCircuitBreaker
-      ).toEqual({ Enable: true, Rollback: true })
+      if (service.Properties.ServiceName === "garnet-api") {
+        expect(deployment.Strategy).toBe("BLUE_GREEN")
+        expect(deployment.DeploymentCircuitBreaker).toBeUndefined()
+      } else {
+        expect(deployment.DeploymentCircuitBreaker)
+          .toEqual({ Enable: true, Rollback: true })
+      }
     }
   })
 

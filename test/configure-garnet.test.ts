@@ -78,7 +78,7 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.source).not.toContain("BROKER_ENGINE")
   })
 
-  it("clears optional settings and defaults to rolling consistency", () => {
+  it("clears optional settings and defaults to blue/green", () => {
     const configured = source
       .replace(
         'garnet_load_image: ""',
@@ -95,7 +95,7 @@ describe("Garnet-only deployment configuration", () => {
       deploymentEnvironment()
     )
 
-    expect(result.strategy).toBe("rolling")
+    expect(result.strategy).toBe("bluegreen")
     expect(result.schema_compatibility).toBe("unchanged")
     expect(result.eventual_reads).toBe(false)
     expect(result.bootstrap_tenant).toBe("default")

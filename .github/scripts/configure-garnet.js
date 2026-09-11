@@ -124,7 +124,7 @@ const apply_configuration = (source, env) => {
     throw new Error('GARNET_LOAD_IMAGE must be a digest-pinned image')
   }
   const strategy =
-    (optional(env, 'GARNET_DEPLOYMENT_STRATEGY') || 'rolling')
+    (optional(env, 'GARNET_DEPLOYMENT_STRATEGY') || 'bluegreen')
       .toLowerCase()
   if (!STRATEGIES.has(strategy)) {
     throw new Error(

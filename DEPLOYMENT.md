@@ -44,7 +44,7 @@ CI and CD use `.github/scripts/configure-garnet.js`. The deployment inputs are:
 | `GARNET_BROKER_IMAGE` | yes | Digest-pinned broker image |
 | `GARNET_LOAD_IMAGE` | no | Digest-pinned AWS load-runner image |
 | `GARNET_REGION` | yes in CI/CD | Target region |
-| `GARNET_DEPLOYMENT_STRATEGY` | no | `rolling` or `bluegreen`; default `rolling` |
+| `GARNET_DEPLOYMENT_STRATEGY` | no | `bluegreen` (default) or `rolling` |
 | `GARNET_SCHEMA_COMPATIBILITY` | yes | `unchanged` or `backward-compatible`; writer-drain releases are rejected |
 | `GARNET_BROKER_PUBLIC_ORIGIN` | distributed callbacks | Exact public HTTP(S) origin |
 | `GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS` | no | Exact comma-separated callback origins |
@@ -77,13 +77,7 @@ exact cloud assembly, and deploys the same assembly through CloudFormation.
 
 ## Deployment strategies
 
-### Rolling
-
-Every API-independent worker uses ECS rolling deployment with a circuit breaker
-and automatic rollback. The API uses the same strategy when
-`GARNET_DEPLOYMENT_STRATEGY=rolling`.
-
-### Blue/green
+### Blue/green (default)
 
 Blue/green applies only to the externally routed API service. Workers continue
 rolling because they do not have a traffic listener and running two independent
@@ -103,6 +97,13 @@ The API blue/green path has:
 
 The blue/green API deliberately does not configure the rolling-only ECS circuit
 breaker.
+
+### Rolling
+
+Set `GARNET_DEPLOYMENT_STRATEGY=rolling` for disposable environments where the
+extra API task set and bake window are not worth the temporary cost. Every
+service then uses an ECS rolling deployment with a circuit breaker and automatic
+rollback.
 
 Blue/green reduces API release risk; it does not make an incompatible database
 migration reversible. `/garnet-migrate` runs before services start. Every schema

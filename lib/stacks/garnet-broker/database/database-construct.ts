@@ -38,7 +38,7 @@ export class GarnetBrokerDatabase extends Construct {
         super(scope, id)
 
         const engine = DatabaseClusterEngine.auroraPostgres({
-            version: AuroraPostgresEngineVersion.VER_16_11
+            version: AuroraPostgresEngineVersion.of("16.14", "16")
         })
         this.security_group = new SecurityGroup(this, "SecurityGroup", {
             vpc: props.vpc,

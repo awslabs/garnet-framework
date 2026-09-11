@@ -34,7 +34,7 @@ inputs:
   deployment-strategy:
     description: rolling or bluegreen
     required: false
-    default: rolling
+    default: bluegreen
   schema-compatibility:
     description: unchanged or backward-compatible; writer-drain releases are blocked
     required: true

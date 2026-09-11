@@ -18,8 +18,9 @@ export const enum SCHEMA_COMPATIBILITY {
 type DeploymentParams = {
     architecture: ARCHITECTURE,
     /**
-     * Rolling applies to every service. Blue/green additionally gives the
-     * externally routed API an alternate target group and traffic switch.
+     * Blue/green gives the externally routed API an alternate target group,
+     * pre-production validation and an alarm-guarded traffic switch. Workers
+     * remain rolling because duplicate consumers cannot be isolated by an ALB.
      */
     deployment_strategy: DEPLOYMENT_STRATEGY,
     schema_compatibility: SCHEMA_COMPATIBILITY,
@@ -44,7 +45,7 @@ type DeploymentParams = {
 
 export const deployment_params: DeploymentParams = {
         architecture: ARCHITECTURE.Distributed,
-        aurora_min_capacity: 2,
+        aurora_min_capacity: 8,
         aurora_max_capacity: 256,
         nat_gateway_count: Parameters.nat_gateway_count,
         database_deletion_protection:
