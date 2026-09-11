@@ -67,6 +67,7 @@ jobs:
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
           load-image: ${{ vars.GARNET_LOAD_IMAGE }}
           public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}
@@ -100,6 +101,7 @@ jobs:
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
           load-image: ${{ vars.GARNET_LOAD_IMAGE }}
           public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}
@@ -132,6 +134,7 @@ jobs:
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
           load-image: ${{ vars.GARNET_LOAD_IMAGE }}
           public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}
@@ -167,6 +170,7 @@ jobs:
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
+          aws-account-id: ${{ vars.AWS_ACCOUNT_ID }}
           broker-image: ${{ vars.GARNET_BROKER_IMAGE }}
           load-image: ${{ vars.GARNET_LOAD_IMAGE }}
           public-origin: ${{ vars.GARNET_BROKER_PUBLIC_ORIGIN }}

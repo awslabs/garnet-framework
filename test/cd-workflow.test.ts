@@ -18,6 +18,14 @@ const job = (name: string, next?: string): string => {
 }
 
 describe("CD deployment concurrency", () => {
+  it("binds every deployment to its environment account", () => {
+    expect(
+      workflow.match(
+        /aws-account-id: \$\{\{ vars\.AWS_ACCOUNT_ID \}\}/g
+      )
+    ).toHaveLength(4)
+  })
+
   it.each([
     ["deploy-dev", "deploy-stage", "garnet-deploy-dev"],
     ["deploy-stage", "deploy-prod", "garnet-deploy-stage"],

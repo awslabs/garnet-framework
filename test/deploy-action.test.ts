@@ -7,6 +7,21 @@ const action = readFileSync(
 )
 
 describe("deployment action", () => {
+  it("fails closed against the environment's exact AWS account", () => {
+    expect(action).toMatch(
+      /aws-account-id:[\s\S]*?required: true/
+    )
+    expect(action).toContain(
+      "uses: aws-actions/configure-aws-credentials@v6.2.1"
+    )
+    expect(action).toContain(
+      "allowed-account-ids: ${{ inputs.aws-account-id }}"
+    )
+    expect(action).toContain(
+      '[[ ! "$EXPECTED_AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]'
+    )
+  })
+
   it("defaults production deployments to blue/green", () => {
     expect(action).toMatch(
       /deployment-strategy:[\s\S]*?default: bluegreen/

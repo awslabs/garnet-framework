@@ -24,6 +24,8 @@ classes must be coordinated across both stacks.
 - AWS CDK bootstrap in the target account and region
 - a digest-pinned Linux ARM64 or multi-architecture Garnet Broker image
 - AWS credentials only for `diff` and deployment
+- an exact `AWS_ACCOUNT_ID` GitHub Environment variable for every deployment
+  environment; the credentials action rejects any other assumed account
 
 Install and verify:
 

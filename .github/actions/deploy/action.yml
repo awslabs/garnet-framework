@@ -8,6 +8,9 @@ inputs:
   aws-region:
     description: Region to deploy into
     required: true
+  aws-account-id:
+    description: Exact 12-digit AWS account expected for this environment
+    required: true
   broker-image:
     description: Immutable Garnet Broker image reference
     required: true
@@ -75,12 +78,23 @@ runs:
         # dependencies must be installed before synth or the layer ships empty.
         npm ci --prefix lib/layers/nodejs
 
+    - name: Validate deployment identity
+      shell: bash
+      env:
+        EXPECTED_AWS_ACCOUNT_ID: ${{ inputs.aws-account-id }}
+      run: |
+        if [[ ! "$EXPECTED_AWS_ACCOUNT_ID" =~ ^[0-9]{12}$ ]]; then
+          echo "aws-account-id must be an exact 12-digit AWS account ID" >&2
+          exit 1
+        fi
+
     # Short-lived credentials minted per run. Nothing to rotate or leak.
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v5
+      uses: aws-actions/configure-aws-credentials@v6.2.1
       with:
         role-to-assume: ${{ inputs.aws-role-arn }}
         aws-region: ${{ inputs.aws-region }}
+        allowed-account-ids: ${{ inputs.aws-account-id }}
         role-session-name: garnet-deploy-${{ github.run_id }}
 
     - name: Apply deployment configuration
