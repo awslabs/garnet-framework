@@ -63,8 +63,8 @@ rewriting `configuration.ts`.
 ```bash
 node .github/scripts/configure-garnet.js
 npx cdk synth --quiet
-npx cdk diff
-npx cdk deploy \
+npx cdk diff --app cdk.out --method change-set
+npx cdk deploy --app cdk.out \
   --require-approval never \
   --outputs-file cdk-outputs.json \
   --progress events
@@ -72,7 +72,8 @@ node .github/scripts/smoke-test.js
 ```
 
 CI synthesizes both rolling and blue/green profiles. CD assumes a short-lived
-OIDC role and deploys the stack through CloudFormation.
+OIDC role, synthesizes once with the target environment's inputs, diffs that
+exact cloud assembly, and deploys the same assembly through CloudFormation.
 
 ## Deployment strategies
 

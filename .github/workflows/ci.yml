@@ -146,8 +146,9 @@ jobs:
           CDK_DEFAULT_REGION: us-east-1
           CDK_DEFAULT_ACCOUNT: '000000000000'
 
-      # Retained so the exact assembly that passed CI is what CD deploys,
-      # rather than a fresh synth that could pick up a different dependency.
+      # Retained for template review and reproducibility. CD synthesizes a
+      # separate environment-specific assembly from this locked source because
+      # each environment supplies its own image, Region and security policy.
       - name: Upload cloud assembly
         uses: actions/upload-artifact@v5
         with:

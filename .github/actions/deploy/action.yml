@@ -101,15 +101,20 @@ runs:
         GARNET_REGION: ${{ inputs.aws-region }}
       run: node .github/scripts/configure-garnet.js
 
+    - name: Synthesize deployment assembly
+      shell: bash
+      run: npx cdk synth --quiet
+
     - name: Show what will change
       shell: bash
-      # Non-zero exit just means "there is a diff", so it must not fail the step
-      run: npx cdk diff || true
+      # --fail is intentionally absent, so an ordinary diff exits zero while
+      # credential, assembly and change-set failures still stop deployment.
+      run: npx cdk diff --app cdk.out --method change-set
 
     - name: Deploy
       shell: bash
       run: |
-        npx cdk deploy \
+        npx cdk deploy --app cdk.out \
           --require-approval never \
           --outputs-file cdk-outputs.json \
           --progress events
