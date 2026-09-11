@@ -103,7 +103,6 @@ describe("Garnet Broker AWS runtime", () => {
     }
     expect(entry_points.sort()).toEqual([
       "/garnet-broker",
-      "/garnet-broker",
       "/garnet-delivery",
       "/garnet-event-sink",
       "/garnet-federation",
@@ -114,6 +113,7 @@ describe("Garnet Broker AWS runtime", () => {
       "/garnet-migrate",
       "/garnet-notification-scheduler",
       "/garnet-relay",
+      "/garnet-snapshot",
       "/garnet-subscription-reconciler"
     ].sort())
   })
@@ -236,7 +236,29 @@ describe("Garnet Broker AWS runtime", () => {
       snapshot.Properties.ContainerDefinitions[0].Environment
         .map((entry: any) => [entry.Name, entry.Value])
     )
+    expect(snapshot_environment).toMatchObject({
+      FEDERATION_DEFAULT_LOCAL: "true",
+      SNAPSHOT_QUERY_TIMEOUT_MS: "30000",
+      SNAPSHOT_WORKERS: "2"
+    })
+    expect(snapshot_environment.SNAPSHOT_BROKER_URL)
+      .toHaveProperty("Fn::Join")
     expect(snapshot_environment).not.toHaveProperty("READ_DBHOST")
+    expect(snapshot_environment).not.toHaveProperty("BROKER_WORKERS")
+    expect(snapshot_environment).not.toHaveProperty("PORT")
+    expect(snapshot_environment).not.toHaveProperty(
+      "FEDERATION_ROUTER_TOKEN"
+    )
+    const snapshot_secrets =
+      snapshot.Properties.ContainerDefinitions[0].Secrets
+        .map((entry: any) => entry.Name)
+    expect(snapshot_secrets.sort()).toEqual([
+      "DBPASS",
+      "DBUSER"
+    ])
+    expect(
+      snapshot.Properties.ContainerDefinitions[0].PortMappings
+    ).toBeUndefined()
 
     const delivery = (Object.values(task_definitions) as any[])
       .find((resource) =>

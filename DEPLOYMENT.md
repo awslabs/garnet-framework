@@ -98,6 +98,13 @@ The API blue/green path has:
 The blue/green API deliberately does not configure the rolling-only ECS circuit
 breaker.
 
+Snapshot materialization runs in a dedicated worker binary with no HTTP listener
+or federation credentials. It sends canonical read queries through the internal
+load balancer's production listener, so snapshots follow the same blue/green
+traffic decision as external API requests without creating a second Service
+Connect deployment-routing plane. The load balancer security group accepts this
+path only from the broker task security group.
+
 ### Rolling
 
 Set `GARNET_DEPLOYMENT_STRATEGY=rolling` for disposable environments where the
@@ -192,6 +199,11 @@ swaps the active target group. At that target the configuration has a
 steady-state planning ceiling of 16,000 requests/s, but this is only an
 autoscaling shape. Actual endpoint capacity depends on query mix, payload size,
 Aurora latency, connection pressure and downstream work.
+
+Snapshot workers use 1 vCPU / 2 GiB ARM64 tasks and scale independently from one
+to eight tasks. Their API reads contribute to the same target-group request and
+latency metrics as other broker traffic, while durable PostgreSQL leases divide
+snapshot jobs across worker replicas.
 
 A public 10,000 requests/s test also reaches the default API Gateway
 account/Region throttle, which is shared by all APIs. Request quota headroom

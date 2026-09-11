@@ -473,26 +473,6 @@ export class GarnetBrokerRuntime extends Construct {
             environment: distributed_environment,
             secrets: distributed_secrets
         }))
-        add(factory.create_service({
-            id: "Snapshot",
-            name: "snapshot",
-            entry_point: "/garnet-broker",
-            capacity: GARNET_SERVICE_CAPACITY.snapshot,
-            environment: {
-                ...distributed_environment,
-                PORT: "8080",
-                BROKER_WORKERS: "1",
-                HTTP_MAX_IN_FLIGHT: "16",
-                SNAPSHOT_WORKERS: "2"
-            },
-            secrets: distributed_secrets,
-            port: {
-                name: "snapshot",
-                number: 8080
-            },
-            service_connect_client: true
-        }))
-
         const sg_alb = new SecurityGroup(this, "LoadBalancerSecurityGroup", {
             vpc: props.vpc,
             description: "Internal API Gateway VPC link to Garnet Broker",
@@ -634,6 +614,27 @@ export class GarnetBrokerRuntime extends Construct {
                 })
             )
         }
+
+        sg_alb.addIngressRule(
+            this.sg_broker,
+            Port.tcp(80),
+            "Snapshot workers to the production API listener"
+        )
+        const snapshot = add(factory.create_service({
+            id: "Snapshot",
+            name: "snapshot",
+            entry_point: "/garnet-snapshot",
+            capacity: GARNET_SERVICE_CAPACITY.snapshot,
+            environment: {
+                FEDERATION_DEFAULT_LOCAL:
+                    distributed_environment.FEDERATION_DEFAULT_LOCAL,
+                SNAPSHOT_BROKER_URL:
+                    `http://${this.fargate_alb.loadBalancerDnsName}`,
+                SNAPSHOT_QUERY_TIMEOUT_MS: "30000",
+                SNAPSHOT_WORKERS: "2"
+            }
+        }))
+        snapshot.service.node.addDependency(api.service)
 
         if (props.load_image.trim() !== "") {
             this.load = new GarnetLoad(this, "Load", {
