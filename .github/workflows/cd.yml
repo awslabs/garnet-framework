@@ -15,8 +15,9 @@ on:
         type: choice
         options: [dev, stage, prod]
 
-# Never run two deploys at the same environment concurrently. Not cancelling in
-# progress: interrupting cdk deploy can leave a stack in UPDATE_IN_PROGRESS.
+# Serialize automatic promotion pipelines. Each deployment job also has an
+# environment-specific group so manual and automatic runs cannot update the
+# same stack concurrently. Never cancel an in-progress CDK deployment.
 concurrency:
   group: cd-${{ github.event.inputs.environment || 'pipeline' }}
   cancel-in-progress: false
@@ -47,6 +48,9 @@ jobs:
   deploy-dev:
     name: Deploy dev
     needs: verify
+    concurrency:
+      group: garnet-deploy-dev
+      cancel-in-progress: false
     # workflow_dispatch takes the single-environment path below instead
     if: github.event_name == 'push'
     # No approval on dev: it exists to find what unit tests cannot
@@ -80,6 +84,9 @@ jobs:
   deploy-stage:
     name: Deploy stage
     needs: deploy-dev
+    concurrency:
+      group: garnet-deploy-stage
+      cancel-in-progress: false
     # Approval is configured on the GitHub Environment, not here
     environment:
       name: stage
@@ -110,6 +117,9 @@ jobs:
   deploy-prod:
     name: Deploy prod
     needs: deploy-stage
+    concurrency:
+      group: garnet-deploy-prod
+      cancel-in-progress: false
     environment:
       name: prod
     runs-on: ubuntu-latest
@@ -142,6 +152,9 @@ jobs:
     name: Deploy ${{ github.event.inputs.environment }} (manual)
     if: github.event_name == 'workflow_dispatch'
     needs: verify
+    concurrency:
+      group: garnet-deploy-${{ github.event.inputs.environment }}
+      cancel-in-progress: false
     environment:
       name: ${{ github.event.inputs.environment }}
     runs-on: ubuntu-latest
