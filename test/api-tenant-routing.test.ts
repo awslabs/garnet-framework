@@ -83,5 +83,21 @@ describe("tenant-safe API routing", () => {
         MaxAge: 5
       }
     })
+
+    const ingress = Object.values(
+      template.findResources("AWS::EC2::SecurityGroupIngress")
+    ).find(
+      (resource: any) =>
+        resource.Properties.Description ===
+          "API Gateway VPC link to the Garnet Broker ALB"
+    ) as any
+
+    expect(ingress.Properties).toMatchObject({
+      FromPort: 80,
+      IpProtocol: "tcp",
+      SourceSecurityGroupId: expect.anything(),
+      ToPort: 80
+    })
+    expect(ingress.Properties).not.toHaveProperty("CidrIp")
   })
 })

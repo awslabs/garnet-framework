@@ -9,7 +9,6 @@ import { CfnScalingPolicy } from
     "aws-cdk-lib/aws-applicationautoscaling"
 import { Alarm, TreatMissingData } from "aws-cdk-lib/aws-cloudwatch"
 import {
-    Peer,
     Port,
     SecurityGroup,
     SubnetType,
@@ -499,11 +498,6 @@ export class GarnetBrokerRuntime extends Construct {
             description: "Internal API Gateway VPC link to Garnet Broker",
             allowAllOutbound: true
         })
-        sg_alb.addIngressRule(
-            Peer.ipv4(props.vpc.vpcCidrBlock),
-            Port.tcp(80),
-            "HTTP from the Garnet VPC link"
-        )
         this.sg_broker.addIngressRule(
             sg_alb,
             Port.tcp(8080),

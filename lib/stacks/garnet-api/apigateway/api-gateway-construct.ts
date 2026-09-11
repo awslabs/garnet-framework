@@ -1,6 +1,10 @@
 
 import { CfnAuthorizer as CfnAuthorizerV2, CfnIntegration, CfnRoute, CfnStage, CfnVpcLink, CorsHttpMethod, HttpApi } from "aws-cdk-lib/aws-apigatewayv2"
-import { SecurityGroup, Vpc } from "aws-cdk-lib/aws-ec2"
+import {
+    CfnSecurityGroupIngress,
+    SecurityGroup,
+    Vpc
+} from "aws-cdk-lib/aws-ec2"
 import { Construct } from "constructs"
 import { Function as LambdaFunction, Runtime, Code, Permission } from 'aws-cdk-lib/aws-lambda'
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
@@ -35,6 +39,21 @@ export class GarnetApiGateway extends Construct{
         const sg_vpc_link = new SecurityGroup(this, 'SgVpcLink', {
             securityGroupName: garnet_resource_name("api-vpc-link-sg"),
             vpc: props.vpc
+        })
+        const [alb_security_group] =
+            props.fargate_alb.connections.securityGroups
+        if (alb_security_group === undefined) {
+            throw new Error(
+                "The Garnet Broker load balancer requires a security group"
+            )
+        }
+        new CfnSecurityGroupIngress(this, "VpcLinkToBrokerAlbIngress", {
+            description: "API Gateway VPC link to the Garnet Broker ALB",
+            groupId: alb_security_group.securityGroupId,
+            sourceSecurityGroupId: sg_vpc_link.securityGroupId,
+            ipProtocol: "tcp",
+            fromPort: 80,
+            toPort: 80
         })
 
 
