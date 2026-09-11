@@ -110,12 +110,24 @@ describe("Garnet multi-tenant Iceberg lake", () => {
       PolicyDocument: {
         Statement: Match.arrayWith([
           Match.objectLike({
-            Action: "lakeformation:GetDataAccess",
+            Action: Match.arrayWith([
+              "glue:GetDatabase",
+              "glue:GetTable",
+              "glue:UpdateTable"
+            ]),
+            Effect: "Allow"
+          }),
+          Match.objectLike({
+            Action: "lambda:GetFunctionConfiguration",
             Effect: "Allow",
-            Resource: "*"
+            Resource: Match.anyValue()
           })
         ])
       }
     })
+    expect(
+      JSON.stringify(template.toJSON())
+        .match(/lakeformation:GetDataAccess/g)
+    ).toHaveLength(2)
   })
 })

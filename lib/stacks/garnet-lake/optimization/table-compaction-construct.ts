@@ -40,6 +40,10 @@ export class GarnetTableCompaction extends Construct {
       ]
     }))
     role.addToPolicy(new PolicyStatement({
+      actions: ["lakeformation:GetDataAccess"],
+      resources: ["*"]
+    }))
+    role.addToPolicy(new PolicyStatement({
       actions: [
         "logs:CreateLogGroup",
         "logs:CreateLogStream",

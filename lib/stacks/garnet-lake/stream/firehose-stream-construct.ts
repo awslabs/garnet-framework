@@ -88,7 +88,8 @@ export class GarnetDataLakeStream extends Construct {
         "glue:GetTable",
         "glue:GetTables",
         "glue:GetTableVersion",
-        "glue:GetTableVersions"
+        "glue:GetTableVersions",
+        "glue:UpdateTable"
       ],
       resources: [
         `arn:${Aws.PARTITION}:glue:${Aws.REGION}:${Aws.ACCOUNT_ID}:catalog`,
@@ -102,6 +103,10 @@ export class GarnetDataLakeStream extends Construct {
     }))
     delivery_logs.grantWrite(role)
     transform.grantInvoke(role)
+    role.addToPolicy(new PolicyStatement({
+      actions: ["lambda:GetFunctionConfiguration"],
+      resources: [transform.functionArn]
+    }))
 
     const stream = new CfnDeliveryStream(this, "Firehose", {
       deliveryStreamName:
