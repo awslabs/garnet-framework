@@ -180,34 +180,53 @@ describe("Garnet API blue/green deployment", () => {
               Metrics: Match.arrayWith([
                 Match.objectLike({
                   Expression:
-                    "IF(running > 0, " +
-                    "(production_requests + " +
-                    "alternate_requests) / running, 0)"
+                    "production_requests_per_target + " +
+                    "alternate_requests_per_target"
                 }),
                 Match.objectLike({
                   MetricStat: Match.objectLike({
                     Metric: Match.objectLike({
-                      MetricName: "RequestCount",
+                      MetricName: "RequestCountPerTarget",
                       Namespace: "AWS/ApplicationELB"
-                    })
-                  })
-                }),
-                Match.objectLike({
-                  MetricStat: Match.objectLike({
-                    Metric: Match.objectLike({
-                      MetricName: "RunningTaskCount",
-                      Namespace: "ECS/ContainerInsights"
-                    })
+                    }),
+                    Stat: "Sum"
                   })
                 })
               ])
             },
             ScaleInCooldown: 180,
             ScaleOutCooldown: 30,
-            TargetValue: 15000
+            TargetValue: 60000
           })
       }
     )
+    const bluegreen_policy = Object.values(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalingPolicy"
+      )
+    ).find(
+      (policy: any) =>
+        policy.Properties.TargetTrackingScalingPolicyConfiguration
+          ?.TargetValue === 60000
+    ) as any
+    const metrics =
+      bluegreen_policy.Properties
+        .TargetTrackingScalingPolicyConfiguration
+        .CustomizedMetricSpecification.Metrics
+    expect(
+      metrics.filter(
+        (metric: any) =>
+          metric.MetricStat?.Metric.MetricName ===
+          "RequestCountPerTarget"
+      )
+    ).toHaveLength(2)
+    expect(
+      metrics.some(
+        (metric: any) =>
+          metric.MetricStat?.Metric.MetricName ===
+          "RunningTaskCount"
+      )
+    ).toBe(false)
     const scaling_policies = Object.values(
       template.findResources(
         "AWS::ApplicationAutoScaling::ScalingPolicy"

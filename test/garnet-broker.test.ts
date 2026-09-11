@@ -337,7 +337,7 @@ describe("Garnet Broker AWS runtime", () => {
     )
   })
 
-  it("treats API request scaling as requests per task per minute", () => {
+  it("scales the API on requests per active target per minute", () => {
     const template = synth_broker()
 
     template.hasResourceProperties(
@@ -349,15 +349,24 @@ describe("Garnet Broker AWS runtime", () => {
             Metrics: Match.arrayWith([
               Match.objectLike({
                 Expression:
-                  "IF(running > 0, " +
-                  "(production_requests + " +
-                  "alternate_requests) / running, 0)"
+                  "production_requests_per_target + " +
+                  "alternate_requests_per_target"
+              }),
+              Match.objectLike({
+                MetricStat: {
+                  Metric: Match.objectLike({
+                    MetricName: "RequestCountPerTarget",
+                    Namespace: "AWS/ApplicationELB"
+                  }),
+                  Stat: "Sum"
+                },
+                ReturnData: false
               })
             ])
           }),
           ScaleInCooldown: 180,
           ScaleOutCooldown: 30,
-          TargetValue: 15000
+          TargetValue: 60000
         })
       }
     )
@@ -371,7 +380,7 @@ describe("Garnet Broker AWS runtime", () => {
     )
     expect(apiTarget).toBeDefined()
     expect(apiTarget.Properties).toMatchObject({
-      MinCapacity: 2,
+      MinCapacity: 3,
       MaxCapacity: 64
     })
   })

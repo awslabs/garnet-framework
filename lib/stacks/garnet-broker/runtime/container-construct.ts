@@ -89,6 +89,31 @@ export interface GarnetBrokerRuntimeProps {
     context_allow_hosts: string
 }
 
+const request_count_per_target_metric = (
+    id: string,
+    target: ApplicationTargetGroup
+): CfnScalingPolicy.TargetTrackingMetricDataQueryProperty => ({
+    id,
+    returnData: false,
+    metricStat: {
+        metric: {
+            namespace: "AWS/ApplicationELB",
+            metricName: "RequestCountPerTarget",
+            dimensions: [
+                {
+                    name: "LoadBalancer",
+                    value: target.firstLoadBalancerFullName
+                },
+                {
+                    name: "TargetGroup",
+                    value: target.targetGroupFullName
+                }
+            ]
+        },
+        stat: "Sum"
+    }
+})
+
 export class GarnetBrokerRuntime extends Construct {
     public readonly fargate_alb: ApplicationLoadBalancer
     public readonly sg_broker: SecurityGroup
@@ -698,94 +723,22 @@ export class GarnetBrokerRuntime extends Construct {
                         customizedMetricSpecification: {
                             metrics: [
                                 {
-                                    id: "requests_per_task",
+                                    id: "requests_per_target",
                                     expression:
-                                        "IF(running > 0, " +
-                                        "(production_requests + " +
-                                        "alternate_requests) / running, 0)",
+                                        "production_requests_per_target + " +
+                                        "alternate_requests_per_target",
                                     label:
-                                        "Garnet API requests per running task",
+                                        "Garnet API requests per active target",
                                     returnData: true
                                 },
-                                {
-                                    id: "production_requests",
-                                    returnData: false,
-                                    metricStat: {
-                                        metric: {
-                                            namespace:
-                                                "AWS/ApplicationELB",
-                                            metricName: "RequestCount",
-                                            dimensions: [
-                                                {
-                                                    name: "LoadBalancer",
-                                                    value:
-                                                        production_target
-                                                            .firstLoadBalancerFullName
-                                                },
-                                                {
-                                                    name: "TargetGroup",
-                                                    value:
-                                                        production_target
-                                                            .targetGroupFullName
-                                                }
-                                            ]
-                                        },
-                                        stat: "Sum"
-                                    }
-                                },
-                                {
-                                    id: "alternate_requests",
-                                    returnData: false,
-                                    metricStat: {
-                                        metric: {
-                                            namespace:
-                                                "AWS/ApplicationELB",
-                                            metricName: "RequestCount",
-                                            dimensions: [
-                                                {
-                                                    name: "LoadBalancer",
-                                                    value:
-                                                        alternate_target
-                                                            .firstLoadBalancerFullName
-                                                },
-                                                {
-                                                    name: "TargetGroup",
-                                                    value:
-                                                        alternate_target
-                                                            .targetGroupFullName
-                                                }
-                                            ]
-                                        },
-                                        stat: "Sum"
-                                    }
-                                },
-                                {
-                                    id: "running",
-                                    returnData: false,
-                                    metricStat: {
-                                        metric: {
-                                            namespace:
-                                                "ECS/ContainerInsights",
-                                            metricName:
-                                                "RunningTaskCount",
-                                            dimensions: [
-                                                {
-                                                    name: "ClusterName",
-                                                    value:
-                                                        this.cluster
-                                                            .clusterName
-                                                },
-                                                {
-                                                    name: "ServiceName",
-                                                    value:
-                                                        api.service
-                                                            .serviceName
-                                                }
-                                            ]
-                                        },
-                                        stat: "Average"
-                                    }
-                                }
+                                request_count_per_target_metric(
+                                    "production_requests_per_target",
+                                    production_target
+                                ),
+                                request_count_per_target_metric(
+                                    "alternate_requests_per_target",
+                                    alternate_target
+                                )
                             ]
                         }
                     }

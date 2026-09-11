@@ -1,5 +1,5 @@
-import { App } from "aws-cdk-lib"
-import { Template } from "aws-cdk-lib/assertions"
+import { App, NestedStack } from "aws-cdk-lib"
+import { Match, Template } from "aws-cdk-lib/assertions"
 
 const CONFIG_PATH = require.resolve("../configuration")
 
@@ -38,6 +38,35 @@ describe("Garnet load deployment outputs", () => {
       }
     )
     const template = Template.fromStack(stack)
+    const broker = stack.node.findChild("GarnetBroker") as NestedStack
+    const broker_template = Template.fromStack(broker)
+
+    broker_template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "TargetTrackingScaling",
+        TargetTrackingScalingPolicyConfiguration:
+          Match.objectLike({
+            PredefinedMetricSpecification: {
+              PredefinedMetricType:
+                "ALBRequestCountPerTarget",
+              ResourceLabel: Match.anyValue()
+            },
+            TargetValue: 60000
+          })
+      }
+    )
+    const scalable_targets = Object.values(
+      broker_template.findResources(
+        "AWS::ApplicationAutoScaling::ScalableTarget"
+      )
+    ) as any[]
+    expect(
+      scalable_targets.find(
+        (resource) =>
+          resource.Properties.MaxCapacity === 64
+      )?.Properties.MinCapacity
+    ).toBe(3)
 
     for (const output of [
       "GarnetApiTokenSecretArn",

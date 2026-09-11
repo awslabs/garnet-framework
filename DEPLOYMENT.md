@@ -192,16 +192,24 @@ zone. `Parameters.nat_gateway_count = 1` is available only as a lower-cost test
 profile and deliberately gives up zone-independent internet egress. S3 traffic
 from private application subnets uses a gateway endpoint rather than NAT.
 
-The API profile uses 2 vCPU / 4 GiB ARM64 tasks, starts at two tasks and may
-scale to 64. Request target tracking is configured at 15,000 requests per
-running task per minute (250 requests/s), not 15,000 requests/s. Rolling
+The API profile uses 2 vCPU / 4 GiB ARM64 tasks, starts at three tasks and may
+scale to 64. Request target tracking is configured at 60,000 requests per
+healthy target per minute (1,000 requests/s), not 60,000 requests/s. Rolling
 deployments use native `ALBRequestCountPerTarget`. Because AWS does not support
-that predefined metric with ECS blue/green, blue/green uses metric math across
-both target groups divided by `RunningTaskCount`; this remains valid when ECS
-swaps the active target group. At that target the configuration has a
-steady-state planning ceiling of 16,000 requests/s, but this is only an
-autoscaling shape. Actual endpoint capacity depends on query mix, payload size,
-Aurora latency, connection pressure and downstream work.
+that predefined metric with ECS blue/green, blue/green sums the
+`RequestCountPerTarget` metrics for both target groups. The inactive group
+contributes zero outside deployments; during a traffic shift, the sum preserves
+the request rate per task without counting the idle task set as serving
+capacity. At that target the configuration has a steady-state planning ceiling
+of 64,000 requests/s, but this is only an autoscaling shape.
+
+The initial 1,000 requests/s target is deliberately below the local broad
+numeric-range saturation knee measured on 11 September 2026: one process
+completed 3,000 requests/s with p99 54.272 ms, while 3,500 requests/s reached
+p99 933.888 ms. Those measurements guide the first AWS profile; they do not
+qualify AWS capacity. Actual endpoint capacity depends on query mix, payload
+size, Aurora latency, connection pressure and downstream work, and the target
+must be ratcheted from distributed AWS evidence.
 
 Snapshot workers use 1 vCPU / 2 GiB ARM64 tasks and scale independently from one
 to eight tasks. Each task exposes its two bounded materialization slots through
