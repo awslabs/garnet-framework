@@ -90,7 +90,8 @@ The API blue/green path has:
 3. a private ARM64 lifecycle Lambda at
    `POST_TEST_TRAFFIC_SHIFT`;
 4. validation of `/health` and
-   `/ngsi-ld/v1/entities?limit=1&local=true`;
+   `/ngsi-ld/v1/entities?limit=1&local=true`, including a bounded
+   `application/ld+json` Entity-array response check;
 5. deployment rollback alarms for unhealthy targets and target 5xx rate across
    both target groups;
 6. a configurable bake window retaining the previous revision.

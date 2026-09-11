@@ -2,6 +2,8 @@ export {}
 
 const {
   handler,
+  requireEntityCollection,
+  timeoutWithin,
   validate
 } = require(
   "../lib/stacks/garnet-broker/runtime/lambda/deployment-validation"
@@ -24,7 +26,10 @@ describe("Garnet API deployment validation", () => {
   it("checks health and a local-only NGSI-LD database read", async () => {
     global.fetch = jest.fn()
       .mockResolvedValueOnce({ status: 200 })
-      .mockResolvedValueOnce({ status: 200 })
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => []
+      })
 
     await expect(
       validate("http://internal:8080", 100)
@@ -38,8 +43,38 @@ describe("Garnet API deployment validation", () => {
       2,
       "http://internal:8080" +
         "/ngsi-ld/v1/entities?limit=1&local=true",
-      expect.any(Object)
+      expect.objectContaining({
+        headers: {
+          Accept: "application/ld+json"
+        }
+      })
     )
+  })
+
+  it("rejects a successful status with a malformed Entity collection", async () => {
+    await expect(requireEntityCollection({
+      json: async () => ({ id: "not-an-array" })
+    }, "/ngsi-ld/v1/entities")).rejects.toThrow(
+      /did not return an Entity array/
+    )
+    await expect(requireEntityCollection({
+      json: async () => {
+        throw new Error("invalid JSON")
+      }
+    }, "/ngsi-ld/v1/entities")).rejects.toThrow(
+      /did not return JSON: invalid JSON/
+    )
+  })
+
+  it("bounds every network probe by the remaining lifecycle deadline", () => {
+    const now = jest.spyOn(Date, "now")
+      .mockReturnValue(10_000)
+
+    expect(timeoutWithin(12_500)).toBe(2_500)
+    expect(timeoutWithin(20_000)).toBe(5_000)
+    expect(() => timeoutWithin(10_000))
+      .toThrow(/deadline exceeded/)
+    now.mockRestore()
   })
 
   it("returns the ECS failure contract when validation cannot run", async () => {
@@ -47,6 +82,20 @@ describe("Garnet API deployment validation", () => {
     jest.spyOn(console, "error").mockImplementation(() => undefined)
     await expect(handler()).resolves.toEqual({
       hookStatus: "FAILED"
+    })
+  })
+
+  it("returns the native ECS success contract after semantic validation", async () => {
+    process.env.TEST_ORIGIN = "http://internal:8080"
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ status: 200 })
+      .mockResolvedValueOnce({
+        status: 200,
+        json: async () => []
+      })
+
+    await expect(handler()).resolves.toEqual({
+      hookStatus: "SUCCEEDED"
     })
   })
 })
