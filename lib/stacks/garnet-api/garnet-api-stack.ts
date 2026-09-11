@@ -21,6 +21,7 @@ export class GarnetApi extends NestedStack {
 
     public readonly private_sub_endpoint: string
     public readonly api_ref: string
+    public readonly stage_name: string
     public readonly broker_api_endpoint: string
     public readonly garnet_api_token_secret: ISecret
 
@@ -46,6 +47,7 @@ export class GarnetApi extends NestedStack {
 
 
       this.api_ref = api_gateway_construct.api_ref
+      this.stage_name = api_gateway_construct.stage_name
       this.broker_api_endpoint = `https://${api_gateway_construct.api_ref}.execute-api.${Aws.REGION}.amazonaws.com`
       this.garnet_api_token_secret = api_auth_construct.garnet_api_token_secret
       

@@ -242,18 +242,39 @@ LOAD_DURATION_SECONDS=3600 \
 LOAD_WARMUP_SECONDS=60 \
 LOAD_TELEMETRY_GROUP_ID=GarnetRelease20260910 \
 LOAD_EXTERNAL_TELEMETRY_ID=GarnetRelease20260910-10000-1 \
+LOAD_SYSTEM_COST_PER_HOUR="$GARNET_TEST_SYSTEM_COST_PER_HOUR" \
 GARNET_COMMIT="$(git rev-parse HEAD)" \
 npm run load:aws
 ```
 
+Qualification defaults are the minimum admissible shape: two generators,
+50,000 fixture Entities, 60 seconds of warm-up and a 3,600-second steady-state
+run. Explicit qualification durations must be whole minutes and at least one
+hour. The launcher rounds an implicit start to the next whole minute and rejects
+an explicit unaligned start, so every returned series can be checked against the
+same 60-second sample grid.
+
 Set explicit latency, error and cost budgets before treating the run as a pass.
-Every qualification now waits for the required CloudWatch datapoints and writes
-one raw telemetry artifact locally under `results/aws-evidence/` and to the
-Object-Locked load-report prefix. The artifact binds the exact aggregate S3
-object version and ETag to the deployed image and Region, and retains the API
-EMF metrics, ECS service CPU and memory, Aurora
-capacity/connections/latency, and Entity-event SQS metrics returned by
-`GetMetricData`.
+Every qualification waits for all required CloudWatch datapoints and writes one
+schema-2 native telemetry artifact locally under `results/aws-evidence/` and to
+the Object-Locked load-report prefix. The artifact binds the aggregate report's
+S3 version, ETag and SHA-256 digest to the deployed image, AWS account and
+Region.
+
+The seven canonical comparison roles use API Gateway public-ingress request
+count, p99 latency in seconds and 5xx count; maximum CPU and memory across all
+broker ECS services; and maximum Aurora CPU and connections across the writer
+and readers. Public ingress requests and 5xx responses must reconcile exactly
+with the aggregate report. Keep unrelated clients, synthetic monitors and
+manual tests off the qualification API during the steady-state window.
+
+The same artifact retains every returned auxiliary one-minute series: API EMF
+requests/errors/rejections/p99, per-service ECS CPU and memory, delivery and
+snapshot worker utilization, SQS backlog/age/flow, Firehose Iceberg
+freshness/failures/throttling/partitions, and Aurora capacity, I/O, latency,
+throughput and replica lag. Missing, duplicate, negative, partial or out-of-order
+samples fail collection; the collector does not silently substitute a shorter
+window.
 
 Use one telemetry group for every rate/trial belonging to the same native
 deployment, and a distinct external telemetry id for each run. After the
@@ -267,8 +288,9 @@ npm run evidence:merge -- \
   results/aws-evidence/GarnetRelease20260910R5000T3-telemetry-evidence.json
 ```
 
-The merged file preserves every raw per-run collection and is the
-`telemetryArtifact` supplied to the broker's best-native comparison manifest.
+The merged schema-2 file preserves every per-run query and result and is
+directly usable as the `telemetryArtifact` in the broker's best-native
+comparison manifest.
 Aurora failure injection and API-visible zero-loss reconciliation remain a
 separate, explicit durability run; load collection never triggers a database
 failover.

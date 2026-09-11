@@ -88,23 +88,23 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
   const generator_count = positive_integer(
     env,
     'LOAD_GENERATOR_COUNT',
-    1,
+    qualification ? 2 : 1,
     32
   )
   const fixture_entities = positive_integer(
     env,
     'LOAD_FIXTURE_ENTITIES',
-    1000
+    qualification ? 50_000 : 1000
   )
   const duration_seconds = positive_number(
     env,
     'LOAD_DURATION_SECONDS',
-    10
+    qualification ? 3_600 : 10
   )
   const warmup_seconds = positive_number(
     env,
     'LOAD_WARMUP_SECONDS',
-    2
+    qualification ? 60 : 2
   )
   const telemetry_wait_seconds = positive_integer(
     env,
@@ -121,6 +121,30 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
   const telemetry_group_id = setting(env, 'LOAD_TELEMETRY_GROUP_ID')
   const telemetry_trial_id = setting(env, 'LOAD_EXTERNAL_TELEMETRY_ID')
   if (qualification) {
+    if (generator_count < 2) {
+      throw new Error(
+        'LOAD_GENERATOR_COUNT shall be at least 2 for qualification'
+      )
+    }
+    if (fixture_entities < 50_000) {
+      throw new Error(
+        'LOAD_FIXTURE_ENTITIES shall be at least 50000 for qualification'
+      )
+    }
+    if (
+      !Number.isSafeInteger(duration_seconds) ||
+      duration_seconds < 3_600 ||
+      duration_seconds % 60 !== 0
+    ) {
+      throw new Error(
+        'LOAD_DURATION_SECONDS shall be whole minutes and at least 3600 for qualification'
+      )
+    }
+    if (warmup_seconds < 60) {
+      throw new Error(
+        'LOAD_WARMUP_SECONDS shall be at least 60 for qualification'
+      )
+    }
     if (telemetry_group_id === undefined) {
       throw new Error(
         'LOAD_TELEMETRY_GROUP_ID is required for qualification'
@@ -141,18 +165,29 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
     }
   }
   const configured_start = setting(env, 'LOAD_START_AT')
-  const start_at = configured_start === undefined
+  const requested_start = configured_start === undefined
     ? new Date(now.getTime() + start_delay_seconds * 1000)
     : new Date(
       Number.isFinite(Number(configured_start))
         ? Number(configured_start)
         : configured_start
     )
+  const start_at =
+    qualification && configured_start === undefined
+      ? new Date(
+        Math.ceil(requested_start.getTime() / 60_000) * 60_000
+      )
+      : requested_start
   if (
     Number.isNaN(start_at.getTime()) ||
     start_at.getTime() <= now.getTime()
   ) {
     throw new Error('LOAD_START_AT shall be a future epoch or ISO timestamp')
+  }
+  if (qualification && start_at.getTime() % 60_000 !== 0) {
+    throw new Error(
+      'LOAD_START_AT shall align to a whole minute for qualification'
+    )
   }
   const actual_start_delay_seconds =
     Math.ceil((start_at.getTime() - now.getTime()) / 1000)
@@ -160,6 +195,9 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
   const shared = {
     LOAD_RUN_ID: run_id,
     LOAD_GENERATOR_COUNT: String(generator_count),
+    LOAD_FIXTURE_ENTITIES: String(fixture_entities),
+    LOAD_DURATION_SECONDS: String(duration_seconds),
+    LOAD_WARMUP_SECONDS: String(warmup_seconds),
     LOAD_START_AT: start_at.toISOString(),
     LOAD_URL: required_output(
       outputs,
@@ -227,6 +265,12 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
         event_queue: required_output(
           outputs,
           'GarnetEntityEventQueueName'
+        ),
+        api_id: required_output(outputs, 'GarnetApiId'),
+        api_stage: required_output(outputs, 'GarnetApiStage'),
+        lake_stream: required_output(
+          outputs,
+          'GarnetLakeDeliveryStream'
         ),
         report_bucket,
         report_key,

@@ -23,6 +23,7 @@ export interface GarnetApiGatewayProps {
 
 export class GarnetApiGateway extends Construct{
     public readonly api_ref: string
+    public readonly stage_name = "$default"
     constructor(scope: Construct, id: string, props: GarnetApiGatewayProps) {
         super(scope, id)
         // Check props

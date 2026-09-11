@@ -7,7 +7,8 @@ const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 const { plan_load_test } = require('./load-test-plan.js')
 const {
-  build_telemetry_artifact
+  build_telemetry_artifact,
+  qualification_window
 } = require('./telemetry-evidence.js')
 const {
   metric_data_queries,
@@ -39,11 +40,13 @@ const read_report = (telemetry, aws = aws_cli) => {
       telemetry.report_key,
       output
     ])
+    const bytes = fs.readFileSync(output)
     return {
-      report: JSON.parse(fs.readFileSync(output, 'utf8')),
+      report: JSON.parse(bytes.toString('utf8')),
       source: {
         version_id: source.VersionId,
-        etag: source.ETag
+        etag: source.ETag,
+        sha256: crypto.createHash('sha256').update(bytes).digest('hex')
       }
     }
   } finally {
@@ -51,14 +54,13 @@ const read_report = (telemetry, aws = aws_cli) => {
   }
 }
 
-const metric_window = report => ({
-  start_time: new Date(
-    Date.parse(report.startedAt) - 60_000
-  ).toISOString(),
-  end_time: new Date(
-    Date.parse(report.completedAt) + 120_000
-  ).toISOString()
-})
+const metric_window = report => {
+  const window = qualification_window(report)
+  return {
+    start_time: window.started_at,
+    end_time: window.completed_at
+  }
+}
 
 const collect_telemetry_evidence = async (
   plan,
@@ -108,10 +110,14 @@ const collect_telemetry_evidence = async (
         'CloudWatch telemetry exceeded one bounded GetMetricData response'
       )
     }
-    reasons = metric_data_reasons(metric_response, {
-      started_at: report.startedAt,
-      completed_at: report.completedAt
-    })
+    reasons = metric_data_reasons(
+      metric_response,
+      {
+        started_at: window.start_time,
+        completed_at: window.end_time
+      },
+      queries
+    )
     if (reasons.length > 0 && now() >= deadline) {
       throw new Error(
         `CloudWatch telemetry did not converge: ${reasons.join('; ')}`

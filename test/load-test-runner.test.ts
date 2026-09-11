@@ -27,7 +27,10 @@ const OUTPUTS = {
     `public.ecr.aws/garnet/broker@sha256:${"a".repeat(64)}`,
   GarnetBrokerCluster: "garnet-broker-cluster",
   GarnetDatabaseCluster: "garnet-broker-aurora",
-  GarnetEntityEventQueueName: "garnet-entity-events.fifo"
+  GarnetEntityEventQueueName: "garnet-entity-events.fifo",
+  GarnetApiId: "api-123",
+  GarnetApiStage: "$default",
+  GarnetLakeDeliveryStream: "garnet-lake"
 }
 
 const override_environment = (
@@ -64,6 +67,8 @@ describe("AWS load-test launcher", () => {
     expect(environments[0]).toMatchObject({
       LOAD_RATE: "5000",
       LOAD_FIXTURE_ENTITIES: "50000",
+      LOAD_DURATION_SECONDS: "10",
+      LOAD_WARMUP_SECONDS: "2",
       LOAD_GENERATOR_COUNT: "3",
       LOAD_URL: "http://internal.example",
       LOAD_ENVIRONMENT: "aws-ecs-internal"
@@ -81,7 +86,6 @@ describe("AWS load-test launcher", () => {
       OUTPUTS,
       {
         LOAD_QUALIFICATION: "true",
-        LOAD_GENERATOR_COUNT: "2",
         LOAD_START_DELAY_SECONDS: "60",
         LOAD_TELEMETRY_GROUP_ID: "garnet-release",
         LOAD_EXTERNAL_TELEMETRY_ID: "garnet-release-5000-1"
@@ -90,6 +94,7 @@ describe("AWS load-test launcher", () => {
     )
 
     expect(plan.qualification).toBe(true)
+    expect(plan.generator_overrides).toHaveLength(2)
     expect(plan.telemetry).toMatchObject({
       group_id: "garnet-release",
       trial_id: "garnet-release-5000-1",
@@ -99,6 +104,9 @@ describe("AWS load-test launcher", () => {
       broker_cluster: "garnet-broker-cluster",
       database_cluster: "garnet-broker-aurora",
       event_queue: "garnet-entity-events.fifo",
+      api_id: "api-123",
+      api_stage: "$default",
+      lake_stream: "garnet-lake",
       artifact_key:
         "garnet-load/R20260907120000/telemetry-evidence.json"
     })
@@ -106,7 +114,10 @@ describe("AWS load-test launcher", () => {
       expect(override_environment(override)).toMatchObject({
         LOAD_URL: "https://public.example",
         LOAD_ENVIRONMENT: "aws-ecs",
-        LOAD_QUALIFICATION: "1"
+        LOAD_QUALIFICATION: "1",
+        LOAD_FIXTURE_ENTITIES: "50000",
+        LOAD_DURATION_SECONDS: "3600",
+        LOAD_WARMUP_SECONDS: "60"
       })
       expect(override_environment(override))
         .not.toHaveProperty("LOAD_HEADERS_JSON")
@@ -135,6 +146,55 @@ describe("AWS load-test launcher", () => {
       LOAD_EXTERNAL_TELEMETRY_ID: "garnet-release-1"
     })).toThrow(
       "LOAD_TELEMETRY_GROUP_ID is required for qualification"
+    )
+  })
+
+  it("rejects qualification windows that cannot produce minute telemetry", () => {
+    for (const [setting, value, reason] of [
+      [
+        "LOAD_GENERATOR_COUNT",
+        "1",
+        "LOAD_GENERATOR_COUNT shall be at least 2"
+      ],
+      [
+        "LOAD_FIXTURE_ENTITIES",
+        "49999",
+        "LOAD_FIXTURE_ENTITIES shall be at least 50000"
+      ],
+      [
+        "LOAD_WARMUP_SECONDS",
+        "59",
+        "LOAD_WARMUP_SECONDS shall be at least 60"
+      ]
+    ]) {
+      expect(() => plan_load_test(OUTPUTS, {
+        LOAD_QUALIFICATION: "1",
+        LOAD_TELEMETRY_GROUP_ID: "garnet-release",
+        LOAD_EXTERNAL_TELEMETRY_ID: "garnet-release-1",
+        [setting]: value
+      })).toThrow(reason)
+    }
+
+    expect(() => plan_load_test(OUTPUTS, {
+      LOAD_QUALIFICATION: "1",
+      LOAD_TELEMETRY_GROUP_ID: "garnet-release",
+      LOAD_EXTERNAL_TELEMETRY_ID: "garnet-release-1",
+      LOAD_DURATION_SECONDS: "3601"
+    })).toThrow(
+      "LOAD_DURATION_SECONDS shall be whole minutes and at least 3600"
+    )
+
+    expect(() => plan_load_test(
+      OUTPUTS,
+      {
+        LOAD_QUALIFICATION: "1",
+        LOAD_TELEMETRY_GROUP_ID: "garnet-release",
+        LOAD_EXTERNAL_TELEMETRY_ID: "garnet-release-1",
+        LOAD_START_AT: "2026-09-07T12:01:01.000Z"
+      },
+      new Date("2026-09-07T12:00:00Z")
+    )).toThrow(
+      "LOAD_START_AT shall align to a whole minute for qualification"
     )
   })
 
@@ -282,11 +342,18 @@ describe("AWS load-test launcher", () => {
         runId: "evidence",
         externalTelemetryId: "garnet-release-5000-1",
         awsRegion: "eu-west-3",
-        garnetImage: OUTPUTS.GarnetBrokerImage
+        garnetImage: OUTPUTS.GarnetBrokerImage,
+        startAtEpochMs: Date.parse("2026-09-07T12:01:00.000Z"),
+        durationSeconds: 3600
       },
-      totals: {
+      steady: {
         started: 2
-      }
+      },
+      targets: [{
+        statuses: {
+          "200": 2
+        }
+      }]
     }
     const cluster = {
       DBClusterMembers: [{
@@ -313,18 +380,45 @@ describe("AWS load-test launcher", () => {
         const queries = JSON.parse(
           args[args.indexOf("--metric-data-queries") + 1]!
         )
+        const timestamps = Array.from(
+          { length: 60 },
+          (_, index) =>
+            new Date(
+              Date.parse("2026-09-07T12:01:00.000Z") +
+              index * 60_000
+            ).toISOString()
+        )
         return {
-          MetricDataResults: queries.map((query: any) => ({
-            Id: query.Id,
-            StatusCode: "Complete",
-            Timestamps: [
-              "2026-09-07T12:02:00.000Z",
-              "2026-09-07T13:01:00.000Z"
-            ],
-            Values: ["app_5xx", "app_rejected"].includes(query.Id)
-              ? [0, 0]
-              : [1, 1]
-          })),
+          MetricDataResults: queries
+            .filter((query: any) => query.ReturnData)
+            .map((query: any) => ({
+              Id: query.Id,
+              StatusCode: "Complete",
+              Timestamps: timestamps,
+              Values: timestamps.map((_, index) => {
+                if (
+                  query.Id === "ingress_requests" ||
+                  query.Id === "app_requests"
+                ) {
+                  return index < 2 ? 1 : 0
+                }
+                if (
+                  [
+                    "ingress_5xx",
+                    "app_5xx",
+                    "app_rejected",
+                    "sqs_age",
+                    "sqs_visible",
+                    "firehose_failed_rows",
+                    "firehose_throttled",
+                    "firehose_partition_exceeded"
+                  ].includes(query.Id)
+                ) {
+                  return 0
+                }
+                return query.Id === "ingress_p99" ? 0.02 : 1
+              })
+            })),
           Messages: []
         }
       }
@@ -356,20 +450,24 @@ describe("AWS load-test launcher", () => {
         fs.readFileSync(result.path, "utf8")
       )
       expect(artifact).toMatchObject({
+        schemaVersion: 2,
+        kind: "native-telemetry-evidence",
         evidenceId: "garnet-release",
         trialTelemetryIds: ["garnet-release-5000-1"],
-        collection: {
+        runs: [{
           runId: "evidence",
           trialTelemetryId: "garnet-release-5000-1",
           accountId: "111111111111",
           reportVersionId: "aggregate-version-1",
           reportETag: "\"aggregate-etag\"",
-          databaseMembers: [
-            { identifier: "garnet-writer", writer: true },
-            { identifier: "garnet-reader", writer: false }
-          ]
-        }
+          periodSeconds: 60,
+          pageCount: 1,
+          nextTokenExhausted: true
+        }]
       })
+      expect(artifact.runs[0].reportSha256).toMatch(/^[0-9a-f]{64}$/)
+      expect(artifact.runs[0].metricDataResults[0].Timestamps)
+        .toHaveLength(60)
       expect(uploads).toHaveLength(1)
       expect(
         uploads[0][uploads[0].indexOf("--key") + 1]

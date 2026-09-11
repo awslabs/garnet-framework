@@ -53,7 +53,10 @@ describe("Garnet load deployment outputs", () => {
       "GarnetBrokerImage",
       "GarnetBrokerCluster",
       "GarnetDatabaseCluster",
-      "GarnetEntityEventQueueName"
+      "GarnetEntityEventQueueName",
+      "GarnetApiId",
+      "GarnetApiStage",
+      "GarnetLakeDeliveryStream"
     ]) {
       template.hasOutput(output, {})
     }

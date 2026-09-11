@@ -1,9 +1,11 @@
 const {
-  database_members,
+  TELEMETRY_METRICS,
   metric_data_queries,
   metric_data_reasons,
   metric_sum
 } = require('./telemetry-metrics.js')
+
+const SHA256 = /^[0-9a-f]{64}$/i
 
 const non_empty_string = (value, label) => {
   if (typeof value !== 'string' || value.trim() === '') {
@@ -17,7 +19,58 @@ const timestamp = (value, label) => {
   if (!Number.isFinite(Date.parse(result))) {
     throw new Error(`${label} shall be an ISO-8601 timestamp`)
   }
+  return new Date(result).toISOString()
+}
+
+const positive_integer = (value, label) => {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new Error(`${label} shall be a positive safe integer`)
+  }
+  return value
+}
+
+const non_negative_integer = (value, label) => {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`${label} shall be a non-negative safe integer`)
+  }
+  return value
+}
+
+const sha256 = (value, label) => {
+  const result = non_empty_string(value, label)
+  if (!SHA256.test(result)) {
+    throw new Error(`${label} shall be a sha256 digest`)
+  }
   return result
+}
+
+const qualification_window = report => {
+  const configuration = report?.configuration
+  const start = configuration?.startAtEpochMs
+  const duration = configuration?.durationSeconds
+  if (!Number.isSafeInteger(start) || start <= 0) {
+    throw new Error(
+      'aggregate report.configuration.startAtEpochMs is required'
+    )
+  }
+  if (!Number.isSafeInteger(duration) || duration <= 0) {
+    throw new Error(
+      'aggregate report.configuration.durationSeconds is required'
+    )
+  }
+  const end = start + duration * 1000
+  if (
+    start % 60_000 !== 0 ||
+    end % 60_000 !== 0
+  ) {
+    throw new Error(
+      'qualification telemetry window shall use aligned whole minutes'
+    )
+  }
+  return {
+    started_at: new Date(start).toISOString(),
+    completed_at: new Date(end).toISOString()
+  }
 }
 
 const assert_report_identity = (telemetry, report) => {
@@ -52,17 +105,58 @@ const assert_report_identity = (telemetry, report) => {
       'aggregate report image does not match the qualification plan'
     )
   }
+  qualification_window(report)
+}
+
+const report_5xx = report => {
+  if (!Array.isArray(report?.targets)) {
+    throw new Error('aggregate report.targets is required')
+  }
+  let total = 0
+  for (const [target_index, target] of report.targets.entries()) {
+    const statuses = target?.statuses
+    if (
+      statuses === null ||
+      typeof statuses !== 'object' ||
+      Array.isArray(statuses)
+    ) {
+      throw new Error(
+        `aggregate report.targets[${target_index}].statuses is required`
+      )
+    }
+    for (const [status, count] of Object.entries(statuses)) {
+      const numeric = Number(status)
+      const value = non_negative_integer(
+        count,
+        `aggregate report.targets[${target_index}].statuses.${status}`
+      )
+      if (numeric >= 500 && numeric <= 599) total += value
+    }
+  }
+  return total
 }
 
 const assert_application_totals = (report, metric_response) => {
-  const started_requests = report.totals?.started
-  if (
-    !Number.isSafeInteger(started_requests) ||
-    started_requests <= 0 ||
-    metric_sum(metric_response, 'app_requests') < started_requests
-  ) {
+  const started_requests = non_negative_integer(
+    report?.steady?.started,
+    'aggregate report.steady.started'
+  )
+  const ingress_requests = metric_sum(
+    metric_response,
+    'ingress_requests'
+  )
+  if (ingress_requests !== started_requests) {
     throw new Error(
-      'application request telemetry does not account for the load report'
+      `public ingress telemetry counted ` +
+      `${ingress_requests}/${started_requests} load requests`
+    )
+  }
+  const expected_5xx = report_5xx(report)
+  const ingress_5xx = metric_sum(metric_response, 'ingress_5xx')
+  if (ingress_5xx !== expected_5xx) {
+    throw new Error(
+      `public ingress telemetry counted ` +
+      `${ingress_5xx}/${expected_5xx} HTTP 5xx responses`
     )
   }
   if (metric_sum(metric_response, 'app_5xx') !== 0) {
@@ -92,67 +186,146 @@ const build_telemetry_artifact = ({
       'AWS caller account does not match the deployed qualification account'
     )
   }
-  const metric_window = {
-    started_at: report.startedAt,
-    completed_at: report.completedAt
-  }
-  const reasons = metric_data_reasons(metric_response, metric_window)
+  const window = qualification_window(report)
+  const queries = metric_data_queries(telemetry, cluster)
+  const reasons = metric_data_reasons(
+    metric_response,
+    window,
+    queries
+  )
   if (reasons.length > 0) {
     throw new Error(`telemetry metrics are incomplete: ${reasons.join('; ')}`)
   }
   assert_application_totals(report, metric_response)
-  const started_at = timestamp(report.startedAt, 'aggregate report.startedAt')
-  const completed_at = timestamp(
-    report.completedAt,
-    'aggregate report.completedAt'
-  )
-  if (Date.parse(completed_at) < Date.parse(started_at)) {
-    throw new Error(
-      'aggregate report.completedAt shall not precede startedAt'
-    )
-  }
   const collection_timestamp = timestamp(
     collected_at,
-    'collection.collectedAt'
+    'telemetry run.collectedAt'
   )
-  if (Date.parse(collection_timestamp) < Date.parse(completed_at)) {
+  if (
+    Date.parse(collection_timestamp) <
+    Date.parse(window.completed_at)
+  ) {
     throw new Error(
-      'collection.collectedAt shall not precede report completion'
+      'telemetry run.collectedAt shall not precede report completion'
     )
   }
+  const run = {
+    runId: telemetry.run_id,
+    trialTelemetryId: telemetry.trial_id,
+    accountId: account_id,
+    startedAt: window.started_at,
+    completedAt: window.completed_at,
+    collectedAt: collection_timestamp,
+    report: telemetry.report_uri,
+    reportVersionId: non_empty_string(
+      report_source?.version_id,
+      'aggregate report source.VersionId'
+    ),
+    reportETag: non_empty_string(
+      report_source?.etag,
+      'aggregate report source.ETag'
+    ),
+    reportSha256: sha256(
+      report_source?.sha256,
+      'aggregate report source.sha256'
+    ),
+    periodSeconds: 60,
+    scanBy: 'TimestampAscending',
+    pageCount: 1,
+    nextTokenExhausted: true,
+    messages: metric_response.Messages ?? [],
+    metrics: TELEMETRY_METRICS,
+    metricDataQueries: queries,
+    metricDataResults: metric_response.MetricDataResults
+  }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: 'native-telemetry-evidence',
     evidenceId: telemetry.group_id,
     source: 'aws-cloudwatch-get-metric-data',
     awsRegion: telemetry.aws_region,
     image: telemetry.image,
+    startedAt: window.started_at,
+    completedAt: collection_timestamp,
+    trialTelemetryIds: [telemetry.trial_id],
+    runs: [run]
+  }
+}
+
+const same_metrics = value =>
+  JSON.stringify(value) === JSON.stringify(TELEMETRY_METRICS)
+
+const parse_run = (run, label) => {
+  if (run === null || typeof run !== 'object' || Array.isArray(run)) {
+    throw new Error(`${label} shall be an object`)
+  }
+  const started_at = timestamp(run.startedAt, `${label}.startedAt`)
+  const completed_at = timestamp(run.completedAt, `${label}.completedAt`)
+  const collected_at = timestamp(run.collectedAt, `${label}.collectedAt`)
+  if (
+    Date.parse(completed_at) <= Date.parse(started_at) ||
+    Date.parse(collected_at) < Date.parse(completed_at)
+  ) {
+    throw new Error(`${label} timestamps are not ordered`)
+  }
+  if (run.periodSeconds !== 60) {
+    throw new Error(`${label}.periodSeconds shall be 60`)
+  }
+  if (run.scanBy !== 'TimestampAscending') {
+    throw new Error(`${label}.scanBy shall be TimestampAscending`)
+  }
+  if (run.nextTokenExhausted !== true) {
+    throw new Error(`${label}.nextTokenExhausted shall be true`)
+  }
+  if (!Array.isArray(run.messages) || run.messages.length !== 0) {
+    throw new Error(`${label}.messages shall be empty`)
+  }
+  if (!same_metrics(run.metrics)) {
+    throw new Error(`${label}.metrics shall cover canonical telemetry roles`)
+  }
+  const metric_response = {
+    MetricDataResults: run.metricDataResults,
+    Messages: run.messages
+  }
+  const reasons = metric_data_reasons(
+    metric_response,
+    {
+      started_at,
+      completed_at
+    },
+    run.metricDataQueries
+  )
+  if (reasons.length > 0) {
+    throw new Error(`${label} telemetry is incomplete: ${reasons.join('; ')}`)
+  }
+  if (
+    metric_sum(metric_response, 'app_5xx') !== 0 ||
+    metric_sum(metric_response, 'app_rejected') !== 0
+  ) {
+    throw new Error(`${label} reports failed or rejected application requests`)
+  }
+  non_empty_string(run.runId, `${label}.runId`)
+  non_empty_string(run.trialTelemetryId, `${label}.trialTelemetryId`)
+  const account = non_empty_string(run.accountId, `${label}.accountId`)
+  if (!/^\d{12}$/.test(account)) {
+    throw new Error(`${label}.accountId shall be a 12-digit AWS account`)
+  }
+  non_empty_string(run.report, `${label}.report`)
+  const report_version = non_empty_string(
+    run.reportVersionId,
+    `${label}.reportVersionId`
+  )
+  if (report_version === 'null') {
+    throw new Error(`${label}.reportVersionId requires S3 versioning`)
+  }
+  non_empty_string(run.reportETag, `${label}.reportETag`)
+  sha256(run.reportSha256, `${label}.reportSha256`)
+  positive_integer(run.pageCount, `${label}.pageCount`)
+  return {
+    ...run,
     startedAt: started_at,
     completedAt: completed_at,
-    trialTelemetryIds: [telemetry.trial_id],
-    collection: {
-      runId: telemetry.run_id,
-      trialTelemetryId: telemetry.trial_id,
-      accountId: account_id,
-      collectedAt: collection_timestamp,
-      report: telemetry.report_uri,
-      reportVersionId: non_empty_string(
-        report_source?.version_id,
-        'aggregate report source.VersionId'
-      ),
-      reportETag: non_empty_string(
-        report_source?.etag,
-        'aggregate report source.ETag'
-      ),
-      brokerCluster: telemetry.broker_cluster,
-      databaseCluster: telemetry.database_cluster,
-      databaseMembers: database_members(cluster),
-      entityEventQueue: telemetry.event_queue,
-      periodSeconds: 60,
-      metricDataQueries: metric_data_queries(telemetry, cluster),
-      metricDataResults: metric_response.MetricDataResults,
-      messages: metric_response.Messages ?? []
-    }
+    collectedAt: collected_at
   }
 }
 
@@ -161,125 +334,132 @@ const parse_artifact = (value, label) => {
     value === null ||
     typeof value !== 'object' ||
     Array.isArray(value) ||
-    value.schemaVersion !== 1 ||
+    value.schemaVersion !== 2 ||
     value.kind !== 'native-telemetry-evidence'
   ) {
-    throw new Error(`${label} is not native telemetry evidence schema 1`)
+    throw new Error(`${label} is not native telemetry evidence schema 2`)
   }
-  non_empty_string(value.evidenceId, `${label}.evidenceId`)
-  non_empty_string(value.awsRegion, `${label}.awsRegion`)
-  non_empty_string(value.image, `${label}.image`)
   if (value.source !== 'aws-cloudwatch-get-metric-data') {
     throw new Error(`${label}.source is not the AWS collector`)
   }
+  const evidence_id = non_empty_string(
+    value.evidenceId,
+    `${label}.evidenceId`
+  )
+  const aws_region = non_empty_string(
+    value.awsRegion,
+    `${label}.awsRegion`
+  )
+  const image = non_empty_string(value.image, `${label}.image`)
   const started_at = timestamp(value.startedAt, `${label}.startedAt`)
   const completed_at = timestamp(value.completedAt, `${label}.completedAt`)
-  if (Date.parse(completed_at) < Date.parse(started_at)) {
-    throw new Error(`${label}.completedAt shall not precede startedAt`)
+  if (!Array.isArray(value.runs) || value.runs.length === 0) {
+    throw new Error(`${label}.runs shall be a non-empty array`)
   }
+  const runs = value.runs.map(
+    (run, index) => parse_run(run, `${label}.runs[${index}]`)
+  )
+  const trial_ids = runs.map(run => run.trialTelemetryId)
   if (
     !Array.isArray(value.trialTelemetryIds) ||
-    value.trialTelemetryIds.length !== 1 ||
-    typeof value.trialTelemetryIds[0] !== 'string' ||
-    value.trialTelemetryIds[0].trim() === ''
+    JSON.stringify(value.trialTelemetryIds) !== JSON.stringify(trial_ids)
   ) {
-    throw new Error(`${label} shall contain exactly one trial telemetry id`)
+    throw new Error(`${label}.trialTelemetryIds shall match its runs`)
   }
-  if (
-    value.collection === null ||
-    typeof value.collection !== 'object' ||
-    Array.isArray(value.collection)
-  ) {
-    throw new Error(`${label}.collection is required`)
-  }
-  const collection = value.collection
-  non_empty_string(collection.runId, `${label}.collection.runId`)
-  if (collection.trialTelemetryId !== value.trialTelemetryIds[0]) {
-    throw new Error(
-      `${label}.collection trial id does not match its artifact`
-    )
-  }
-  non_empty_string(collection.accountId, `${label}.collection.accountId`)
-  non_empty_string(
-    collection.reportVersionId,
-    `${label}.collection.reportVersionId`
+  const earliest = Math.min(
+    ...runs.map(run => Date.parse(run.startedAt))
   )
-  non_empty_string(collection.reportETag, `${label}.collection.reportETag`)
-  const collected_at = timestamp(
-    collection.collectedAt,
-    `${label}.collection.collectedAt`
+  const latest = Math.max(
+    ...runs.map(run => Date.parse(run.collectedAt))
   )
-  if (Date.parse(collected_at) < Date.parse(completed_at)) {
-    throw new Error(
-      `${label}.collection.collectedAt shall not precede completedAt`
-    )
+  if (
+    Date.parse(started_at) !== earliest ||
+    Date.parse(completed_at) !== latest
+  ) {
+    throw new Error(`${label} window shall match its runs`)
   }
   if (
-    !Array.isArray(collection.metricDataQueries) ||
-    collection.metricDataQueries.length === 0
+    new Set(trial_ids).size !== trial_ids.length ||
+    new Set(runs.map(run => run.runId)).size !== runs.length
   ) {
-    throw new Error(`${label}.collection.metricDataQueries is required`)
+    throw new Error(`${label} repeats a trial or run id`)
   }
-  const metric_response = {
-    MetricDataResults: collection.metricDataResults,
-    Messages: collection.messages
+  return {
+    schemaVersion: 2,
+    kind: 'native-telemetry-evidence',
+    evidenceId: evidence_id,
+    source: 'aws-cloudwatch-get-metric-data',
+    awsRegion: aws_region,
+    image,
+    startedAt: started_at,
+    completedAt: completed_at,
+    trialTelemetryIds: trial_ids,
+    runs
   }
-  const reasons = metric_data_reasons(metric_response, {
-    started_at,
-    completed_at
-  })
-  if (reasons.length > 0) {
-    throw new Error(
-      `${label}.collection telemetry is incomplete: ${reasons.join('; ')}`
-    )
-  }
-  if (
-    metric_sum(metric_response, 'app_5xx') !== 0 ||
-    metric_sum(metric_response, 'app_rejected') !== 0
-  ) {
-    throw new Error(`${label}.collection reports failed or rejected requests`)
-  }
-  return value
 }
+
+const windows_overlap = (left, right) =>
+  Date.parse(left.startedAt) < Date.parse(right.completedAt) &&
+  Date.parse(right.startedAt) < Date.parse(left.completedAt)
 
 const merge_telemetry_artifacts = artifacts => {
   if (!Array.isArray(artifacts) || artifacts.length === 0) {
     throw new Error('at least one telemetry artifact is required')
   }
-  const runs = artifacts.map((artifact, index) =>
+  const parsed = artifacts.map((artifact, index) =>
     parse_artifact(artifact, `artifact ${index + 1}`)
   )
-  const first = runs[0]
-  for (const artifact of runs.slice(1)) {
-    for (const field of ['evidenceId', 'awsRegion', 'image']) {
+  const first = parsed[0]
+  for (const artifact of parsed.slice(1)) {
+    for (const field of ['evidenceId', 'awsRegion', 'image', 'source']) {
       if (artifact[field] !== first[field]) {
         throw new Error(`telemetry artifacts disagree on ${field}`)
       }
     }
   }
-  const trial_ids = runs.map(artifact => artifact.trialTelemetryIds[0])
-  if (new Set(trial_ids).size !== trial_ids.length) {
-    throw new Error('telemetry artifacts repeat a trial telemetry id')
+  const runs = parsed
+    .flatMap(artifact => artifact.runs)
+    .sort(
+      (left, right) =>
+        Date.parse(left.startedAt) - Date.parse(right.startedAt)
+    )
+  if (
+    new Set(runs.map(run => run.trialTelemetryId)).size !== runs.length ||
+    new Set(runs.map(run => run.runId)).size !== runs.length ||
+    new Set(runs.map(run =>
+      `${run.report}\n${run.reportVersionId}`
+    )).size !== runs.length ||
+    new Set(runs.map(run => run.accountId)).size !== 1
+  ) {
+    throw new Error(
+      'telemetry runs shall use unique ids and reports in one AWS account'
+    )
   }
-  return {
-    schemaVersion: 1,
+  for (let left = 0; left < runs.length; left++) {
+    for (let right = left + 1; right < runs.length; right++) {
+      if (windows_overlap(runs[left], runs[right])) {
+        throw new Error('telemetry run windows shall not overlap')
+      }
+    }
+  }
+  return parse_artifact({
+    schemaVersion: 2,
     kind: 'native-telemetry-evidence',
     evidenceId: first.evidenceId,
-    source: 'aws-cloudwatch-get-metric-data',
+    source: first.source,
     awsRegion: first.awsRegion,
     image: first.image,
-    startedAt: new Date(Math.min(
-      ...runs.map(artifact => Date.parse(artifact.startedAt))
-    )).toISOString(),
+    startedAt: runs[0].startedAt,
     completedAt: new Date(Math.max(
-      ...runs.map(artifact => Date.parse(artifact.completedAt))
+      ...runs.map(run => Date.parse(run.collectedAt))
     )).toISOString(),
-    trialTelemetryIds: trial_ids,
-    runs: runs.map(artifact => artifact.collection)
-  }
+    trialTelemetryIds: runs.map(run => run.trialTelemetryId),
+    runs
+  }, 'merged telemetry evidence')
 }
 
 module.exports = {
   build_telemetry_artifact,
-  merge_telemetry_artifacts
+  merge_telemetry_artifacts,
+  qualification_window
 }

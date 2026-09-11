@@ -1,6 +1,7 @@
 const {
   build_telemetry_artifact,
-  merge_telemetry_artifacts
+  merge_telemetry_artifacts,
+  qualification_window
 } = require("../.github/scripts/telemetry-evidence.js")
 const {
   REQUIRED_METRIC_IDS,
@@ -23,6 +24,9 @@ const telemetry = {
   broker_cluster: "garnet-broker-cluster",
   database_cluster: "garnet-broker-aurora",
   event_queue: "garnet-entity-events.fifo",
+  api_id: "api-123",
+  api_stage: "$default",
+  lake_stream: "garnet-lake",
   report_uri:
     "s3://garnet-load/garnet-load/release/aggregate.json"
 }
@@ -42,179 +46,265 @@ const report = {
   kind: "aggregate",
   status: "passed",
   validQualification: true,
-  startedAt: "2026-09-10T10:00:00.000Z",
+  startedAt: "2026-09-10T09:55:00.000Z",
   completedAt: "2026-09-10T11:01:00.000Z",
   configuration: {
     runId: telemetry.run_id,
     externalTelemetryId: telemetry.trial_id,
     awsRegion: telemetry.aws_region,
-    garnetImage: telemetry.image
+    garnetImage: telemetry.image,
+    startAtEpochMs: Date.parse("2026-09-10T10:00:00.000Z"),
+    durationSeconds: 3600
   },
-  totals: {
+  steady: {
     started: 300000
+  },
+  targets: [{
+    statuses: {
+      "200": 270000,
+      "204": 30000
+    }
+  }]
+}
+
+const source = {
+  version_id: "aggregate-version-1",
+  etag: "\"aggregate-etag\"",
+  sha256: "b".repeat(64)
+}
+
+const timestamps = (value: any) => {
+  const start = value.configuration.startAtEpochMs
+  const periods = value.configuration.durationSeconds / 60
+  return Array.from(
+    { length: periods },
+    (_, index) => new Date(start + index * 60_000).toISOString()
+  )
+}
+
+const complete_metrics = (
+  selected_telemetry: any = telemetry,
+  selected_report: any = report
+) => {
+  const sample_timestamps = timestamps(selected_report)
+  const requests_per_period =
+    selected_report.steady.started / sample_timestamps.length
+  const queries = metric_data_queries(selected_telemetry, cluster)
+  return {
+    queries,
+    response: {
+      MetricDataResults: queries
+        .filter((query: any) => query.ReturnData)
+        .map((query: any) => ({
+          Id: query.Id,
+          StatusCode: "Complete",
+          Timestamps: sample_timestamps,
+          Values: sample_timestamps.map(() => {
+            if (
+              query.Id === "ingress_requests" ||
+              query.Id === "app_requests"
+            ) {
+              return requests_per_period
+            }
+            if (
+              [
+                "ingress_5xx",
+                "app_5xx",
+                "app_rejected",
+                "sqs_age",
+                "sqs_visible",
+                "firehose_failed_rows",
+                "firehose_throttled",
+                "firehose_partition_exceeded"
+              ].includes(query.Id)
+            ) {
+              return 0
+            }
+            return query.Id === "ingress_p99" ? 0.02 : 1
+          })
+        })),
+      Messages: []
+    }
   }
 }
 
-const complete_metrics = () => ({
-  MetricDataResults: metric_data_queries(telemetry, cluster)
-    .map((query: any) => ({
-      Id: query.Id,
-      StatusCode: "Complete",
-      Timestamps: [
-        "2026-09-10T10:01:00.000Z",
-        "2026-09-10T11:00:00.000Z"
-      ],
-      Values: query.Id === "app_requests"
-        ? [150000, 150000]
-        : ["app_5xx", "app_rejected"].includes(query.Id)
-          ? [0, 0]
-          : [1, 1]
-    })),
-  Messages: []
-})
+const build = (
+  selected_telemetry: any = telemetry,
+  selected_report: any = report,
+  collected_at = "2026-09-10T11:05:00.000Z",
+  selected_source: any = source
+) => {
+  const metrics = complete_metrics(selected_telemetry, selected_report)
+  return build_telemetry_artifact({
+    telemetry: selected_telemetry,
+    report: selected_report,
+    report_source: selected_source,
+    cluster,
+    caller_identity: { Account: "111111111111" },
+    metric_response: metrics.response,
+    collected_at
+  })
+}
 
 describe("AWS qualification telemetry evidence", () => {
-  it("binds one aggregate report to complete CloudWatch evidence", () => {
+  it("binds one aggregate report to canonical schema 2 evidence", () => {
     const metrics = complete_metrics()
-    expect(metric_data_reasons(metrics, {
-      started_at: report.startedAt,
-      completed_at: report.completedAt
-    })).toEqual([])
+    const window = qualification_window(report)
+    expect(metric_data_reasons(
+      metrics.response,
+      window,
+      metrics.queries
+    )).toEqual([])
 
-    const artifact = build_telemetry_artifact({
-      telemetry,
-      report,
-      report_source: {
-        version_id: "aggregate-version-1",
-        etag: "\"aggregate-etag\""
-      },
-      cluster,
-      caller_identity: { Account: "111111111111" },
-      metric_response: metrics,
-      collected_at: "2026-09-10T11:05:00.000Z"
-    })
+    const artifact = build()
 
     expect(artifact).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       kind: "native-telemetry-evidence",
       evidenceId: "garnet-release",
       awsRegion: "eu-west-3",
       image: IMAGE,
+      startedAt: "2026-09-10T10:00:00.000Z",
+      completedAt: "2026-09-10T11:05:00.000Z",
       trialTelemetryIds: ["garnet-release-5000-1"],
-      collection: {
+      runs: [{
         runId: "release50001",
         trialTelemetryId: "garnet-release-5000-1",
         accountId: "111111111111",
         reportVersionId: "aggregate-version-1",
         reportETag: "\"aggregate-etag\"",
-        brokerCluster: "garnet-broker-cluster",
-        databaseCluster: "garnet-broker-aurora",
-        entityEventQueue: "garnet-entity-events.fifo",
-        periodSeconds: 60
-      }
+        reportSha256: "b".repeat(64),
+        periodSeconds: 60,
+        pageCount: 1,
+        nextTokenExhausted: true
+      }]
     })
-    expect(artifact.collection.metricDataQueries.length).toBeGreaterThan(30)
+    expect(artifact.runs[0].metricDataQueries.length).toBeGreaterThan(50)
     expect(
-      artifact.collection.metricDataResults
-        .find((result: any) => result.Id === "app_requests")
+      artifact.runs[0].metricDataResults
+        .find((result: any) => result.Id === "ingress_requests")
         .Values
-    ).toEqual([150000, 150000])
+    ).toHaveLength(60)
+    expect(
+      artifact.runs[0].metricDataQueries
+        .find((query: any) => query.Id === "ingress_requests")
+        .MetricStat.Metric
+    ).toMatchObject({
+      Namespace: "AWS/ApiGateway",
+      MetricName: "Count",
+      Dimensions: expect.arrayContaining([
+        { Name: "ApiId", Value: "api-123" },
+        { Name: "Stage", Value: "$default" }
+      ])
+    })
   })
 
-  it("fails closed when required telemetry or report identity is missing", () => {
+  it("fails closed on missing samples, forged identity, or unaligned runs", () => {
     const metrics = complete_metrics()
-    metrics.MetricDataResults = metrics.MetricDataResults.filter(
-      (result: any) => result.Id !== REQUIRED_METRIC_IDS[0]
-    )
+    metrics.response.MetricDataResults =
+      metrics.response.MetricDataResults.filter(
+        (result: any) => result.Id !== REQUIRED_METRIC_IDS[0]
+      )
+    const window = qualification_window(report)
+    expect(metric_data_reasons(
+      metrics.response,
+      window,
+      metrics.queries
+    )).toContain("ingress_requests has no valid datapoints")
+    expect(() => build_telemetry_artifact({
+      telemetry,
+      report,
+      report_source: source,
+      cluster,
+      caller_identity: { Account: "111111111111" },
+      metric_response: metrics.response,
+      collected_at: "2026-09-10T11:05:00.000Z"
+    })).toThrow("ingress_requests has no valid datapoints")
 
-    expect(metric_data_reasons(metrics)).toContain(
-      "app_requests has no valid datapoints"
-    )
-    expect(() => build_telemetry_artifact({
-      telemetry,
-      report,
-      report_source: {
-        version_id: "aggregate-version-1",
-        etag: "\"aggregate-etag\""
-      },
-      cluster,
-      caller_identity: { Account: "111111111111" },
-      metric_response: metrics,
-      collected_at: "2026-09-10T11:05:00.000Z"
-    })).toThrow("app_requests has no valid datapoints")
-    expect(() => build_telemetry_artifact({
-      telemetry,
-      report,
-      report_source: {
-        version_id: "aggregate-version-1",
-        etag: "\"aggregate-etag\""
-      },
-      cluster,
-      caller_identity: { Account: "111111111111" },
-      metric_response: complete_metrics(),
-      collected_at: "2026-09-10T11:05:00.000Z"
-    })).not.toThrow()
-    expect(() => build_telemetry_artifact({
-      telemetry: { ...telemetry, image: `sha256:${"b".repeat(64)}` },
-      report,
-      report_source: {
-        version_id: "aggregate-version-1",
-        etag: "\"aggregate-etag\""
-      },
-      cluster,
-      caller_identity: { Account: "111111111111" },
-      metric_response: complete_metrics(),
-      collected_at: "2026-09-10T11:05:00.000Z"
-    })).toThrow(
+    expect(() => build(
+      { ...telemetry, image: `sha256:${"c".repeat(64)}` }
+    )).toThrow(
       "aggregate report image does not match the qualification plan"
     )
     expect(() => build_telemetry_artifact({
       telemetry,
       report,
-      report_source: {
-        version_id: "aggregate-version-1",
-        etag: "\"aggregate-etag\""
-      },
+      report_source: source,
       cluster,
       caller_identity: { Account: "222222222222" },
-      metric_response: complete_metrics(),
+      metric_response: complete_metrics().response,
       collected_at: "2026-09-10T11:05:00.000Z"
     })).toThrow(
       "AWS caller account does not match the deployed qualification account"
     )
+
+    const unaligned = structuredClone(report)
+    unaligned.configuration.startAtEpochMs += 1000
+    expect(() => qualification_window(unaligned)).toThrow(
+      "aligned whole minutes"
+    )
   })
 
-  it("merges independent trials without dropping their raw collections", () => {
-    const first = build_telemetry_artifact({
-      telemetry,
-      report,
-      report_source: {
-        version_id: "aggregate-version-1",
-        etag: "\"aggregate-etag\""
-      },
-      cluster,
-      caller_identity: { Account: "111111111111" },
-      metric_response: complete_metrics(),
-      collected_at: "2026-09-10T11:05:00.000Z"
-    })
-    const second = structuredClone(first)
-    second.startedAt = "2026-09-10T12:00:00.000Z"
-    second.completedAt = "2026-09-10T13:01:00.000Z"
-    second.trialTelemetryIds = ["garnet-release-5000-2"]
-    second.collection.runId = "release50002"
-    second.collection.trialTelemetryId = "garnet-release-5000-2"
-    second.collection.collectedAt = "2026-09-10T13:05:00.000Z"
-    second.collection.metricDataResults.forEach((result: any) => {
-      result.Timestamps = [
-        "2026-09-10T12:01:00.000Z",
-        "2026-09-10T13:00:00.000Z"
-      ]
-    })
+  it("rejects malformed queries and impossible canonical values", () => {
+    const fractional = complete_metrics()
+    fractional.response.MetricDataResults.find(
+      (result: any) => result.Id === "ingress_requests"
+    ).Values[0] = 4999.5
+    expect(metric_data_reasons(
+      fractional.response,
+      qualification_window(report),
+      fractional.queries
+    )).toContain("ingress_requests does not contain integer counts")
+
+    const excessive = complete_metrics()
+    excessive.response.MetricDataResults.find(
+      (result: any) => result.Id === "compute_cpu"
+    ).Values[0] = 101
+    expect(metric_data_reasons(
+      excessive.response,
+      qualification_window(report),
+      excessive.queries
+    )).toContain("compute_cpu exceeds 100 percent")
+
+    const duplicate = complete_metrics()
+    duplicate.queries[1].Id = duplicate.queries[0].Id
+    expect(metric_data_reasons(
+      duplicate.response,
+      qualification_window(report),
+      duplicate.queries
+    )).toContain("telemetry metric queries repeat ids")
+  })
+
+  it("merges independent trials into one canonical artifact", () => {
+    const first = build()
+    const second_telemetry = {
+      ...telemetry,
+      run_id: "release50002",
+      trial_id: "garnet-release-5000-2",
+      report_uri:
+        "s3://garnet-load/garnet-load/release-2/aggregate.json"
+    }
+    const second_report = structuredClone(report)
+    second_report.configuration.runId = second_telemetry.run_id
+    second_report.configuration.externalTelemetryId =
+      second_telemetry.trial_id
+    second_report.configuration.startAtEpochMs =
+      Date.parse("2026-09-10T12:00:00.000Z")
+    const second = build(
+      second_telemetry,
+      second_report,
+      "2026-09-10T13:05:00.000Z",
+      {
+        version_id: "aggregate-version-2",
+        etag: "\"aggregate-etag-2\"",
+        sha256: "c".repeat(64)
+      }
+    )
 
     const merged = merge_telemetry_artifacts([first, second])
 
     expect(merged.startedAt).toBe("2026-09-10T10:00:00.000Z")
-    expect(merged.completedAt).toBe("2026-09-10T13:01:00.000Z")
+    expect(merged.completedAt).toBe("2026-09-10T13:05:00.000Z")
     expect(merged.trialTelemetryIds).toEqual([
       "garnet-release-5000-1",
       "garnet-release-5000-2"
@@ -222,25 +312,14 @@ describe("AWS qualification telemetry evidence", () => {
     expect(merged.runs).toHaveLength(2)
   })
 
-  it("rejects malformed retained runs during merge", () => {
-    const artifact = build_telemetry_artifact({
-      telemetry,
-      report,
-      report_source: {
-        version_id: "aggregate-version-1",
-        etag: "\"aggregate-etag\""
-      },
-      cluster,
-      caller_identity: { Account: "111111111111" },
-      metric_response: complete_metrics(),
-      collected_at: "2026-09-10T11:05:00.000Z"
-    })
-    artifact.collection.metricDataResults.find(
+  it("rejects failed application metrics during merge", () => {
+    const artifact = build()
+    artifact.runs[0].metricDataResults.find(
       (result: any) => result.Id === "app_5xx"
-    ).Values = [0, 1]
+    ).Values[0] = 1
 
     expect(() => merge_telemetry_artifacts([artifact])).toThrow(
-      "reports failed or rejected requests"
+      "reports failed or rejected application requests"
     )
   })
 })

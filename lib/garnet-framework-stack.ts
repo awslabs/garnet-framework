@@ -125,6 +125,18 @@ export class GarnetFrameworkStack extends Stack {
       value: garnet_broker_stack.event_queue_name,
       description: 'SQS Entity-event wake-up queue'
     })
+    new CfnOutput(this, 'GarnetApiId', {
+      value: garnet_api.api_ref,
+      description: 'Public HTTP API identifier used for qualification telemetry'
+    })
+    new CfnOutput(this, 'GarnetApiStage', {
+      value: garnet_api.stage_name,
+      description: 'Public HTTP API stage used for qualification telemetry'
+    })
+    new CfnOutput(this, 'GarnetLakeDeliveryStream', {
+      value: garnet_datalake.delivery_stream_name,
+      description: 'Firehose delivery stream used for lake qualification telemetry'
+    })
     if (garnet_broker_stack.load !== undefined) {
       const load = garnet_broker_stack.load
       new CfnOutput(this, 'GarnetLoadCluster', {
