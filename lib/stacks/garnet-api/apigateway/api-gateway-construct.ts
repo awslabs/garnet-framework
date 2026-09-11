@@ -1,17 +1,20 @@
 
-import { CfnAuthorizer as CfnAuthorizerV2, CfnIntegration, CfnRoute, CfnStage, CfnVpcLink, CorsHttpMethod, HttpApi } from "aws-cdk-lib/aws-apigatewayv2"
+import {
+    CfnAuthorizer as CfnAuthorizerV2,
+    CfnIntegration,
+    CfnRoute,
+    CfnVpcLink,
+    CorsHttpMethod,
+    HttpApi
+} from "aws-cdk-lib/aws-apigatewayv2"
 import {
     CfnSecurityGroupIngress,
     SecurityGroup,
     Vpc
 } from "aws-cdk-lib/aws-ec2"
 import { Construct } from "constructs"
-import { Function as LambdaFunction, Runtime, Code, Permission } from 'aws-cdk-lib/aws-lambda'
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
-import { HttpLambdaAuthorizer, HttpLambdaResponseType } from "aws-cdk-lib/aws-apigatewayv2-authorizers"
-import { ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { Aws, Duration } from "aws-cdk-lib"
-import { AuthorizationType, CfnAuthorizer } from "aws-cdk-lib/aws-apigateway"
 import { Parameters } from "../../../../configuration"
 import { garnet_resource_name } from "../../../../constants"
 
@@ -95,8 +98,6 @@ export class GarnetApiGateway extends Construct{
             createDefaultStage: true
             })
 
-        const lambda_authorizer = LambdaFunction.fromFunctionArn(this, 'LambdaAuthorizer', props.lambda_authorizer_arn)
-
         const integration = new CfnIntegration(this, 'HttpApiIntegration', {
             apiId: api.apiId,
             integrationMethod: "ANY",
@@ -114,41 +115,6 @@ export class GarnetApiGateway extends Construct{
 
 
 
-
-        // Create CORS preflight Lambda function first
-        const corsLambda = new LambdaFunction(this, 'CorsPreflightHandler', {
-            functionName: garnet_resource_name("api-cors-preflight"),
-            runtime: Runtime.NODEJS_24_X,
-            handler: 'index.handler',
-            code: Code.fromInline(`
-exports.handler  = async (event) => {
-    return {
-        statusCode: 200,
-        headers: {
-            "Access-Control-Allow-Origin": "*",
-            "Access-Control-Allow-Headers": "Authorization,Content-Type,Link,NGSILD-Tenant,NGSILD-Path",
-            "Access-Control-Allow-Methods": "GET,POST,PATCH,DELETE,OPTIONS"
-        },
-        body: ''
-    }
-}
-            `)
-        })
-
-        // Grant API Gateway permission to invoke the CORS Lambda function
-        corsLambda.addPermission('ApiGatewayInvokePermission', {
-            principal: new ServicePrincipal('apigateway.amazonaws.com'),
-            sourceArn: `arn:aws:execute-api:${Aws.REGION}:${Aws.ACCOUNT_ID}:${api.apiId}/*/*`
-        })
-
-        // Create Lambda integration for CORS preflight
-        const corsIntegration = new CfnIntegration(this, 'CorsLambdaIntegration', {
-            apiId: api.apiId,
-            integrationMethod: "POST",
-            integrationType: "AWS_PROXY",
-            integrationUri: `arn:aws:apigateway:${Aws.REGION}:lambda:path/2015-03-31/functions/${corsLambda.functionArn}/invocations`,
-            payloadFormatVersion: "2.0",
-        })
 
         const authorizer = new CfnAuthorizerV2(this, 'JwtAuthorizer', {
             apiId: api.apiId,
@@ -174,19 +140,6 @@ exports.handler  = async (event) => {
         if (Parameters.authorization) {
             route.node.addDependency(authorizer)
         }
-
-        // Add OPTIONS route for CORS preflight AFTER the ANY route
-        const optionsRoute = new CfnRoute(this, 'ApiOptionsRoute', {
-            apiId: api.apiId,
-            routeKey: "OPTIONS /{proxy+}",
-            target: `integrations/${corsIntegration.ref}`,
-            authorizationType: 'NONE'
-        })
-
-        // Add explicit dependencies to ensure proper creation order
-        optionsRoute.node.addDependency(corsIntegration)
-        optionsRoute.node.addDependency(corsLambda)
-
 
         this.api_ref = api.apiId
 

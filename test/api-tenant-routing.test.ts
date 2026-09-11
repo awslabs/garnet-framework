@@ -83,6 +83,9 @@ describe("tenant-safe API routing", () => {
         MaxAge: 5
       }
     })
+    template.resourceCountIs("AWS::ApiGatewayV2::Integration", 1)
+    template.resourceCountIs("AWS::ApiGatewayV2::Route", 1)
+    template.resourceCountIs("AWS::Lambda::Function", 0)
 
     const ingress = Object.values(
       template.findResources("AWS::EC2::SecurityGroupIngress")
