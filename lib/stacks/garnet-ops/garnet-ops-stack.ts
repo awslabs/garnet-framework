@@ -14,11 +14,11 @@ import {
 import { Construct } from "constructs"
 import { garnet_resource_name } from "../../../constants"
 import { GarnetLakeObservability } from "./lake-observability"
+import { GarnetMatcherObservability } from "./matcher-observability"
 
 export interface GarnetOpsProps extends NestedStackProps {
     broker_cluster_name: string
     database_cluster_identifier: string
-    entity_event_queue_name: string
     lake_delivery_stream_name: string
 }
 
@@ -56,6 +56,10 @@ export class GarnetOps extends NestedStack {
                 delivery_stream_name:
                     props.lake_delivery_stream_name
             }
+        )
+        const matcher = new GarnetMatcherObservability(
+            this,
+            "MatcherObservability"
         )
         dashboard.addWidgets(new Row(
             new SingleValueWidget({
@@ -162,7 +166,6 @@ export class GarnetOps extends NestedStack {
         const service_names = [
             "garnet-api",
             "garnet-federation",
-            "garnet-relay",
             "garnet-matcher",
             "garnet-lake-sink",
             "garnet-delivery",
@@ -201,34 +204,7 @@ export class GarnetOps extends NestedStack {
         }))
 
         dashboard.addWidgets(new Row(
-            new GraphWidget({
-                title: "Entity event transport",
-                width: 12,
-                left: [
-                    new Metric({
-                        namespace: "AWS/SQS",
-                        metricName:
-                            "ApproximateNumberOfMessagesVisible",
-                        dimensionsMap: {
-                            QueueName:
-                                props.entity_event_queue_name
-                        },
-                        statistic: "Maximum",
-                        period
-                    }),
-                    new Metric({
-                        namespace: "AWS/SQS",
-                        metricName:
-                            "ApproximateAgeOfOldestMessage",
-                        dimensionsMap: {
-                            QueueName:
-                                props.entity_event_queue_name
-                        },
-                        statistic: "Maximum",
-                        period
-                    })
-                ]
-            }),
+            matcher.backlog_widget,
             new GraphWidget({
                 title: "Aurora capacity and connections",
                 width: 12,
@@ -249,7 +225,10 @@ export class GarnetOps extends NestedStack {
             })
         ))
         dashboard.addWidgets(new Row(
-            lake.delivery_widget,
+            matcher.outcomes_widget,
+            lake.delivery_widget
+        ))
+        dashboard.addWidgets(new Row(
             lake.partition_widget
         ))
     }

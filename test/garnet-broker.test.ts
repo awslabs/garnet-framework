@@ -89,8 +89,8 @@ describe("Garnet Broker AWS runtime", () => {
     const task_definitions =
       template.findResources("AWS::ECS::TaskDefinition")
 
-    expect(Object.keys(task_definitions)).toHaveLength(13)
-    template.resourceCountIs("AWS::ECS::Service", 9)
+    expect(Object.keys(task_definitions)).toHaveLength(12)
+    template.resourceCountIs("AWS::ECS::Service", 8)
     const entry_points: string[] = []
     for (const resource of Object.values(task_definitions) as any[]) {
       expect(resource.Properties.RuntimePlatform).toEqual({
@@ -112,7 +112,6 @@ describe("Garnet Broker AWS runtime", () => {
       "/garnet-matcher",
       "/garnet-migrate",
       "/garnet-notification-scheduler",
-      "/garnet-relay",
       "/garnet-snapshot",
       "/garnet-subscription-reconciler"
     ].sort())
@@ -194,7 +193,7 @@ describe("Garnet Broker AWS runtime", () => {
         }
       }
     })
-    template.resourceCountIs("AWS::ECS::Service", 9)
+    template.resourceCountIs("AWS::ECS::Service", 8)
   })
 
   it("keeps local traffic local and externalizes every scalable background role", () => {
@@ -213,7 +212,8 @@ describe("Garnet Broker AWS runtime", () => {
     expect(environment).toMatchObject({
       FEDERATION_DEFAULT_LOCAL: "true",
       FEDERATION_ROUTER_URL: "http://federation:8080",
-      ENTITY_EVENT_TRANSPORT: "sqs-watermark",
+      ENTITY_EVENT_TRANSPORT: "postgres",
+      ENTITY_EVENT_MATCHER_MODE: "external",
       NOTIFICATION_DELIVERY_MODE: "external",
       PERIODIC_NOTIFICATION_MODE: "external",
       DISTRIBUTED_SUBSCRIPTION_RECONCILIATION_MODE: "external",
@@ -283,6 +283,30 @@ describe("Garnet Broker AWS runtime", () => {
       WORKER_METRICS: "emf",
       WORKER_METRICS_NAMESPACE: "Garnet/Broker",
       WORKER_METRICS_SERVICE: "garnet-delivery",
+      WORKER_METRICS_INTERVAL_MS: "60000"
+    })
+
+    const matcher = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-matcher"
+      )
+    const matcher_environment = Object.fromEntries(
+      matcher.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+    expect(matcher_environment).toMatchObject({
+      ENTITY_EVENT_TRANSPORT: "postgres",
+      ENTITY_EVENT_POSTGRES_CLAIM_BATCH: "64",
+      ENTITY_EVENT_POSTGRES_LEASE_MS: "60000",
+      ENTITY_EVENT_POSTGRES_HEARTBEAT_MS: "5000",
+      ENTITY_EVENT_POSTGRES_WORKER_STALE_MS: "15000",
+      ENTITY_EVENT_POSTGRES_IDLE_MAX_MS: "500",
+      ENTITY_EVENT_POSTGRES_MAX_ATTEMPTS: "20",
+      ENTITY_EVENT_SINKS: "garnet-lake",
+      WORKER_METRICS: "emf",
+      WORKER_METRICS_NAMESPACE: "Garnet/Broker",
+      WORKER_METRICS_SERVICE: "garnet-matcher",
       WORKER_METRICS_INTERVAL_MS: "60000"
     })
   })
@@ -403,68 +427,65 @@ describe("Garnet Broker AWS runtime", () => {
     expect(environment).not.toHaveProperty("READ_DB_POOL_MAX")
   })
 
-  it("uses one deterministic high-throughput FIFO matcher queue", () => {
+  it("scales direct matchers by independent PostgreSQL partitions", () => {
     const template = synth_broker()
 
-    template.hasResourceProperties("AWS::SQS::Queue", {
-      FifoQueue: true,
-      DeduplicationScope: "messageGroup",
-      FifoThroughputLimit: "perMessageGroupId",
-      VisibilityTimeout: 60,
-      ReceiveMessageWaitTimeSeconds: 20
-    })
+    template.resourceCountIs("AWS::SQS::Queue", 0)
     const rendered = JSON.stringify(template.toJSON())
     expect(rendered).not.toContain('"sqs:*"')
     expect(rendered).not.toContain('"sns:*"')
     expect(rendered).not.toContain("AWS::SNS::Topic")
     template.hasResourceProperties(
-      "AWS::CloudWatch::Alarm",
-      {
-        DatapointsToAlarm: 2,
-        EvaluationPeriods: 2,
-        Metrics: Match.arrayWith([
-          Match.objectLike({
-            Expression: "visible / running",
-            ReturnData: true
-          }),
-          Match.objectLike({
-            MetricStat: {
-              Metric: {
-                MetricName: "ApproximateNumberOfMessagesVisible",
-                Namespace: "AWS/SQS"
-              },
-              Stat: "Sum"
-            },
-            ReturnData: false
-          }),
-          Match.objectLike({
-            MetricStat: {
-              Metric: {
-                MetricName: "RunningTaskCount",
-                Namespace: "ECS/ContainerInsights"
-              },
-              Stat: "Average"
-            },
-            ReturnData: false
-          })
-        ])
-      }
-    )
-    template.hasResourceProperties(
       "AWS::ApplicationAutoScaling::ScalingPolicy",
       {
-        PolicyType: "StepScaling",
-        StepScalingPolicyConfiguration: Match.objectLike({
-          AdjustmentType: "ChangeInCapacity",
-          Cooldown: 60,
-          StepAdjustments: Match.arrayWith([
-            Match.objectLike({
-              ScalingAdjustment: 4
-            })
-          ])
-        })
+        PolicyType: "TargetTrackingScaling",
+        TargetTrackingScalingPolicyConfiguration: {
+          CustomizedMetricSpecification: {
+            Metrics: Match.arrayWith([
+              Match.objectLike({
+                Expression:
+                  "IF(workers > 0, pending / workers, pending)",
+                ReturnData: true
+              }),
+              Match.objectLike({
+                MetricStat: {
+                  Metric: Match.objectLike({
+                    MetricName: "EntityEventPendingPartitions",
+                    Namespace: "Garnet/Broker"
+                  }),
+                  Stat: "Average"
+                },
+                ReturnData: false
+              }),
+              Match.objectLike({
+                MetricStat: {
+                  Metric: Match.objectLike({
+                    MetricName: "EntityEventMatcherWorkers",
+                    Namespace: "Garnet/Broker"
+                  }),
+                  Stat: "Average"
+                },
+                ReturnData: false
+              })
+            ])
+          },
+          ScaleInCooldown: 180,
+          ScaleOutCooldown: 30,
+          TargetValue: 4
+        }
       }
     )
+    const scalable_targets = Object.values(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalableTarget"
+      )
+    ) as any[]
+    expect(
+      scalable_targets.some((resource) =>
+        resource.Properties.MinCapacity === 2 &&
+        resource.Properties.MaxCapacity === 16
+      )
+    ).toBe(true)
   })
 
   it("uses one TLS single-shard Valkey group for replica-safe federation state", () => {

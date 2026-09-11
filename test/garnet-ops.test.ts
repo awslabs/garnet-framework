@@ -14,12 +14,11 @@ describe("Garnet operations observability", () => {
     const ops = new GarnetOps(parent, "Ops", {
       broker_cluster_name: "garnet",
       database_cluster_identifier: "garnet-database",
-      entity_event_queue_name: "garnet-events.fifo",
       lake_delivery_stream_name: "garnet-lake"
     })
     const template = Template.fromStack(ops)
 
-    template.resourceCountIs("AWS::CloudWatch::Alarm", 4)
+    template.resourceCountIs("AWS::CloudWatch::Alarm", 9)
     template.hasResourceProperties("AWS::CloudWatch::Alarm", {
       AlarmName: "garnet-framework-lake-data-freshness",
       MetricName: "DeliveryToIceberg.DataFreshness",
@@ -44,6 +43,34 @@ describe("Garnet operations observability", () => {
         EvaluationPeriods: 1
       })
     }
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      AlarmName: "garnet-framework-matcher-oldest-pending",
+      MetricName: "EntityEventOldestPendingAgeMs",
+      Namespace: "Garnet/Broker",
+      Threshold: 60000,
+      EvaluationPeriods: 3,
+      DatapointsToAlarm: 2
+    })
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      AlarmName: "garnet-framework-matcher-worker-quorum",
+      ComparisonOperator: "LessThanThreshold",
+      MetricName: "EntityEventMatcherWorkers",
+      Namespace: "Garnet/Broker",
+      Threshold: 2,
+      TreatMissingData: "breaching"
+    })
+    for (const metricName of [
+      "EntityEventHealthSampleErrors",
+      "EntityEventOpenQuarantines",
+      "EntityEventOpenQuarantineLimitReached"
+    ]) {
+      template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+        MetricName: metricName,
+        Namespace: "Garnet/Broker",
+        Threshold: 0,
+        EvaluationPeriods: 1
+      })
+    }
     const dashboards = Object.values(
       template.findResources("AWS::CloudWatch::Dashboard")
     )
@@ -53,6 +80,8 @@ describe("Garnet operations observability", () => {
     )
     expect(dashboard).toContain("ActivePartitionsLimit")
     expect(dashboard).toContain("Snapshot materialization saturation")
+    expect(dashboard).toContain("Direct Entity-event matcher backlog")
+    expect(dashboard).toContain("EntityEventPendingPartitions")
     expect(dashboard).toContain("garnet-snapshot")
   })
 })

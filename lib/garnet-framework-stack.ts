@@ -79,8 +79,6 @@ export class GarnetFrameworkStack extends Stack {
       broker_cluster_name: garnet_broker_stack.cluster_name,
       database_cluster_identifier:
         garnet_broker_stack.database_cluster_identifier,
-      entity_event_queue_name:
-        garnet_broker_stack.event_queue_name,
       lake_delivery_stream_name:
         garnet_datalake.delivery_stream_name
     })
@@ -127,10 +125,6 @@ export class GarnetFrameworkStack extends Stack {
         : 'shared',
       description:
         'Database topology required by native qualification telemetry'
-    })
-    new CfnOutput(this, 'GarnetEntityEventQueueName', {
-      value: garnet_broker_stack.event_queue_name,
-      description: 'SQS Entity-event wake-up queue'
     })
     new CfnOutput(this, 'GarnetApiId', {
       value: garnet_api.api_ref,

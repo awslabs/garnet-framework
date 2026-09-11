@@ -42,12 +42,6 @@ import { PolicyStatement } from "aws-cdk-lib/aws-iam"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
-import {
-    DeduplicationScope,
-    FifoThroughputLimit,
-    Queue,
-    QueueEncryption
-} from "aws-cdk-lib/aws-sqs"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import {
@@ -64,7 +58,7 @@ import {
     GARNET_API_REQUESTS_PER_TARGET_MINUTE,
     GARNET_SERVICE_CAPACITY
 } from "./runtime-profile"
-import { scale_on_queue_backlog } from "./queue-scaling"
+import { scale_on_matcher_partitions } from "./matcher-scaling"
 import { scale_on_worker_utilization } from "./worker-scaling"
 import { GarnetApiDeploymentGuard } from "./api-deployment-guard"
 import {
@@ -118,7 +112,6 @@ export class GarnetBrokerRuntime extends Construct {
     public readonly fargate_alb: ApplicationLoadBalancer
     public readonly sg_broker: SecurityGroup
     public readonly cluster: Cluster
-    public readonly event_queue: Queue
     public readonly load?: GarnetLoad
 
     constructor(scope: Construct, id: string, props: GarnetBrokerRuntimeProps) {
@@ -153,41 +146,6 @@ export class GarnetBrokerRuntime extends Construct {
             defaultCloudMapNamespace: {
                 name: "garnet-framework.local"
             }
-        })
-
-        const event_dlq = new Queue(this, "EntityEventDeadLetterQueue", {
-            queueName: garnet_resource_name("entity-events-dlq.fifo"),
-            fifo: true,
-            encryption: QueueEncryption.SQS_MANAGED,
-            retentionPeriod: Duration.days(14)
-        })
-        this.event_queue = new Queue(this, "EntityEventQueue", {
-            queueName: garnet_resource_name("entity-events.fifo"),
-            fifo: true,
-            encryption: QueueEncryption.SQS_MANAGED,
-            contentBasedDeduplication: false,
-            deduplicationScope: DeduplicationScope.MESSAGE_GROUP,
-            fifoThroughputLimit: FifoThroughputLimit.PER_MESSAGE_GROUP_ID,
-            visibilityTimeout: Duration.seconds(60),
-            receiveMessageWaitTime: Duration.seconds(20),
-            retentionPeriod: Duration.days(4),
-            deadLetterQueue: {
-                queue: event_dlq,
-                maxReceiveCount: 20
-            }
-        })
-        new Alarm(this, "EntityEventAgeAlarm", {
-            metric: this.event_queue.metricApproximateAgeOfOldestMessage(),
-            threshold: 60,
-            evaluationPeriods: 3,
-            datapointsToAlarm: 2,
-            treatMissingData: TreatMissingData.NOT_BREACHING
-        })
-        new Alarm(this, "EntityEventDeadLetterAlarm", {
-            metric: event_dlq.metricApproximateNumberOfMessagesVisible(),
-            threshold: 1,
-            evaluationPeriods: 1,
-            treatMissingData: TreatMissingData.NOT_BREACHING
         })
 
         const federation_token = new Secret(this, "FederationRouterToken", {
@@ -307,8 +265,8 @@ export class GarnetBrokerRuntime extends Construct {
         }))
 
         const distributed_environment = {
-            ENTITY_EVENT_TRANSPORT: "sqs-watermark",
-            ENTITY_EVENT_WATERMARK_QUEUE_URL: this.event_queue.queueUrl,
+            ENTITY_EVENT_TRANSPORT: "postgres",
+            ENTITY_EVENT_MATCHER_MODE: "external",
             FEDERATION_STATE_HOST: props.federation_state_host,
             FEDERATION_STATE_PORT: String(props.federation_state_port),
             FEDERATION_STATE_TLS: "true",
@@ -398,40 +356,35 @@ export class GarnetBrokerRuntime extends Construct {
             )
         }
 
-        const relay = add(factory.create_service({
-            id: "Relay",
-            name: "relay",
-            entry_point: "/garnet-relay",
-            capacity: GARNET_SERVICE_CAPACITY.relay,
-            environment: {
-                ENTITY_EVENT_TRANSPORT: "sqs-watermark",
-                ENTITY_EVENT_WATERMARK_QUEUE_URL: this.event_queue.queueUrl
-            }
-        }))
-        this.event_queue.grantSendMessages(relay.task_definition.taskRole)
-
         const matcher = add(factory.create_service({
             id: "Matcher",
             name: "matcher",
             entry_point: "/garnet-matcher",
             capacity: GARNET_SERVICE_CAPACITY.matcher,
+            cpu_autoscaling: false,
             environment: {
-                ENTITY_EVENT_TRANSPORT: "sqs-watermark",
-                ENTITY_EVENT_WATERMARK_QUEUE_URL: this.event_queue.queueUrl,
-                ENTITY_EVENT_SINKS: "garnet-lake"
+                ENTITY_EVENT_TRANSPORT: "postgres",
+                ENTITY_EVENT_POSTGRES_CLAIM_BATCH: "64",
+                ENTITY_EVENT_POSTGRES_LEASE_MS: "60000",
+                ENTITY_EVENT_POSTGRES_HEARTBEAT_MS: "5000",
+                ENTITY_EVENT_POSTGRES_WORKER_STALE_MS: "15000",
+                ENTITY_EVENT_POSTGRES_IDLE_MAX_MS: "500",
+                ENTITY_EVENT_POSTGRES_MAX_ATTEMPTS: "20",
+                ENTITY_EVENT_SINKS: "garnet-lake",
+                WORKER_METRICS: "emf",
+                WORKER_METRICS_NAMESPACE: "Garnet/Broker",
+                WORKER_METRICS_SERVICE: "garnet-matcher",
+                WORKER_METRICS_INTERVAL_MS: "60000"
             }
         }))
-        matcher.service.node.addDependency(relay.service)
-        this.event_queue.grantConsumeMessages(matcher.task_definition.taskRole)
         if (matcher.scaling === undefined) {
             throw new Error("Garnet matcher requires task-count scaling")
         }
-        scale_on_queue_backlog({
-            id: "MatcherBacklogScaling",
-            queue: this.event_queue,
-            service: matcher.service,
+        scale_on_matcher_partitions({
+            scope: this,
+            id: "MatcherPartitionScaling",
             scaling: matcher.scaling,
-            target_backlog_per_task: 8
+            target_pending_partitions_per_worker: 4
         })
 
         const sink = add(factory.create_service({
@@ -803,8 +756,8 @@ export class GarnetBrokerRuntime extends Construct {
 
         // Keep the array live as an explicit inventory: every long-lived role above must depend on
         // the migration gate, including roles added later.
-        if (services.length !== 9) {
-            throw new Error("Garnet Broker runtime must define exactly nine services")
+        if (services.length !== 8) {
+            throw new Error("Garnet Broker runtime must define exactly eight services")
         }
     }
 }

@@ -9,8 +9,9 @@ All notable changes to the Garnet Framework will be documented in this file.
 - Replaced the Scorpio deployment with a Garnet Broker-only distributed runtime
   under the separate `GarnetFramework` stack and `garnet-framework` resource
   namespace.
-- Split the broker into independently scalable API, federation, relay, matcher,
-  lake sink, notification and maintenance roles on Linux ARM64.
+- Split the broker into independently scalable API, federation, direct
+  PostgreSQL matcher, lake sink, notification and maintenance roles on Linux
+  ARM64.
 - Added a tenant-partitioned Apache Iceberg event lake fed from the broker's
   durable PostgreSQL event log.
 

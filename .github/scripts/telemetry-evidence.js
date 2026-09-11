@@ -2,6 +2,8 @@ const {
   database_topology,
   metric_data_queries,
   metric_data_reasons,
+  metric_max,
+  metric_min,
   metric_sum,
   telemetry_metrics
 } = require('./telemetry-metrics.js')
@@ -168,6 +170,33 @@ const assert_application_totals = (report, metric_response) => {
   }
 }
 
+const assert_matcher_health = metric_response => {
+  for (const [id, label] of [
+    ['matcher_open_quarantines', 'open quarantines'],
+    ['matcher_quarantine_limit', 'quarantine sample limit'],
+    ['matcher_health_errors', 'health sample errors'],
+    ['matcher_claim_errors', 'claim errors'],
+    ['matcher_completion_errors', 'completion errors']
+  ]) {
+    if (metric_sum(metric_response, id) !== 0) {
+      throw new Error(`matcher telemetry reports ${label}`)
+    }
+  }
+  if (metric_min(metric_response, 'matcher_workers') < 2) {
+    throw new Error('matcher telemetry dropped below two live workers')
+  }
+  if (
+    metric_max(
+      metric_response,
+      'matcher_oldest_pending_age_ms'
+    ) > 60_000
+  ) {
+    throw new Error(
+      'matcher telemetry exceeded 60000 ms oldest pending age'
+    )
+  }
+}
+
 const build_telemetry_artifact = ({
   telemetry,
   report,
@@ -201,6 +230,7 @@ const build_telemetry_artifact = ({
     throw new Error(`telemetry metrics are incomplete: ${reasons.join('; ')}`)
   }
   assert_application_totals(report, metric_response)
+  assert_matcher_health(metric_response)
   const collection_timestamp = timestamp(
     collected_at,
     'telemetry run.collectedAt'
@@ -310,6 +340,7 @@ const parse_run = (run, label, topology) => {
   ) {
     throw new Error(`${label} reports failed or rejected application requests`)
   }
+  assert_matcher_health(metric_response)
   non_empty_string(run.runId, `${label}.runId`)
   non_empty_string(run.trialTelemetryId, `${label}.trialTelemetryId`)
   const account = non_empty_string(run.accountId, `${label}.accountId`)

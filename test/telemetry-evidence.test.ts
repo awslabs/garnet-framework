@@ -24,7 +24,6 @@ const telemetry = {
   broker_cluster: "garnet-broker-cluster",
   database_cluster: "garnet-broker-aurora",
   database_topology: "writer-reader",
-  event_queue: "garnet-entity-events.fifo",
   api_id: "api-123",
   api_stage: "$default",
   lake_stream: "garnet-lake",
@@ -112,8 +111,13 @@ const complete_metrics = (
                 "ingress_5xx",
                 "app_5xx",
                 "app_rejected",
-                "sqs_age",
-                "sqs_visible",
+                "matcher_oldest_pending_age_ms",
+                "matcher_pending_partitions",
+                "matcher_open_quarantines",
+                "matcher_quarantine_limit",
+                "matcher_health_errors",
+                "matcher_claim_errors",
+                "matcher_completion_errors",
                 "firehose_failed_rows",
                 "firehose_throttled",
                 "firehose_partition_exceeded"
@@ -121,6 +125,7 @@ const complete_metrics = (
             ) {
               return 0
             }
+            if (query.Id === "matcher_workers") return 2
             return query.Id === "ingress_p99" ? 0.02 : 1
           })
         })),
@@ -148,7 +153,7 @@ const build = (
 }
 
 describe("AWS qualification telemetry evidence", () => {
-  it("binds one aggregate report to canonical schema 2 evidence", () => {
+  it("binds one aggregate report to canonical schema 3 evidence", () => {
     const metrics = complete_metrics()
     const window = qualification_window(report)
     expect(metric_data_reasons(
@@ -303,7 +308,7 @@ describe("AWS qualification telemetry evidence", () => {
     })
 
     expect(artifact.databaseTopology).toBe("shared")
-    expect(artifact.runs[0].metrics).toHaveLength(7)
+    expect(artifact.runs[0].metrics).toHaveLength(16)
     expect(artifact.runs[0].metrics.map((metric: any) => metric.role))
       .not.toContain("database-reader-cpu-maximum-percent")
     expect(artifact.runs[0].metricDataQueries.some(
@@ -367,6 +372,39 @@ describe("AWS qualification telemetry evidence", () => {
 
     expect(() => merge_telemetry_artifacts([artifact])).toThrow(
       "reports failed or rejected application requests"
+    )
+  })
+
+  it("rejects unhealthy matcher telemetry during collection and merge", () => {
+    const unhealthy = complete_metrics()
+    unhealthy.response.MetricDataResults.find(
+      (result: any) => result.Id === "matcher_health_errors"
+    ).Values[0] = 1
+    expect(() => build_telemetry_artifact({
+      telemetry,
+      report,
+      report_source: source,
+      cluster,
+      caller_identity: { Account: "111111111111" },
+      metric_response: unhealthy.response,
+      collected_at: "2026-09-10T11:05:00.000Z"
+    })).toThrow("matcher telemetry reports health sample errors")
+
+    const missing_peer = build()
+    missing_peer.runs[0].metricDataResults.find(
+      (result: any) => result.Id === "matcher_workers"
+    ).Values[0] = 1
+    expect(() => merge_telemetry_artifacts([missing_peer])).toThrow(
+      "matcher telemetry dropped below two live workers"
+    )
+
+    const delayed = build()
+    delayed.runs[0].metricDataResults.find(
+      (result: any) =>
+        result.Id === "matcher_oldest_pending_age_ms"
+    ).Values[0] = 60_001
+    expect(() => merge_telemetry_artifacts([delayed])).toThrow(
+      "matcher telemetry exceeded 60000 ms oldest pending age"
     )
   })
 

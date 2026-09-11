@@ -84,7 +84,6 @@ describe("Garnet load deployment outputs", () => {
       "GarnetBrokerCluster",
       "GarnetDatabaseCluster",
       "GarnetDatabaseTopology",
-      "GarnetEntityEventQueueName",
       "GarnetApiId",
       "GarnetApiStage",
       "GarnetLakeDeliveryStream"

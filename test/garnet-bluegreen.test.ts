@@ -68,7 +68,7 @@ describe("Garnet API blue/green deployment", () => {
   it("keeps workers rolling and gives the API a test traffic path", () => {
     const template = synth_bluegreen()
     const services = template.findResources("AWS::ECS::Service")
-    expect(Object.keys(services)).toHaveLength(9)
+    expect(Object.keys(services)).toHaveLength(8)
 
     const bluegreen = Object.values(services).filter(
       (service: any) =>

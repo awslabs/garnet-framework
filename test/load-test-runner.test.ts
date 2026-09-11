@@ -28,7 +28,6 @@ const OUTPUTS = {
   GarnetBrokerCluster: "garnet-broker-cluster",
   GarnetDatabaseCluster: "garnet-broker-aurora",
   GarnetDatabaseTopology: "writer-reader",
-  GarnetEntityEventQueueName: "garnet-entity-events.fifo",
   GarnetApiId: "api-123",
   GarnetApiStage: "$default",
   GarnetLakeDeliveryStream: "garnet-lake"
@@ -105,7 +104,6 @@ describe("AWS load-test launcher", () => {
       broker_cluster: "garnet-broker-cluster",
       database_cluster: "garnet-broker-aurora",
       database_topology: "writer-reader",
-      event_queue: "garnet-entity-events.fifo",
       api_id: "api-123",
       api_stage: "$default",
       lake_stream: "garnet-lake",
@@ -409,8 +407,13 @@ describe("AWS load-test launcher", () => {
                     "ingress_5xx",
                     "app_5xx",
                     "app_rejected",
-                    "sqs_age",
-                    "sqs_visible",
+                    "matcher_oldest_pending_age_ms",
+                    "matcher_pending_partitions",
+                    "matcher_open_quarantines",
+                    "matcher_quarantine_limit",
+                    "matcher_health_errors",
+                    "matcher_claim_errors",
+                    "matcher_completion_errors",
                     "firehose_failed_rows",
                     "firehose_throttled",
                     "firehose_partition_exceeded"
@@ -418,6 +421,7 @@ describe("AWS load-test launcher", () => {
                 ) {
                   return 0
                 }
+                if (query.Id === "matcher_workers") return 2
                 return query.Id === "ingress_p99" ? 0.02 : 1
               })
             })),

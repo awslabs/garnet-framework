@@ -26,7 +26,6 @@ export class GarnetBroker extends NestedStack {
     public readonly load?: GarnetLoad
     public readonly cluster_name: string
     public readonly database_cluster_identifier: string
-    public readonly event_queue_name: string
 
     constructor(scope: Construct, id: string, props: GarnetBrokerProps) {
         super(scope, id, props)
@@ -67,13 +66,9 @@ export class GarnetBroker extends NestedStack {
         this.cluster_name = runtime.cluster.clusterName
         this.database_cluster_identifier =
             database.cluster.clusterIdentifier
-        this.event_queue_name = runtime.event_queue.queueName
 
         new CfnOutput(this, "BrokerLoadBalancer", {
             value: this.dns_context_broker
-        })
-        new CfnOutput(this, "EntityEventQueue", {
-            value: runtime.event_queue.queueUrl
         })
     }
 }

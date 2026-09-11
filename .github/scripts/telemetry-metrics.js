@@ -1,7 +1,6 @@
 const BROKER_SERVICES = [
   'garnet-api',
   'garnet-federation',
-  'garnet-relay',
   'garnet-matcher',
   'garnet-lake-sink',
   'garnet-delivery',
@@ -38,6 +37,42 @@ const SHARED_TELEMETRY_METRICS = [
   {
     role: 'database-writer-connections-maximum',
     queryId: 'database_writer_connections'
+  },
+  {
+    role: 'matcher-pending-partitions-maximum',
+    queryId: 'matcher_pending_partitions'
+  },
+  {
+    role: 'matcher-oldest-pending-age-maximum-milliseconds',
+    queryId: 'matcher_oldest_pending_age_ms'
+  },
+  {
+    role: 'matcher-workers-minimum',
+    queryId: 'matcher_workers'
+  },
+  {
+    role: 'matcher-open-quarantines-maximum',
+    queryId: 'matcher_open_quarantines'
+  },
+  {
+    role: 'matcher-quarantine-limit-maximum',
+    queryId: 'matcher_quarantine_limit'
+  },
+  {
+    role: 'matcher-health-errors-count',
+    queryId: 'matcher_health_errors'
+  },
+  {
+    role: 'matcher-claim-errors-count',
+    queryId: 'matcher_claim_errors'
+  },
+  {
+    role: 'matcher-completion-errors-count',
+    queryId: 'matcher_completion_errors'
+  },
+  {
+    role: 'matcher-processed-count',
+    queryId: 'matcher_processed'
   }
 ]
 
@@ -274,25 +309,71 @@ const metric_data_queries = (telemetry, cluster) => {
       'WorkerUtilizationMax',
       { Service: 'garnet-snapshot' },
       'Maximum'
+    ),
+    metric_query(
+      'matcher_pending_partitions',
+      'Garnet/Broker',
+      'EntityEventPendingPartitions',
+      { Service: 'garnet-matcher' },
+      'Maximum'
+    ),
+    metric_query(
+      'matcher_oldest_pending_age_ms',
+      'Garnet/Broker',
+      'EntityEventOldestPendingAgeMs',
+      { Service: 'garnet-matcher' },
+      'Maximum'
+    ),
+    metric_query(
+      'matcher_workers',
+      'Garnet/Broker',
+      'EntityEventMatcherWorkers',
+      { Service: 'garnet-matcher' },
+      'Minimum'
+    ),
+    metric_query(
+      'matcher_open_quarantines',
+      'Garnet/Broker',
+      'EntityEventOpenQuarantines',
+      { Service: 'garnet-matcher' },
+      'Maximum'
+    ),
+    metric_query(
+      'matcher_quarantine_limit',
+      'Garnet/Broker',
+      'EntityEventOpenQuarantineLimitReached',
+      { Service: 'garnet-matcher' },
+      'Maximum'
+    ),
+    metric_query(
+      'matcher_health_errors',
+      'Garnet/Broker',
+      'EntityEventHealthSampleErrors',
+      { Service: 'garnet-matcher' },
+      'Sum'
+    ),
+    metric_query(
+      'matcher_claim_errors',
+      'Garnet/Broker',
+      'EntityEventClaimErrors',
+      { Service: 'garnet-matcher' },
+      'Sum'
+    ),
+    metric_query(
+      'matcher_completion_errors',
+      'Garnet/Broker',
+      'EntityEventCompletionErrors',
+      { Service: 'garnet-matcher' },
+      'Sum'
+    ),
+    metric_query(
+      'matcher_processed',
+      'Garnet/Broker',
+      'EntityEventProcessorCompleted',
+      { Service: 'garnet-matcher' },
+      'Sum'
     )
   )
-
-  for (const [id, metric, stat] of [
-    ['sqs_visible', 'ApproximateNumberOfMessagesVisible', 'Maximum'],
-    ['sqs_age', 'ApproximateAgeOfOldestMessage', 'Maximum'],
-    ['sqs_sent', 'NumberOfMessagesSent', 'Sum'],
-    ['sqs_received', 'NumberOfMessagesReceived', 'Sum'],
-    ['sqs_deleted', 'NumberOfMessagesDeleted', 'Sum']
-  ]) {
-    filled_metric(
-      queries,
-      id,
-      'AWS/SQS',
-      metric,
-      { QueueName: telemetry.event_queue },
-      stat
-    )
-  }
 
   for (const [id, metric, stat] of [
     [
@@ -569,14 +650,27 @@ const metric_data_reasons = (response, window, queries, metrics) => {
   return reasons
 }
 
-const metric_sum = (response, id) => {
+const metric_values = (response, id) => {
   const result = response.MetricDataResults
     .find(candidate => candidate.Id === id)
-  if (result === undefined || !Array.isArray(result.Values)) {
+  if (
+    result === undefined ||
+    !Array.isArray(result.Values) ||
+    result.Values.length === 0
+  ) {
     throw new Error(`CloudWatch result ${id} is missing`)
   }
-  return result.Values.reduce((sum, value) => sum + value, 0)
+  return result.Values
 }
+
+const metric_sum = (response, id) =>
+  metric_values(response, id).reduce((sum, value) => sum + value, 0)
+
+const metric_max = (response, id) =>
+  Math.max(...metric_values(response, id))
+
+const metric_min = (response, id) =>
+  Math.min(...metric_values(response, id))
 
 module.exports = {
   BROKER_SERVICES,
@@ -585,6 +679,8 @@ module.exports = {
   expected_timestamps,
   metric_data_queries,
   metric_data_reasons,
+  metric_max,
+  metric_min,
   metric_sum,
   telemetry_metrics
 }

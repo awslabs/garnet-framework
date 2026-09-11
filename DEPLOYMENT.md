@@ -232,6 +232,15 @@ API reads contribute to the same target-group request and latency metrics as
 other broker traffic, while durable PostgreSQL leases divide snapshot jobs
 across worker replicas.
 
+Entity matching uses direct PostgreSQL partition ownership. The deployment has
+no broker-internal relay or Entity-event SQS queue: API writes commit the
+authoritative outbox row, and dedicated matcher tasks claim it from Aurora.
+Matchers start at two tasks so one warm peer remains available after a task
+loss. Target tracking divides the bounded count of non-empty logical partitions
+by live matcher membership, while separate alarms cover oldest-event age,
+membership loss, failed health samples and quarantined events. A single hot
+partition is deliberately not treated as parallel work.
+
 A public 10,000 requests/s test also reaches the default API Gateway
 account/Region throttle, which is shared by all APIs. Request quota headroom
 before qualification instead of treating the default ceiling as available
@@ -246,7 +255,7 @@ A 10,000 requests/s claim requires an AWS qualification run covering:
 - API Gateway and internal-ALB paths;
 - p50/p95/p99 latency and error rate;
 - Aurora ACU, connections, I/O and replica lag;
-- matcher queue age/backlog;
+- direct matcher pending partitions, oldest-event age and worker membership;
 - notification and lake worker saturation;
 - Firehose throttling and Iceberg freshness;
 - scale-out time from minimum and a pre-warmed task count.
@@ -294,7 +303,7 @@ off the qualification API during the steady-state window.
 
 The same artifact retains every returned auxiliary one-minute series: API EMF
 requests/errors/rejections/p99, per-service ECS CPU and memory, delivery and
-snapshot worker utilization, SQS backlog/age/flow, Firehose Iceberg
+snapshot worker utilization, direct matcher backlog/health/outcomes, Firehose Iceberg
 freshness/failures/throttling/partitions, and per-instance Aurora CPU,
 connections, capacity, I/O, latency, throughput and reader lag. This preserves
 reader connection distribution instead of hiding it behind one aggregate.

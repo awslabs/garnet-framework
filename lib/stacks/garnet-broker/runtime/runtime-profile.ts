@@ -25,17 +25,10 @@ export const GARNET_SERVICE_CAPACITY = {
         max_tasks: 8,
         database_pool: 4
     },
-    relay: {
-        cpu: 512,
-        memory_mib: 1024,
-        min_tasks: 1,
-        max_tasks: 8,
-        database_pool: 4
-    },
     matcher: {
         cpu: 1024,
         memory_mib: 2048,
-        min_tasks: 1,
+        min_tasks: 2,
         max_tasks: 16,
         database_pool: 8
     },
