@@ -12,8 +12,10 @@ describe("tenant-scoped API authorizer", () => {
       ...original_env,
       SECRET_ARN: "signing-secret-arn",
       JWT_ISS: "garnet",
-      JWT_AUD: "garnet-api"
+      JWT_AUD: "garnet-api",
+      JWT_MAX_AGE_SECONDS: "2678400"
     }
+    jest.spyOn(Date, "now").mockReturnValue(1_700_000_000_000)
   })
 
   afterEach(() => {
@@ -22,10 +24,11 @@ describe("tenant-scoped API authorizer", () => {
   })
 
   const load_handler = (
-    decoded: Record<string, unknown> | Error
+    decoded: Record<string, unknown> | Error,
+    signing_secret: string | null = "signing-key"
   ) => {
     const send = jest.fn(async () => ({
-      SecretString: "signing-key"
+      SecretString: signing_secret
     }))
     const verify = jest.fn(() => {
       if (decoded instanceof Error) throw decoded
@@ -56,7 +59,9 @@ describe("tenant-scoped API authorizer", () => {
       sub: "client-a",
       iss: "garnet",
       aud: "garnet-api",
-      tenant: "factory-a"
+      tenant: "factory-a",
+      iat: 1_700_000_000,
+      exp: 1_700_003_600
     })
 
     await expect(handler({
@@ -79,7 +84,8 @@ describe("tenant-scoped API authorizer", () => {
       {
         issuer: "garnet",
         audience: "garnet-api",
-        algorithms: ["HS256"]
+        algorithms: ["HS256"],
+        maxAge: 2678400
       }
     )
     expect(send).toHaveBeenCalledTimes(1)
@@ -89,7 +95,9 @@ describe("tenant-scoped API authorizer", () => {
     const { handler } = load_handler({
       sub: "client-a",
       iss: "garnet",
-      aud: "garnet-api"
+      aud: "garnet-api",
+      iat: 1_700_000_000,
+      exp: 1_700_003_600
     })
 
     await expect(handler({
@@ -99,7 +107,10 @@ describe("tenant-scoped API authorizer", () => {
 
   it("does not accept credentials from query parameters", async () => {
     const { handler, send, verify } = load_handler({
-      tenant: "factory-a"
+      tenant: "factory-a",
+      sub: "client-a",
+      iat: 1_700_000_000,
+      exp: 1_700_003_600
     })
 
     await expect(handler({
@@ -107,5 +118,53 @@ describe("tenant-scoped API authorizer", () => {
     })).resolves.toEqual({ isAuthorized: false })
     expect(send).not.toHaveBeenCalled()
     expect(verify).not.toHaveBeenCalled()
+  })
+
+  it("rejects signed credentials without a finite lifetime", async () => {
+    const { handler } = load_handler({
+      sub: "client-a",
+      iss: "garnet",
+      aud: "garnet-api",
+      tenant: "factory-a",
+      iat: 1_700_000_000
+    })
+
+    await expect(handler({
+      headers: { authorization: "signed-token" }
+    })).resolves.toEqual({ isAuthorized: false })
+  })
+
+  it("rejects an empty signing secret without verifying the token", async () => {
+    const { handler, verify } = load_handler({
+      sub: "client-a",
+      tenant: "factory-a",
+      iat: 1_700_000_000,
+      exp: 1_700_003_600
+    }, null)
+
+    await expect(handler({
+      headers: { authorization: "signed-token" }
+    })).resolves.toEqual({ isAuthorized: false })
+    expect(verify).not.toHaveBeenCalled()
+  })
+
+  it("refreshes its signing-key cache after one minute", async () => {
+    const { handler, send } = load_handler({
+      sub: "client-a",
+      iss: "garnet",
+      aud: "garnet-api",
+      tenant: "factory-a",
+      iat: 1_700_000_000,
+      exp: 1_700_003_600
+    })
+    const event = {
+      headers: { authorization: "signed-token" }
+    }
+
+    await handler(event)
+    jest.spyOn(Date, "now").mockReturnValue(1_700_000_061_000)
+    await handler(event)
+
+    expect(send).toHaveBeenCalledTimes(2)
   })
 })

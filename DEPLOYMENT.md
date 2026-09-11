@@ -158,8 +158,12 @@ Garnet Broker owns NGSI-LD tenant semantics. Framework ingress preserves them:
   `NGSILD-Tenant` from that verified claim, so a client cannot select another
   tenant by spoofing the request header;
 - the bootstrap credential is tenant-scoped to
-  `Parameters.garnet_bootstrap_tenant` (`default` initially); production
-  onboarding should issue distinct tenant-scoped credentials;
+  `Parameters.garnet_bootstrap_tenant` (`default` initially), expires after
+  30 days, and is renewed daily in Secrets Manager; clients must reload it
+  at least daily rather than caching it for the process lifetime, while
+  production onboarding should issue distinct tenant-scoped credentials.
+  EventBridge and Lambda retries feed terminal refresh failures to an encrypted
+  14-day dead-letter queue, with alarms on delivery, execution and backlog;
 - a bare SQS entity targets the default tenant;
 - `{ "tenant": "factory-a", "entity": { ... } }` forwards
   `NGSILD-Tenant: factory-a`;

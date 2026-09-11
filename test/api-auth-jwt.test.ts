@@ -18,8 +18,10 @@ describe('API client token provisioner', () => {
       JWT_SUB: 'garnet-client',
       JWT_ISS: 'garnet',
       JWT_AUD: 'garnet-api',
-      JWT_TENANT: 'factory-a'
+      JWT_TENANT: 'factory-a',
+      JWT_TTL_SECONDS: '2592000'
     }
+    jest.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
   })
 
   afterEach(() => {
@@ -67,7 +69,9 @@ describe('API client token provisioner', () => {
       sub: 'garnet-client',
       iss: 'garnet',
       aud: 'garnet-api',
-      tenant: 'factory-a'
+      tenant: 'factory-a',
+      iat: 1_700_000_000,
+      exp: 1_702_592_000
     }, 'signing-key', {
       algorithm: 'HS256'
     })
@@ -96,11 +100,33 @@ describe('API client token provisioner', () => {
     expect(sign).not.toHaveBeenCalled()
   })
 
+  it('refreshes the stored credential when invoked by its schedule', async () => {
+    const { handler, send, sign } = load_handler()
+
+    await handler({
+      source: 'aws.events',
+      'detail-type': 'Scheduled Event'
+    })
+
+    expect(send).toHaveBeenCalledTimes(2)
+    expect(sign).toHaveBeenCalledTimes(1)
+  })
+
   it('fails the CloudFormation operation when token provisioning fails', async () => {
     const { handler, send, sign } = load_handler(null)
 
     await expect(handler({ RequestType: 'Create' }))
       .rejects.toThrow('JWT signing secret has no SecretString')
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(sign).not.toHaveBeenCalled()
+  })
+
+  it('rejects an invalid credential lifetime', async () => {
+    process.env.JWT_TTL_SECONDS = 'never'
+    const { handler, send, sign } = load_handler()
+
+    await expect(handler({ RequestType: 'Create' }))
+      .rejects.toThrow('JWT_TTL_SECONDS must be a positive integer')
     expect(send).toHaveBeenCalledTimes(1)
     expect(sign).not.toHaveBeenCalled()
   })
