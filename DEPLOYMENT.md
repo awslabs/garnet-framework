@@ -103,7 +103,10 @@ or federation credentials. It sends canonical read queries through the internal
 load balancer's production listener, so snapshots follow the same blue/green
 traffic decision as external API requests without creating a second Service
 Connect deployment-routing plane. The load balancer security group accepts this
-path only from the broker task security group.
+path only from the broker task security group. Idempotent Snapshot reads retry
+transient network, throttling and 5xx responses with at most four total attempts
+and bounded full-jitter backoff; permanent NGSI-LD request failures are never
+retried.
 
 ### Rolling
 

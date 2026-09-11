@@ -630,6 +630,9 @@ export class GarnetBrokerRuntime extends Construct {
                     distributed_environment.FEDERATION_DEFAULT_LOCAL,
                 SNAPSHOT_BROKER_URL:
                     `http://${this.fargate_alb.loadBalancerDnsName}`,
+                SNAPSHOT_QUERY_MAX_ATTEMPTS: "4",
+                SNAPSHOT_QUERY_RETRY_BASE_MS: "250",
+                SNAPSHOT_QUERY_RETRY_MAX_MS: "5000",
                 SNAPSHOT_QUERY_TIMEOUT_MS: "30000",
                 SNAPSHOT_WORKERS: "2"
             }

@@ -238,6 +238,9 @@ describe("Garnet Broker AWS runtime", () => {
     )
     expect(snapshot_environment).toMatchObject({
       FEDERATION_DEFAULT_LOCAL: "true",
+      SNAPSHOT_QUERY_MAX_ATTEMPTS: "4",
+      SNAPSHOT_QUERY_RETRY_BASE_MS: "250",
+      SNAPSHOT_QUERY_RETRY_MAX_MS: "5000",
       SNAPSHOT_QUERY_TIMEOUT_MS: "30000",
       SNAPSHOT_WORKERS: "2"
     })
