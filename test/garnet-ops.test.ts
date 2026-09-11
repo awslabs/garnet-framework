@@ -48,8 +48,11 @@ describe("Garnet operations observability", () => {
       template.findResources("AWS::CloudWatch::Dashboard")
     )
     expect(dashboards).toHaveLength(1)
-    expect(JSON.stringify(
+    const dashboard = JSON.stringify(
       dashboards[0]?.Properties?.DashboardBody
-    )).toContain("ActivePartitionsLimit")
+    )
+    expect(dashboard).toContain("ActivePartitionsLimit")
+    expect(dashboard).toContain("Snapshot materialization saturation")
+    expect(dashboard).toContain("garnet-snapshot")
   })
 })

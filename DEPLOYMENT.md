@@ -204,9 +204,12 @@ autoscaling shape. Actual endpoint capacity depends on query mix, payload size,
 Aurora latency, connection pressure and downstream work.
 
 Snapshot workers use 1 vCPU / 2 GiB ARM64 tasks and scale independently from one
-to eight tasks. Their API reads contribute to the same target-group request and
-latency metrics as other broker traffic, while durable PostgreSQL leases divide
-snapshot jobs across worker replicas.
+to eight tasks. Each task exposes its two bounded materialization slots through
+the same fixed-cardinality worker metric as notification delivery, and target
+tracking scales at 70% occupied slots instead of waiting for CPU pressure. Their
+API reads contribute to the same target-group request and latency metrics as
+other broker traffic, while durable PostgreSQL leases divide snapshot jobs
+across worker replicas.
 
 A public 10,000 requests/s test also reaches the default API Gateway
 account/Region throttle, which is shared by all APIs. Request quota headroom

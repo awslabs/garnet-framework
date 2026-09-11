@@ -124,6 +124,40 @@ export class GarnetOps extends NestedStack {
                 ]
             })
         ))
+        dashboard.addWidgets(new Row(
+            new GraphWidget({
+                title: "Snapshot materialization saturation",
+                width: 12,
+                left: [
+                    broker_metric(
+                        "WorkerUtilizationMax",
+                        "garnet-snapshot",
+                        "Average"
+                    )
+                ]
+            }),
+            new GraphWidget({
+                title: "Snapshot materialization outcomes",
+                width: 12,
+                left: [
+                    broker_metric(
+                        "WorkerCompleted",
+                        "garnet-snapshot",
+                        "Sum"
+                    ),
+                    broker_metric(
+                        "WorkerFailed",
+                        "garnet-snapshot",
+                        "Sum"
+                    ),
+                    broker_metric(
+                        "WorkerRetries",
+                        "garnet-snapshot",
+                        "Sum"
+                    )
+                ]
+            })
+        ))
 
         const service_names = [
             "garnet-api",

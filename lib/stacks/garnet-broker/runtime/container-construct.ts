@@ -625,6 +625,7 @@ export class GarnetBrokerRuntime extends Construct {
             name: "snapshot",
             entry_point: "/garnet-snapshot",
             capacity: GARNET_SERVICE_CAPACITY.snapshot,
+            cpu_autoscaling: false,
             environment: {
                 FEDERATION_DEFAULT_LOCAL:
                     distributed_environment.FEDERATION_DEFAULT_LOCAL,
@@ -634,10 +635,23 @@ export class GarnetBrokerRuntime extends Construct {
                 SNAPSHOT_QUERY_RETRY_BASE_MS: "250",
                 SNAPSHOT_QUERY_RETRY_MAX_MS: "5000",
                 SNAPSHOT_QUERY_TIMEOUT_MS: "30000",
-                SNAPSHOT_WORKERS: "2"
+                SNAPSHOT_WORKERS: "2",
+                WORKER_METRICS: "emf",
+                WORKER_METRICS_NAMESPACE: "Garnet/Broker",
+                WORKER_METRICS_SERVICE: "garnet-snapshot",
+                WORKER_METRICS_INTERVAL_MS: "60000"
             }
         }))
         snapshot.service.node.addDependency(api.service)
+        if (snapshot.scaling === undefined) {
+            throw new Error("Garnet snapshot requires task-count scaling")
+        }
+        scale_on_worker_utilization({
+            id: "SnapshotUtilizationScaling",
+            scaling: snapshot.scaling,
+            service_name: "garnet-snapshot",
+            target_utilization_percent: 70
+        })
 
         if (props.load_image.trim() !== "") {
             this.load = new GarnetLoad(this, "Load", {

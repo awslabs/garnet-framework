@@ -242,7 +242,11 @@ describe("Garnet Broker AWS runtime", () => {
       SNAPSHOT_QUERY_RETRY_BASE_MS: "250",
       SNAPSHOT_QUERY_RETRY_MAX_MS: "5000",
       SNAPSHOT_QUERY_TIMEOUT_MS: "30000",
-      SNAPSHOT_WORKERS: "2"
+      SNAPSHOT_WORKERS: "2",
+      WORKER_METRICS: "emf",
+      WORKER_METRICS_NAMESPACE: "Garnet/Broker",
+      WORKER_METRICS_SERVICE: "garnet-snapshot",
+      WORKER_METRICS_INTERVAL_MS: "60000"
     })
     expect(snapshot_environment.SNAPSHOT_BROKER_URL)
       .toHaveProperty("Fn::Join")
@@ -295,6 +299,31 @@ describe("Garnet Broker AWS runtime", () => {
             Dimensions: [{
               Name: "Service",
               Value: "garnet-delivery"
+            }],
+            MetricName: "WorkerUtilizationMax",
+            Namespace: "Garnet/Broker",
+            Statistic: "Average"
+          },
+          ScaleInCooldown: 180,
+          ScaleOutCooldown: 30,
+          TargetValue: 70
+        }
+      }
+    )
+  })
+
+  it("scales snapshot materialization from occupied worker slots", () => {
+    const template = synth_broker()
+
+    template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "TargetTrackingScaling",
+        TargetTrackingScalingPolicyConfiguration: {
+          CustomizedMetricSpecification: {
+            Dimensions: [{
+              Name: "Service",
+              Value: "garnet-snapshot"
             }],
             MetricName: "WorkerUtilizationMax",
             Namespace: "Garnet/Broker",
