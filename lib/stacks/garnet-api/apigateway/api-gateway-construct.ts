@@ -14,6 +14,7 @@ import {
 } from "aws-cdk-lib/aws-ec2"
 import { Construct } from "constructs"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
+import { CfnPermission } from "aws-cdk-lib/aws-lambda"
 import { Aws, Duration } from "aws-cdk-lib"
 import { Parameters } from "../../../../configuration"
 import { garnet_resource_name } from "../../../../constants"
@@ -126,6 +127,19 @@ export class GarnetApiGateway extends Construct{
             identitySource: ['$request.header.Authorization'],
             name: 'jwt-authorizer'
         })
+        const authorizer_permission = new CfnPermission(
+            this,
+            "AuthorizerInvokePermission",
+            {
+                action: "lambda:InvokeFunction",
+                functionName: props.lambda_authorizer_arn,
+                principal: "apigateway.amazonaws.com",
+                sourceArn:
+                    `arn:${Aws.PARTITION}:execute-api:` +
+                    `${Aws.REGION}:${Aws.ACCOUNT_ID}:${api.apiId}/` +
+                    `authorizers/${authorizer.ref}`
+            }
+        )
 
         const route = new CfnRoute(this, 'AuthRoute', {
             apiId: api.apiId,
@@ -139,6 +153,7 @@ export class GarnetApiGateway extends Construct{
         
         if (Parameters.authorization) {
             route.node.addDependency(authorizer)
+            route.node.addDependency(authorizer_permission)
         }
 
         this.api_ref = api.apiId

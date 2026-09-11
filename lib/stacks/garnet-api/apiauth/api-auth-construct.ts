@@ -5,7 +5,6 @@ import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import { garnet_nomenclature } from "../../../../constants"
 import { Provider } from "aws-cdk-lib/custom-resources"
-import { ServicePrincipal } from "aws-cdk-lib/aws-iam"
 import { Parameters } from "../../../../configuration"
 
 export interface GarnetApiAuthJwtProps {
@@ -131,7 +130,6 @@ export class GarnetApiAuthJwt extends Construct {
         api_authorizer_lambda.node.addDependency(api_authorizer_logs)
 
         props.secret_api_jwt.grantRead(api_authorizer_lambda)
-        api_authorizer_lambda.grantInvoke(new ServicePrincipal('apigateway.amazonaws.com'))
         
         this.lambda_authorizer_arn = api_authorizer_lambda.functionArn
     }

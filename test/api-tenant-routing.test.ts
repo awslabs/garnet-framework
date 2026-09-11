@@ -86,6 +86,21 @@ describe("tenant-safe API routing", () => {
     template.resourceCountIs("AWS::ApiGatewayV2::Integration", 1)
     template.resourceCountIs("AWS::ApiGatewayV2::Route", 1)
     template.resourceCountIs("AWS::Lambda::Function", 0)
+    const authorizer_permission = Object.values(
+      template.findResources("AWS::Lambda::Permission")
+    ).find(
+      (resource: any) =>
+        resource.Properties.Principal ===
+          "apigateway.amazonaws.com"
+    ) as any
+    expect(authorizer_permission.Properties).toMatchObject({
+      Action: "lambda:InvokeFunction",
+      FunctionName:
+        "arn:aws:lambda:eu-west-3:111111111111:function:authorizer"
+    })
+    expect(
+      JSON.stringify(authorizer_permission.Properties.SourceArn)
+    ).toContain("authorizers")
 
     const ingress = Object.values(
       template.findResources("AWS::EC2::SecurityGroupIngress")

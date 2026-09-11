@@ -66,4 +66,18 @@ describe('API client credential infrastructure', () => {
       TokenSchemaVersion: 'tenant-v1'
     })
   })
+
+  it('does not grant API Gateway account-wide authorizer access', () => {
+    const permissions = Object.values(
+      synth_auth().findResources('AWS::Lambda::Permission')
+    ) as any[]
+
+    expect(
+      permissions.some(
+        (permission) =>
+          permission.Properties.Principal ===
+          'apigateway.amazonaws.com'
+      )
+    ).toBe(false)
+  })
 })
