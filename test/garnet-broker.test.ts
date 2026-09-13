@@ -97,9 +97,16 @@ describe("Garnet Broker AWS runtime", () => {
         CpuArchitecture: "ARM64",
         OperatingSystemFamily: "LINUX"
       })
-      entry_points.push(
-        resource.Properties.ContainerDefinitions[0].EntryPoint[0]
-      )
+      const container = resource.Properties.ContainerDefinitions[0]
+      const entry_point = container.EntryPoint[0]
+      entry_points.push(entry_point)
+      if (!entry_point.startsWith("/garnet-load")) {
+        const environment = Object.fromEntries(
+          (container.Environment ?? [])
+            .map((entry: any) => [entry.Name, entry.Value])
+        )
+        expect(environment.AUTH_MODE).toBe("none")
+      }
     }
     expect(entry_points.sort()).toEqual([
       "/garnet-broker",
@@ -210,6 +217,7 @@ describe("Garnet Broker AWS runtime", () => {
     )
 
     expect(environment).toMatchObject({
+      AUTH_MODE: "none",
       FEDERATION_DEFAULT_LOCAL: "true",
       FEDERATION_ROUTER_URL: "http://federation:8080",
       ENTITY_EVENT_TRANSPORT: "postgres",

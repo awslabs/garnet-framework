@@ -163,6 +163,10 @@ export class GarnetBrokerRuntime extends Construct {
             }
         })
         const common_environment = {
+            // The current managed profile authenticates public traffic at API Gateway. Garnet
+            // Broker itself fails closed when AUTH_MODE is absent, so state that boundary
+            // explicitly until the framework supplies production OIDC or SigV4 credentials.
+            AUTH_MODE: "none",
             DBHOST: props.database.clusterEndpoint.hostname,
             DBPORT: Token.asString(props.database.clusterEndpoint.port),
             DBNAME: garnet_constant.dbname,
