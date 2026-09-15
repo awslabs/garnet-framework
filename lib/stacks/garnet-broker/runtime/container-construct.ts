@@ -81,6 +81,9 @@ export interface GarnetBrokerRuntimeProps {
     notification_delivery_allow_origins: string
     private_notification_origin: string
     context_allow_hosts: string
+    temporal_history_retention_days: number
+    temporal_history_retention_max_gib: number
+    temporal_history_retention_max_partitions: number
 }
 
 const request_count_per_target_metric = (
@@ -725,7 +728,15 @@ export class GarnetBrokerRuntime extends Construct {
             entryPoint: ["/garnet-maintenance"],
             environment: {
                 ...common_environment,
-                DB_POOL_MAX: "1"
+                DB_POOL_MAX: "1",
+                TEMPORAL_HISTORY_RETENTION_DAYS:
+                    String(props.temporal_history_retention_days),
+                TEMPORAL_HISTORY_RETENTION_MAX_GIB:
+                    String(props.temporal_history_retention_max_gib),
+                TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS:
+                    String(
+                        props.temporal_history_retention_max_partitions
+                    )
             },
             secrets: common_secrets,
             logging: LogDrivers.awsLogs({

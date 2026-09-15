@@ -57,6 +57,18 @@ inputs:
     description: Aurora continuous-backup retention from 1 to 35 days
     required: false
     default: '35'
+  temporal-history-retention-days:
+    description: Maximum queryable Aurora Temporal history age
+    required: false
+    default: '365'
+  temporal-history-retention-max-gib:
+    description: Maximum Temporal history and typed-index footprint in GiB
+    required: false
+    default: '500'
+  temporal-history-retention-max-partitions:
+    description: Maximum expired daily or legacy monthly partitions truncated per run
+    required: false
+    default: '12'
   node-version:
     description: Node version used for the build
     required: false
@@ -112,6 +124,9 @@ runs:
         GARNET_NAT_GATEWAY_COUNT: ${{ inputs.nat-gateway-count }}
         GARNET_DATABASE_DELETION_PROTECTION: ${{ inputs.database-deletion-protection }}
         GARNET_DATABASE_BACKUP_RETENTION_DAYS: ${{ inputs.database-backup-retention-days }}
+        GARNET_TEMPORAL_HISTORY_RETENTION_DAYS: ${{ inputs.temporal-history-retention-days }}
+        GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB: ${{ inputs.temporal-history-retention-max-gib }}
+        GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS: ${{ inputs.temporal-history-retention-max-partitions }}
         GARNET_REGION: ${{ inputs.aws-region }}
       run: node .github/scripts/configure-garnet.js
 

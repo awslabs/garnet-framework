@@ -20,7 +20,8 @@ This branch deploys Garnet Broker through the separate `GarnetFramework`
 CloudFormation stack. It does not modify or reuse the maintenance stack's
 database. The runtime is distributed and ARM64, supports rolling or API
 blue/green deployment, and writes immutable broker events to a tenant/day
-partitioned Iceberg lake.
+partitioned Iceberg lake. Queryable Temporal history is bounded in Aurora by
+independent age and size ceilings rather than growing indefinitely.
 
 ## Getting Started 
 

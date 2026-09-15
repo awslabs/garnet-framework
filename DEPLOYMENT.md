@@ -56,6 +56,9 @@ CI and CD use `.github/scripts/configure-garnet.js`. The deployment inputs are:
 | `GARNET_NAT_GATEWAY_COUNT` | no | `2` for production; `1` accepts an egress AZ dependency |
 | `GARNET_DATABASE_DELETION_PROTECTION` | no | Default `true`; set `false` only for disposable environments |
 | `GARNET_DATABASE_BACKUP_RETENTION_DAYS` | no | `1` to `35`; default `35` |
+| `GARNET_TEMPORAL_HISTORY_RETENTION_DAYS` | no | Maximum queryable Aurora Temporal-history age; default `365` |
+| `GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB` | no | Maximum Temporal history and typed-index footprint; default `500` GiB |
+| `GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS` | no | Maximum complete daily or legacy monthly leaves truncated per run; default `12` |
 
 The script validates images, origins, hosts, booleans and strategy before
 rewriting `configuration.ts`.
@@ -367,6 +370,14 @@ The durability command additionally needs `rds:FailoverDBCluster`,
 - Aurora keeps 35 days of continuous backups and enables deletion protection
   by default. Set `Parameters.database_deletion_protection = false` only for a
   disposable environment before destroying it.
+- The daily singleton maintenance task keeps at most 365 days or 500 GiB of
+  Temporal history by default, whichever ceiling is reached first, and
+  truncates at most 12 complete daily or legacy monthly partitions per run.
+  The production configuration path rejects zero for either ceiling so Aurora
+  history cannot silently become unbounded. The open day is never truncated;
+  an unsatisfied size target is reported and alarmable rather than deleting
+  current data. Immutable Entity events remain in the Iceberg lake for
+  long-term analytics.
 - Data-lake and Athena-result buckets use `RemovalPolicy.RETAIN`.
 - Iceberg table metadata uses `RemovalPolicy.RETAIN`.
 - Iceberg compaction may rewrite physical files but does not expire snapshots

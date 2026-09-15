@@ -18,6 +18,9 @@ export interface GarnetBrokerProps extends NestedStackProps {
     private_notification_origin: string
     context_allow_hosts: string
     eventual_entity_reads: boolean
+    temporal_history_retention_days: number
+    temporal_history_retention_max_gib: number
+    temporal_history_retention_max_partitions: number
 }
 
 export class GarnetBroker extends NestedStack {
@@ -56,7 +59,13 @@ export class GarnetBroker extends NestedStack {
                 props.notification_delivery_allow_origins,
             private_notification_origin:
                 props.private_notification_origin,
-            context_allow_hosts: props.context_allow_hosts
+            context_allow_hosts: props.context_allow_hosts,
+            temporal_history_retention_days:
+                props.temporal_history_retention_days,
+            temporal_history_retention_max_gib:
+                props.temporal_history_retention_max_gib,
+            temporal_history_retention_max_partitions:
+                props.temporal_history_retention_max_partitions
         })
         federation_state.allow_connections_from(runtime.sg_broker)
 

@@ -164,6 +164,27 @@ const apply_configuration = (source, env) => {
     1,
     35
   )
+  const temporal_history_retention_days = integer_setting(
+    env,
+    'GARNET_TEMPORAL_HISTORY_RETENTION_DAYS',
+    365,
+    1,
+    36600
+  )
+  const temporal_history_retention_max_gib = integer_setting(
+    env,
+    'GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB',
+    500,
+    1,
+    1048576
+  )
+  const temporal_history_retention_max_partitions = integer_setting(
+    env,
+    'GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS',
+    12,
+    1,
+    1200
+  )
   const bootstrap_tenant = tenant_setting(
     env,
     'GARNET_BOOTSTRAP_TENANT',
@@ -242,6 +263,30 @@ const apply_configuration = (source, env) => {
     `database_backup_retention_days: ${backup_retention_days}`,
     'database_backup_retention_days'
   )
+  out = replace_setting(
+    out,
+    /temporal_history_retention_days: \d+/,
+    `temporal_history_retention_days: ${
+      temporal_history_retention_days
+    }`,
+    'temporal_history_retention_days'
+  )
+  out = replace_setting(
+    out,
+    /temporal_history_retention_max_gib: \d+/,
+    `temporal_history_retention_max_gib: ${
+      temporal_history_retention_max_gib
+    }`,
+    'temporal_history_retention_max_gib'
+  )
+  out = replace_setting(
+    out,
+    /temporal_history_retention_max_partitions: \d+/,
+    `temporal_history_retention_max_partitions: ${
+      temporal_history_retention_max_partitions
+    }`,
+    'temporal_history_retention_max_partitions'
+  )
   if (env.GARNET_REGION) {
     if (!/^[a-z]{2}(-gov)?-[a-z]+-\d$/.test(env.GARNET_REGION)) {
       throw new Error(
@@ -268,6 +313,9 @@ const apply_configuration = (source, env) => {
     nat_gateway_count,
     database_deletion_protection,
     backup_retention_days,
+    temporal_history_retention_days,
+    temporal_history_retention_max_gib,
+    temporal_history_retention_max_partitions,
     strategy,
     schema_compatibility
   }
@@ -285,6 +333,11 @@ const main = () => {
     ` nat-gateways=${result.nat_gateway_count}` +
     ` deletion-protection=${result.database_deletion_protection}` +
     ` backup-days=${result.backup_retention_days}` +
+    ` temporal-days=${result.temporal_history_retention_days}` +
+    ` temporal-gib=${result.temporal_history_retention_max_gib}` +
+    ` temporal-partitions=${
+      result.temporal_history_retention_max_partitions
+    }` +
     ` public-origin=${result.public_origin === '' ? 'disabled' : 'configured'}` +
     ` notification-origins=${
       result.notification_origins === ''

@@ -54,7 +54,13 @@ export class GarnetFrameworkStack extends Stack {
         garnet_privatesub.notification_origin,
       context_allow_hosts: Parameters.garnet_context_allow_hosts,
       eventual_entity_reads:
-        Parameters.garnet_eventual_entity_reads
+        Parameters.garnet_eventual_entity_reads,
+      temporal_history_retention_days:
+        Parameters.temporal_history_retention_days,
+      temporal_history_retention_max_gib:
+        Parameters.temporal_history_retention_max_gib,
+      temporal_history_retention_max_partitions:
+        Parameters.temporal_history_retention_max_partitions
     })
     
     const garnet_ingestion_stack = new GarnetIngestionStack(this, 'GarnetIngestion', {

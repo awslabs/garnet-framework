@@ -35,6 +35,9 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_NAT_GATEWAY_COUNT: "1",
       GARNET_DATABASE_DELETION_PROTECTION: "false",
       GARNET_DATABASE_BACKUP_RETENTION_DAYS: "7",
+      GARNET_TEMPORAL_HISTORY_RETENTION_DAYS: "730",
+      GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB: "750",
+      GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS: "24",
       GARNET_DEPLOYMENT_STRATEGY: "bluegreen",
       GARNET_REGION: "eu-west-3"
     }))
@@ -51,6 +54,9 @@ describe("Garnet-only deployment configuration", () => {
       nat_gateway_count: 1,
       database_deletion_protection: false,
       backup_retention_days: 7,
+      temporal_history_retention_days: 730,
+      temporal_history_retention_max_gib: 750,
+      temporal_history_retention_max_partitions: 24,
       strategy: "bluegreen",
       schema_compatibility: "backward-compatible"
     })
@@ -74,6 +80,15 @@ describe("Garnet-only deployment configuration", () => {
     )
     expect(result.source).toContain(
       "database_backup_retention_days: 7"
+    )
+    expect(result.source).toContain(
+      "temporal_history_retention_days: 730"
+    )
+    expect(result.source).toContain(
+      "temporal_history_retention_max_gib: 750"
+    )
+    expect(result.source).toContain(
+      "temporal_history_retention_max_partitions: 24"
     )
     expect(result.source).not.toContain("BROKER_ENGINE")
   })
@@ -102,6 +117,11 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.nat_gateway_count).toBe(2)
     expect(result.database_deletion_protection).toBe(true)
     expect(result.backup_retention_days).toBe(35)
+    expect(result.temporal_history_retention_days).toBe(365)
+    expect(result.temporal_history_retention_max_gib).toBe(500)
+    expect(
+      result.temporal_history_retention_max_partitions
+    ).toBe(12)
     expect(result.source).toContain('garnet_load_image: ""')
     expect(result.source).toContain(
       'garnet_broker_public_origin: ""'
@@ -134,6 +154,15 @@ describe("Garnet-only deployment configuration", () => {
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_DATABASE_BACKUP_RETENTION_DAYS: "0"
     }))).toThrow(/between 1 and 35/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_TEMPORAL_HISTORY_RETENTION_DAYS: "0"
+    }))).toThrow(/between 1 and 36600/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB: "0"
+    }))).toThrow(/between 1 and 1048576/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS: "0"
+    }))).toThrow(/between 1 and 1200/)
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_BOOTSTRAP_TENANT: "unsafe\nvalue"
     }))).toThrow(/safe tenant/)

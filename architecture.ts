@@ -36,6 +36,9 @@ type DeploymentParams = {
     nat_gateway_count: 1 | 2,
     database_deletion_protection: boolean,
     database_backup_retention_days: number,
+    temporal_history_retention_days: number,
+    temporal_history_retention_max_gib: number,
+    temporal_history_retention_max_partitions: number,
     aurora_storage_type?: DBClusterStorageType,
     aurora_min_capacity: number, 
     aurora_max_capacity: number
@@ -52,6 +55,12 @@ export const deployment_params: DeploymentParams = {
             Parameters.database_deletion_protection,
         database_backup_retention_days:
             Parameters.database_backup_retention_days,
+        temporal_history_retention_days:
+            Parameters.temporal_history_retention_days,
+        temporal_history_retention_max_gib:
+            Parameters.temporal_history_retention_max_gib,
+        temporal_history_retention_max_partitions:
+            Parameters.temporal_history_retention_max_partitions,
 
         deployment_strategy:
             Parameters.deployment_strategy as DEPLOYMENT_STRATEGY,

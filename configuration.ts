@@ -66,6 +66,15 @@ export const Parameters = {
     database_backup_retention_days: 35,
 
     /**
+     * Keep up to one year or 500 GiB of queryable Temporal history in Aurora,
+     * whichever ceiling is reached first. Immutable Entity events continue to
+     * the Iceberg lake for long-term analytics.
+     */
+    temporal_history_retention_days: 365,
+    temporal_history_retention_max_gib: 500,
+    temporal_history_retention_max_partitions: 12,
+
+    /**
      * Blue/green is the production default for the externally routed API.
      * Workers still use rolling updates with ECS circuit breakers because two
      * concurrent consumer revisions would not isolate side effects.

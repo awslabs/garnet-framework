@@ -53,7 +53,10 @@ const synth_broker = (
     private_notification_origin:
       "https://private.example.execute-api.eu-west-3.amazonaws.com",
     context_allow_hosts: "uri.etsi.org",
-    eventual_entity_reads
+    eventual_entity_reads,
+    temporal_history_retention_days: 365,
+    temporal_history_retention_max_gib: 500,
+    temporal_history_retention_max_partitions: 12
   })
   return Template.fromStack(broker)
 }
@@ -122,6 +125,31 @@ describe("Garnet Broker AWS runtime", () => {
       "/garnet-snapshot",
       "/garnet-subscription-reconciler"
     ].sort())
+  })
+
+  it("bounds Aurora Temporal history through scheduled maintenance", () => {
+    const template = synth_broker()
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const maintenance = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].EntryPoint[0] ===
+          "/garnet-maintenance"
+      )
+    const environment = Object.fromEntries(
+      maintenance.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+
+    expect(environment).toMatchObject({
+      TEMPORAL_HISTORY_RETENTION_DAYS: "365",
+      TEMPORAL_HISTORY_RETENTION_MAX_GIB: "500",
+      TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS: "12"
+    })
+    template.hasResourceProperties("AWS::Events::Rule", {
+      ScheduleExpression: "cron(0 3 * * ? *)",
+      State: "ENABLED"
+    })
   })
 
   it("provisions idle load tasks with private durable evidence", () => {
@@ -662,7 +690,10 @@ describe("Garnet Broker AWS runtime", () => {
       private_notification_origin:
         "https://private.example.execute-api.eu-west-3.amazonaws.com",
       context_allow_hosts: "",
-      eventual_entity_reads: false
+      eventual_entity_reads: false,
+      temporal_history_retention_days: 365,
+      temporal_history_retention_max_gib: 500,
+      temporal_history_retention_max_partitions: 12
     })).toThrow(/digest-pinned/)
   })
 
@@ -684,7 +715,10 @@ describe("Garnet Broker AWS runtime", () => {
       private_notification_origin:
         "https://private.example.execute-api.eu-west-3.amazonaws.com",
       context_allow_hosts: "",
-      eventual_entity_reads: false
+      eventual_entity_reads: false,
+      temporal_history_retention_days: 365,
+      temporal_history_retention_max_gib: 500,
+      temporal_history_retention_max_partitions: 12
     })).toThrow(/load image must be immutable and digest-pinned/)
   })
 })

@@ -28,6 +28,26 @@ describe("deployment action", () => {
     )
   })
 
+  it("keeps production Temporal history bounded by default", () => {
+    expect(action).toMatch(
+      /temporal-history-retention-days:[\s\S]*?default: '365'/
+    )
+    expect(action).toMatch(
+      /temporal-history-retention-max-gib:[\s\S]*?default: '500'/
+    )
+    expect(action).toMatch(
+      /temporal-history-retention-max-partitions:[\s\S]*?default: '12'/
+    )
+    expect(action).toContain(
+      "GARNET_TEMPORAL_HISTORY_RETENTION_DAYS: " +
+      "${{ inputs.temporal-history-retention-days }}"
+    )
+    expect(action).toContain(
+      "GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB: " +
+      "${{ inputs.temporal-history-retention-max-gib }}"
+    )
+  })
+
   it("diffs and deploys one environment-specific cloud assembly", () => {
     const synth = action.indexOf("run: npx cdk synth --quiet")
     const diff = action.indexOf(

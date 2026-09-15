@@ -80,6 +80,9 @@ jobs:
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
           database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
+          temporal-history-retention-days: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_DAYS || '365' }}
+          temporal-history-retention-max-gib: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB || '500' }}
+          temporal-history-retention-max-partitions: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS || '12' }}
           node-version: ${{ env.NODE_VERSION }}
 
   deploy-stage:
@@ -114,6 +117,9 @@ jobs:
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
           database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
+          temporal-history-retention-days: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_DAYS || '365' }}
+          temporal-history-retention-max-gib: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB || '500' }}
+          temporal-history-retention-max-partitions: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS || '12' }}
           node-version: ${{ env.NODE_VERSION }}
 
   deploy-prod:
@@ -147,6 +153,9 @@ jobs:
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
           database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
+          temporal-history-retention-days: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_DAYS || '365' }}
+          temporal-history-retention-max-gib: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB || '500' }}
+          temporal-history-retention-max-partitions: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS || '12' }}
           node-version: ${{ env.NODE_VERSION }}
 
   # Single-environment path for workflow_dispatch, so a hotfix or a re-deploy
@@ -183,4 +192,7 @@ jobs:
           nat-gateway-count: ${{ vars.GARNET_NAT_GATEWAY_COUNT || '2' }}
           database-deletion-protection: ${{ vars.GARNET_DATABASE_DELETION_PROTECTION || 'true' }}
           database-backup-retention-days: ${{ vars.GARNET_DATABASE_BACKUP_RETENTION_DAYS || '35' }}
+          temporal-history-retention-days: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_DAYS || '365' }}
+          temporal-history-retention-max-gib: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_GIB || '500' }}
+          temporal-history-retention-max-partitions: ${{ vars.GARNET_TEMPORAL_HISTORY_RETENTION_MAX_PARTITIONS || '12' }}
           node-version: ${{ env.NODE_VERSION }}

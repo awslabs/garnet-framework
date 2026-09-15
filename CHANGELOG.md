@@ -28,6 +28,9 @@ All notable changes to the Garnet Framework will be documented in this file.
 
 - Added Aurora PostgreSQL 16.14 Serverless v2 with an 8-ACU production floor,
   reader failover, deletion protection, 35-day backups and saturation alarms.
+- Enabled dual-limit Temporal retention by default: daily maintenance keeps at
+  most one queryable year or 500 GiB in Aurora and truncates complete daily or
+  legacy monthly partitions.
 - Added independent task autoscaling, AWS load qualification, retained evidence,
   failover exercises and Iceberg compaction monitoring.
 - Bound qualification evidence to the deployed database topology, with separate
