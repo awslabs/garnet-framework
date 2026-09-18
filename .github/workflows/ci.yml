@@ -146,6 +146,9 @@ jobs:
           GARNET_SCHEMA_COMPATIBILITY: unchanged
           GARNET_ECS_INSTANCE_TYPE: c9g.2xlarge
           GARNET_REGION: us-east-1
+          GARNET_OIDC_ISSUER: https://identity.example
+          GARNET_OIDC_AUDIENCES: garnet-api
+          GARNET_BOOTSTRAP_ADMIN_SUBJECT: ci-admin
 
       # No AWS credentials needed: a region is enough to resolve the template.
       - name: Synth

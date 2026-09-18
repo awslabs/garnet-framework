@@ -44,47 +44,19 @@ const take_response = (replies: SmokeResponse[]): SmokeResponse => {
 }
 
 describe('post-deploy smoke test', () => {
-  it('loads the API token from Secrets Manager without invoking a shell', () => {
-    const exec_file = jest.fn(() =>
-      JSON.stringify({ Authorization: 'signed-client-token' })
-    )
-
+  it('loads a short-lived Bearer credential from the protected job environment', () => {
     expect(load_api_token(
-      'arn:aws:secretsmanager:eu-west-3:111111111111:secret:garnet-token',
-      { exec_file, env: { AWS_REGION: 'eu-west-3' } }
-    )).toBe('signed-client-token')
-
-    expect(exec_file).toHaveBeenCalledWith(
-      'aws',
-      [
-        'secretsmanager',
-        'get-secret-value',
-        '--secret-id',
-        'arn:aws:secretsmanager:eu-west-3:111111111111:secret:garnet-token',
-        '--query',
-        'SecretString',
-        '--output',
-        'text'
-      ],
-      expect.objectContaining({
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-    )
+      undefined,
+      { env: { SMOKE_AUTHORIZATION: 'Bearer signed-client-token' } }
+    )).toBe('Bearer signed-client-token')
   })
 
-  it('rejects malformed API client secrets without echoing their contents', () => {
-    const malformed = 'this-is-not-json-and-must-not-be-reported'
-
-    expect(() => load_api_token('secret-arn', {
-      exec_file: () => malformed
-    })).toThrow('Garnet API client secret is not valid JSON')
-
-    try {
-      load_api_token('secret-arn', { exec_file: () => malformed })
-    } catch (error) {
-      expect(String(error)).not.toContain(malformed)
-    }
+  it('rejects a missing or malformed smoke credential', () => {
+    expect(() => load_api_token(undefined, {
+      env: { SMOKE_AUTHORIZATION: 'signed-client-token' }
+    })).toThrow('one Bearer credential')
+    expect(() => load_api_token(undefined, { env: {} }))
+      .toThrow('one Bearer credential')
   })
 
   it('forwards request bodies to fetch', async () => {

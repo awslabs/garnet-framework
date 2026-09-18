@@ -125,13 +125,25 @@ export const Parameters = {
      */
     deployment_test_listener_port: 8080,
 
-    /**
-     * Tenant bound to the bootstrap API credential stored in Secrets Manager.
-     * Production tenant onboarding should issue one tenant-scoped credential
-     * per client rather than sharing this bootstrap credential.
-     */
-    garnet_bootstrap_tenant: "default",
+    /** Exact external OpenID Connect issuer accepted end-to-end. */
+    garnet_oidc_issuer: "https://identity.example.invalid",
 
-    // API Authorization
-    authorization: true
+    /** Comma-separated OAuth audience values accepted by API Gateway and Broker. */
+    garnet_oidc_audiences: "garnet-api",
+
+    /** Claim containing one tenant or a tenant array when the IdP supplies it. */
+    garnet_oidc_tenant_claim: "garnet_tenants",
+
+    /** Stable `sub` of the initial tenant administrator in the external IdP. */
+    garnet_bootstrap_admin_subject: "bootstrap-admin",
+
+    /**
+     * Optional JSON arrays of custom policy documents and additional exact
+     * principal bindings. Broker validates and freezes both before listening.
+     */
+    garnet_authorization_policies: "[]",
+    garnet_authorization_bindings: "[]",
+
+    /** Tenant receiving the initial TenantAdministrator attachment. */
+    garnet_bootstrap_tenant: "default",
 }

@@ -18,6 +18,28 @@ jest.mock(
   }),
   { virtual: true }
 )
+jest.mock(
+  '/opt/nodejs/broker-auth.js',
+  () => ({
+    create_broker_headers: () =>
+      async ({
+        content_type,
+        tenant = 'default'
+      }: {
+        content_type?: string
+        tenant?: string
+      } = {}) => ({
+        Authorization: 'SigV4-STS proof',
+        ...(content_type === undefined
+          ? {}
+          : { 'Content-Type': content_type }),
+        ...(tenant === 'default'
+          ? {}
+          : { 'NGSILD-Tenant': tenant })
+      })
+  }),
+  { virtual: true }
+)
 
 // axios ships in the Lambda layer, not in the root project, so it is virtual here too
 const post = jest.fn()
@@ -37,6 +59,7 @@ const load_handler = () => require(handler_path).handler
 describe('ingestion updateContextBroker handler', () => {
   beforeEach(() => {
     jest.resetModules()
+    process.env.GARNET_TENANT = 'default'
     post.mockReset()
     post.mockResolvedValue({ data: 'ok' })
   })
@@ -74,7 +97,7 @@ describe('ingestion updateContextBroker handler', () => {
     expect(content_types).toEqual(['application/json', 'application/ld+json'])
   })
 
-  it('keeps tenant batches isolated and forwards NGSILD-Tenant', async () => {
+  it('rejects a tenant outside the workload policy binding', async () => {
     const event = {
       Records: [
         record('default', entity('urn:ngsi-ld:Device:1')),
@@ -87,16 +110,14 @@ describe('ingestion updateContextBroker handler', () => {
 
     const result = await load_handler()(event, {})
 
-    expect(result).toEqual({ batchItemFailures: [] })
-    expect(post).toHaveBeenCalledTimes(2)
-    const headers = post.mock.calls.map((call: any) => call[2].headers)
-    expect(headers).toEqual(expect.arrayContaining([
-      { 'Content-Type': 'application/json' },
-      {
-        'Content-Type': 'application/json',
-        'NGSILD-Tenant': 'factory-a'
-      }
-    ]))
+    expect(result).toEqual({
+      batchItemFailures: [{ itemIdentifier: 'tenant' }]
+    })
+    expect(post).toHaveBeenCalledTimes(1)
+    expect(post.mock.calls[0][2].headers).toEqual({
+      Authorization: 'SigV4-STS proof',
+      'Content-Type': 'application/json'
+    })
   })
 
   it('rejects tenant values that could inject an HTTP header', async () => {

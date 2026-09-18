@@ -1,15 +1,15 @@
-import { Aws, Duration, Names, RemovalPolicy } from "aws-cdk-lib";
+import { Aws, Duration, RemovalPolicy } from "aws-cdk-lib";
 import { Runtime, Function, Code, Architecture, LayerVersion, CfnPermission } from "aws-cdk-lib/aws-lambda";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
-import { Queue } from "aws-cdk-lib/aws-sqs";
 import { Construct } from "constructs"
-import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
-import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
+import { PolicyStatement } from "aws-cdk-lib/aws-iam";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
-import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
-import { garnet_constant, garnet_nomenclature } from "../../../../constants";
+import { garnet_nomenclature } from "../../../../constants";
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2";
-import { Parameters } from "../../../../configuration";
+import {
+    broker_workload_environment,
+    create_broker_workload_role
+} from "../../garnet-common/security/broker-workload-role";
 
 /***
  * https://docs.aws.amazon.com/iot/latest/developerguide/registry-events.html#registry-events-thinggroup
@@ -17,7 +17,8 @@ import { Parameters } from "../../../../configuration";
 
 export interface GarnetIotGroupProps {
   vpc: Vpc, 
-  dns_context_broker: string
+  dns_context_broker: string,
+  tenant: string
 }
 
 export class GarnetIotGroup extends Construct {
@@ -61,6 +62,12 @@ export class GarnetIotGroup extends Construct {
           removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_update_group_membership_path = `${__dirname}/lambda/groupMembership`;
+        const lambda_update_group_membership_role =
+          create_broker_workload_role(
+            this,
+            "GarnetIotGroupMembershipLambdaRole",
+            garnet_nomenclature.garnet_iot_group_membership_role
+          )
         const lambda_update_group_membership = new Function(this, "GarnetIoTGroupMembershipLambda", {
           functionName: `${garnet_nomenclature.garnet_iot_group_membership_lambda}`,
           description: 'Garnet Sync AWS IoT Things Group- Function that updates Things Group membership for Things',
@@ -75,10 +82,12 @@ export class GarnetIotGroup extends Construct {
           timeout: Duration.seconds(50),
           logGroup: lambda_update_group_membership_log,
           architecture: Architecture.ARM_64,
+          role: lambda_update_group_membership_role,
           environment: {
             DNS_CONTEXT_BROKER: props.dns_context_broker,
             AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing,
-            AWSIOTTHINGGROUPTYPE: garnet_nomenclature.aws_iot_thing_group
+            AWSIOTTHINGGROUPTYPE: garnet_nomenclature.aws_iot_thing_group,
+            ...broker_workload_environment(props.tenant)
           }
         })
 
@@ -133,6 +142,11 @@ export class GarnetIotGroup extends Construct {
           removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_group_lifecycle_path = `${__dirname}/lambda/groupLifecycle`;
+        const lambda_group_lifecycle_role = create_broker_workload_role(
+          this,
+          "GarnetIotGroupLifecycleLambdaRole",
+          garnet_nomenclature.garnet_iot_group_lifecycle_role
+        )
         const lambda_group_lifecyle = new Function(this, "GarnetIoTGroupLifecycleLambda", {
           functionName: `${garnet_nomenclature.garnet_iot_group_lifecycle_lambda}`,
           description: 'Garnet AWS IoT Things Group Sync - Function that handles Thing Group lifecycle',
@@ -147,9 +161,11 @@ export class GarnetIotGroup extends Construct {
           timeout: Duration.seconds(50),
           logGroup: lambda_group_lifecyle_log,
           architecture: Architecture.ARM_64,
+          role: lambda_group_lifecycle_role,
           environment: {
             DNS_CONTEXT_BROKER: props.dns_context_broker,
-            AWSIOTTHINGGROUPTYPE: garnet_nomenclature.aws_iot_thing_group
+            AWSIOTTHINGGROUPTYPE: garnet_nomenclature.aws_iot_thing_group,
+            ...broker_workload_environment(props.tenant)
           }
         })
         lambda_group_lifecyle.node.addDependency(lambda_group_lifecyle_log)

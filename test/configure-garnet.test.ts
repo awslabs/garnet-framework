@@ -15,6 +15,9 @@ const deploymentEnvironment = (
 ): Record<string, string> => ({
   GARNET_BROKER_IMAGE: image,
   GARNET_SCHEMA_COMPATIBILITY: "unchanged",
+  GARNET_OIDC_ISSUER: "https://identity.example",
+  GARNET_OIDC_AUDIENCES: "garnet-api",
+  GARNET_BOOTSTRAP_ADMIN_SUBJECT: "admin-1",
   ...overrides
 })
 
@@ -38,6 +41,12 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_ECS_INSTANCE_TYPE: "c9g.2xlarge",
       GARNET_WORKER_SPOT_SCALE_OUT: "false",
       GARNET_BOOTSTRAP_TENANT: "factory-a",
+      GARNET_OIDC_ISSUER: "https://login.example/tenant",
+      GARNET_OIDC_AUDIENCES: "garnet-api,garnet-cli",
+      GARNET_OIDC_TENANT_CLAIM: "tenants",
+      GARNET_BOOTSTRAP_ADMIN_SUBJECT: "admin/factory-a",
+      GARNET_AUTHORIZATION_POLICIES: "[]",
+      GARNET_AUTHORIZATION_BINDINGS: "[]",
       GARNET_NAT_GATEWAY_COUNT: "1",
       GARNET_DATABASE_DELETION_PROTECTION: "false",
       GARNET_DATABASE_BACKUP_RETENTION_DAYS: "7",
@@ -62,6 +71,10 @@ describe("Garnet-only deployment configuration", () => {
       aurora_storage: "io-optimized",
       ecs_instance_type: "c9g.2xlarge",
       worker_spot_scale_out: false,
+      oidc_issuer: "https://login.example/tenant",
+      oidc_audiences: "garnet-api,garnet-cli",
+      oidc_tenant_claim: "tenants",
+      bootstrap_admin_subject: "admin/factory-a",
       bootstrap_tenant: "factory-a",
       nat_gateway_count: 1,
       database_deletion_protection: false,
@@ -97,6 +110,9 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.source).toContain('aws_region: "eu-west-3"')
     expect(result.source).toContain(
       'garnet_bootstrap_tenant: "factory-a"'
+    )
+    expect(result.source).toContain(
+      'garnet_oidc_issuer: "https://login.example/tenant"'
     )
     expect(result.source).toContain(
       "nat_gateway_count: 1 as 1 | 2"
@@ -146,6 +162,9 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.ecs_instance_type).toBe("c9g.2xlarge")
     expect(result.worker_spot_scale_out).toBe(true)
     expect(result.bootstrap_tenant).toBe("default")
+    expect(result.oidc_issuer).toBe("https://identity.example")
+    expect(result.oidc_audiences).toBe("garnet-api")
+    expect(result.bootstrap_admin_subject).toBe("admin-1")
     expect(result.nat_gateway_count).toBe(2)
     expect(result.database_deletion_protection).toBe(true)
     expect(result.backup_retention_days).toBe(35)
@@ -218,6 +237,18 @@ describe("Garnet-only deployment configuration", () => {
     expect(() => apply_configuration(source, {
       GARNET_BROKER_IMAGE: image
     })).toThrow(/explicitly set/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_OIDC_ISSUER: "http://identity.example"
+    }))).toThrow(/HTTPS issuer/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_OIDC_AUDIENCES: ""
+    }))).toThrow(/required/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_BOOTSTRAP_ADMIN_SUBJECT: ""
+    }))).toThrow(/identity value/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_AUTHORIZATION_BINDINGS: "{}"
+    }))).toThrow(/JSON array/)
   })
 
   it("fails loudly when the configuration contract changes", () => {

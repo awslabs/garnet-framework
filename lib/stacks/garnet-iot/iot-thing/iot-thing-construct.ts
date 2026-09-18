@@ -1,4 +1,4 @@
-import { Aws, Duration, Names, RemovalPolicy } from "aws-cdk-lib";
+import { Duration, RemovalPolicy } from "aws-cdk-lib";
 import { Runtime, Function, Code, Architecture, LayerVersion, CfnPermission } from "aws-cdk-lib/aws-lambda";
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs";
 import { Queue } from "aws-cdk-lib/aws-sqs";
@@ -6,10 +6,12 @@ import { Construct } from "constructs"
 import { PolicyStatement, Role, ServicePrincipal } from "aws-cdk-lib/aws-iam";
 import { SqsEventSource } from "aws-cdk-lib/aws-lambda-event-sources";
 import { CfnTopicRule } from "aws-cdk-lib/aws-iot";
-import { AwsCustomResource, AwsCustomResourcePolicy, PhysicalResourceId } from "aws-cdk-lib/custom-resources";
-import { garnet_constant, garnet_nomenclature } from "../../../../constants";
+import { garnet_nomenclature } from "../../../../constants";
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2";
-import { Parameters } from "../../../../configuration";
+import {
+    broker_workload_environment,
+    create_broker_workload_role
+} from "../../garnet-common/security/broker-workload-role";
 
 /***
  * https://docs.aws.amazon.com/iot/latest/developerguide/registry-events.html#registry-events-thing
@@ -18,7 +20,8 @@ import { Parameters } from "../../../../configuration";
 
 export interface GarnetIotThingProps {
     vpc: Vpc, 
-    dns_context_broker: string
+    dns_context_broker: string,
+    tenant: string
 }
 
 export class GarnetIotThing extends Construct {
@@ -54,6 +57,11 @@ export class GarnetIotThing extends Construct {
           removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_update_presence_path = `${__dirname}/lambda/presence`;
+        const lambda_update_presence_role = create_broker_workload_role(
+          this,
+          "LambdaUpdatePresenceThingRole",
+          garnet_nomenclature.garnet_iot_presence_role
+        )
         const lambda_update_presence = new Function(this, "LambdaUpdatePresenceThing", {
           functionName: garnet_nomenclature.garnet_iot_presence_lambda,
           description: 'Garnet IoT Things Presence- Function that updates presence for Iot MQTT connected things',
@@ -68,9 +76,11 @@ export class GarnetIotThing extends Construct {
           timeout: Duration.seconds(50),
           logGroup: lambda_update_presence_log,
           architecture: Architecture.ARM_64,
+          role: lambda_update_presence_role,
           environment: {
              DNS_CONTEXT_BROKER: props.dns_context_broker,
-             AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
+             AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing,
+             ...broker_workload_environment(props.tenant)
           }
         })
         lambda_update_presence.node.addDependency(lambda_update_presence_log)
@@ -109,7 +119,7 @@ export class GarnetIotThing extends Construct {
 
 
       // IOT RULE THAT LISTENS TO CHANGES IN IoT PRESENCE AND PUSH TO SQS
-      const iot_rule = new CfnTopicRule(this, "IoTRulePresence", {
+      new CfnTopicRule(this, "IoTRulePresence", {
         ruleName: garnet_nomenclature.garnet_iot_presence_rule,
         topicRulePayload: {
           awsIotSqlVersion: "2016-03-23",
@@ -141,6 +151,11 @@ export class GarnetIotThing extends Construct {
           removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_thing_lifecycle_path = `${__dirname}/lambda/thingLifecycle`;
+        const lambda_thing_lifecycle_role = create_broker_workload_role(
+          this,
+          "GarnetIotThingLifecycleLambdaRole",
+          garnet_nomenclature.garnet_iot_lifecycle_role
+        )
         const lambda_thing_lifecyle = new Function(this, "GarnetIotThingLifecycleLambda", {
           functionName: `${garnet_nomenclature.garnet_iot_lifecycle_lambda}`,
           description: 'Garnet AWS IoT Things  Sync - Function that handles Thing lifecycle',
@@ -155,9 +170,11 @@ export class GarnetIotThing extends Construct {
           timeout: Duration.seconds(50),
           logGroup: lambda_thing_lifecyle_log,
           architecture: Architecture.ARM_64,
+          role: lambda_thing_lifecycle_role,
           environment: {
             DNS_CONTEXT_BROKER: props.dns_context_broker,
-            AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing
+            AWSIOTTHINGTYPE: garnet_nomenclature.aws_iot_thing,
+            ...broker_workload_environment(props.tenant)
           }
         })
         lambda_thing_lifecyle.node.addDependency(lambda_thing_lifecyle_log)

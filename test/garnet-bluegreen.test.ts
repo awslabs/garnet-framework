@@ -57,6 +57,13 @@ const synth_bluegreen = (): Template => {
     private_notification_origin:
       "https://private.example.execute-api.eu-west-3.amazonaws.com",
     context_allow_hosts: "",
+    oidc_issuer: "https://identity.example",
+    oidc_audiences: "garnet-api",
+    oidc_tenant_claim: "garnet_tenants",
+    bootstrap_admin_subject: "admin-1",
+    bootstrap_tenant: "default",
+    authorization_policies: "[]",
+    authorization_bindings: "[]",
     eventual_entity_reads: false
   })
   return Template.fromStack(broker)

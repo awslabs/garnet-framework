@@ -179,16 +179,22 @@ and zero-downtime rollback.
 
 Garnet Broker owns NGSI-LD tenant semantics. Framework ingress preserves them:
 
-- the public API authorizer requires a tenant claim and API Gateway overwrites
-  `NGSILD-Tenant` from that verified claim, so a client cannot select another
-  tenant by spoofing the request header;
-- the bootstrap credential is tenant-scoped to
-  `Parameters.garnet_bootstrap_tenant` (`default` initially), expires after
-  30 days, and is renewed daily in Secrets Manager; clients must reload it
-  at least daily rather than caching it for the process lifetime, while
-  production onboarding should issue distinct tenant-scoped credentials.
-  EventBridge and Lambda retries feed terminal refresh failures to an encrypted
-  14-day dead-letter queue, with alarms on delivery, execution and backlog;
+- API Gateway and Garnet Broker independently validate the same external OIDC
+  issuer and audience. The original Bearer credential and `NGSILD-Tenant`
+  header reach the Broker unchanged; the Broker admits the tenant only when
+  the verified subject or signed tenant claim grants it;
+- the exact bootstrap OIDC subject receives the versioned Garnet-managed
+  `TenantAdministrator` policy for
+  `Parameters.garnet_bootstrap_tenant`. Additional users, custom JSON-LD
+  policies, and exact policy attachments are supplied through the deployment
+  authorization arrays and validated before the API opens its port;
+- Snapshot workers authenticate to the private Broker listener with a
+  short-lived, deployment-bound STS proof signed by their ECS task role. No
+  symmetric API signing secret or generated bootstrap token is deployed;
+- ingestion and IoT connector Lambdas use the same proof mechanism with
+  deterministic, separate execution roles. Each role receives only the
+  `TenantEntityEditor` policy for the configured bootstrap tenant, and the
+  Lambda rejects a payload naming another tenant before sending it;
 - a bare SQS entity targets the default tenant;
 - `{ "tenant": "factory-a", "entity": { ... } }` forwards
   `NGSILD-Tenant: factory-a`;

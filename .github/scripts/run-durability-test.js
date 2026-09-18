@@ -44,7 +44,7 @@ const run_durability_test = async (
 ) => {
   const send = request_fn || ((url, options) =>
     request(url, options, { timeout_ms: plan.request_timeout_ms }))
-  const token = token_loader(plan.token_secret_arn, { env })
+  const token = token_loader(undefined, { env })
   const probes = probe_definitions(plan)
   const attempts = []
   const mutations = []

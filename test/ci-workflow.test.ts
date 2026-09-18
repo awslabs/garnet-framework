@@ -21,4 +21,20 @@ describe("CI security scan", () => {
       "git --redact --verbose --no-banner --platform github ."
     )
   })
+
+  it("supplies the complete authenticated synthesis contract", () => {
+    const synth = workflow.slice(
+      workflow.indexOf("  synth:"),
+      workflow.indexOf("  ci:")
+    )
+    expect(synth).toContain(
+      "GARNET_OIDC_ISSUER: https://identity.example"
+    )
+    expect(synth).toContain(
+      "GARNET_OIDC_AUDIENCES: garnet-api"
+    )
+    expect(synth).toContain(
+      "GARNET_BOOTSTRAP_ADMIN_SUBJECT: ci-admin"
+    )
+  })
 })

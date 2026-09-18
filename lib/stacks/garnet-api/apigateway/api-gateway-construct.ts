@@ -14,15 +14,14 @@ import {
 } from "aws-cdk-lib/aws-ec2"
 import { Construct } from "constructs"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
-import { CfnPermission } from "aws-cdk-lib/aws-lambda"
-import { Aws, Duration } from "aws-cdk-lib"
-import { Parameters } from "../../../../configuration"
+import { Duration } from "aws-cdk-lib"
 import { garnet_resource_name } from "../../../../constants"
 
 export interface GarnetApiGatewayProps {
     readonly vpc: Vpc,
     readonly broker_alb: ApplicationLoadBalancer
-    readonly lambda_authorizer_arn: string
+    readonly oidc_issuer: string
+    readonly oidc_audiences: string
 }
 
 export class GarnetApiGateway extends Construct{
@@ -37,8 +36,12 @@ export class GarnetApiGateway extends Construct{
         if (!props.broker_alb){
             throw new Error('The property broker_alb is required')
         }
-        if (!props.lambda_authorizer_arn) {
-            throw new Error('The property lambda_authorizer_arn is required')
+        const audiences = props.oidc_audiences
+            .split(",")
+            .map((audience) => audience.trim())
+            .filter((audience) => audience !== "")
+        if (audiences.length === 0) {
+            throw new Error('The property oidc_audiences is required')
         }
 
         const sg_vpc_link = new SecurityGroup(this, 'SgVpcLink', {
@@ -107,11 +110,7 @@ export class GarnetApiGateway extends Construct{
             description: "API Integration",
             connectionId: vpc_link.ref, 
             integrationUri: props.broker_alb.listeners[0].listenerArn,
-            payloadFormatVersion: "1.0",
-            requestParameters: {
-                "overwrite:header.NGSILD-Tenant":
-                    "$context.authorizer.tenant"
-            }
+            payloadFormatVersion: "1.0"
         })
 
 
@@ -119,42 +118,23 @@ export class GarnetApiGateway extends Construct{
 
         const authorizer = new CfnAuthorizerV2(this, 'JwtAuthorizer', {
             apiId: api.apiId,
-            authorizerType: 'REQUEST',
-            authorizerPayloadFormatVersion: '2.0',
-            authorizerResultTtlInSeconds: 600,
-            authorizerUri: `arn:aws:apigateway:${Aws.REGION}:lambda:path/2015-03-31/functions/${props.lambda_authorizer_arn}/invocations`,
-            enableSimpleResponses: true,
+            authorizerType: 'JWT',
             identitySource: ['$request.header.Authorization'],
-            name: 'jwt-authorizer'
+            jwtConfiguration: {
+                issuer: props.oidc_issuer.replace(/\/$/, ""),
+                audience: audiences
+            },
+            name: 'oidc-authorizer'
         })
-        const authorizer_permission = new CfnPermission(
-            this,
-            "AuthorizerInvokePermission",
-            {
-                action: "lambda:InvokeFunction",
-                functionName: props.lambda_authorizer_arn,
-                principal: "apigateway.amazonaws.com",
-                sourceArn:
-                    `arn:${Aws.PARTITION}:execute-api:` +
-                    `${Aws.REGION}:${Aws.ACCOUNT_ID}:${api.apiId}/` +
-                    `authorizers/${authorizer.ref}`
-            }
-        )
 
         const route = new CfnRoute(this, 'AuthRoute', {
             apiId: api.apiId,
             routeKey: "ANY /{proxy+}",
             target: `integrations/${integration.ref}`,
-            authorizationType: Parameters.authorization ? 'CUSTOM' : 'NONE',
-            ...(Parameters.authorization ? {
-                authorizerId: authorizer.ref,
-                } : {})
+            authorizationType: 'JWT',
+            authorizerId: authorizer.ref
         })
-        
-        if (Parameters.authorization) {
-            route.node.addDependency(authorizer)
-            route.node.addDependency(authorizer_permission)
-        }
+        route.node.addDependency(authorizer)
 
         this.api_ref = api.apiId
 

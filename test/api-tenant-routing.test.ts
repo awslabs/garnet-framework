@@ -10,7 +10,7 @@ import { GarnetApiGateway } from
   "../lib/stacks/garnet-api/apigateway/api-gateway-construct"
 
 describe("tenant-safe API routing", () => {
-  it("overwrites the tenant header from cached authorizer context", () => {
+  it("uses native OIDC while preserving the signed caller request", () => {
     const app = new App()
     const stack = new Stack(app, "ApiTenantRouting", {
       env: {
@@ -35,26 +35,26 @@ describe("tenant-safe API routing", () => {
     new GarnetApiGateway(stack, "Api", {
       vpc,
       broker_alb: load_balancer,
-      lambda_authorizer_arn:
-        "arn:aws:lambda:eu-west-3:111111111111:function:authorizer"
+      oidc_issuer: "https://identity.example",
+      oidc_audiences: "garnet-api,garnet-cli"
     })
     const template = Template.fromStack(stack)
 
     template.hasResourceProperties(
       "AWS::ApiGatewayV2::Integration",
       {
-        IntegrationType: "HTTP_PROXY",
-        RequestParameters: {
-          "overwrite:header.NGSILD-Tenant":
-            "$context.authorizer.tenant"
-        }
+        IntegrationType: "HTTP_PROXY"
       }
     )
     template.hasResourceProperties(
       "AWS::ApiGatewayV2::Authorizer",
       {
-        AuthorizerResultTtlInSeconds: 600,
-        IdentitySource: ["$request.header.Authorization"]
+        AuthorizerType: "JWT",
+        IdentitySource: ["$request.header.Authorization"],
+        JwtConfiguration: {
+          Audience: ["garnet-api", "garnet-cli"],
+          Issuer: "https://identity.example"
+        }
       }
     )
     template.hasResourceProperties("AWS::ApiGatewayV2::Api", {
@@ -86,21 +86,10 @@ describe("tenant-safe API routing", () => {
     template.resourceCountIs("AWS::ApiGatewayV2::Integration", 1)
     template.resourceCountIs("AWS::ApiGatewayV2::Route", 1)
     template.resourceCountIs("AWS::Lambda::Function", 0)
-    const authorizer_permission = Object.values(
-      template.findResources("AWS::Lambda::Permission")
-    ).find(
-      (resource: any) =>
-        resource.Properties.Principal ===
-          "apigateway.amazonaws.com"
-    ) as any
-    expect(authorizer_permission.Properties).toMatchObject({
-      Action: "lambda:InvokeFunction",
-      FunctionName:
-        "arn:aws:lambda:eu-west-3:111111111111:function:authorizer"
+    template.resourceCountIs("AWS::Lambda::Permission", 0)
+    template.hasResourceProperties("AWS::ApiGatewayV2::Route", {
+      AuthorizationType: "JWT"
     })
-    expect(
-      JSON.stringify(authorizer_permission.Properties.SourceArn)
-    ).toContain("authorizers")
 
     const ingress = Object.values(
       template.findResources("AWS::EC2::SecurityGroupIngress")

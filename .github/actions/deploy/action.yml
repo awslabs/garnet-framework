@@ -66,9 +66,33 @@ inputs:
     description: unchanged or backward-compatible; writer-drain releases are blocked
     required: true
   bootstrap-tenant:
-    description: Tenant bound to the bootstrap API credential
+    description: Tenant receiving the bootstrap administrator policy
     required: false
     default: default
+  oidc-issuer:
+    description: Exact external OpenID Connect issuer URL
+    required: true
+  oidc-audiences:
+    description: Comma-separated OAuth audiences accepted by Garnet
+    required: true
+  oidc-tenant-claim:
+    description: Optional token claim containing tenant grants
+    required: false
+    default: garnet_tenants
+  bootstrap-admin-subject:
+    description: Exact OIDC subject receiving TenantAdministrator
+    required: true
+  authorization-policies:
+    description: Optional JSON array of custom policy documents
+    required: false
+    default: '[]'
+  authorization-bindings:
+    description: Optional JSON array of additional principal bindings
+    required: false
+    default: '[]'
+  smoke-authorization:
+    description: Short-lived Bearer credential for the post-deploy smoke test
+    required: true
   nat-gateway-count:
     description: One for disposable tests or two for zone-independent egress
     required: false
@@ -177,6 +201,12 @@ runs:
         GARNET_DEPLOYMENT_STRATEGY: ${{ inputs.deployment-strategy }}
         GARNET_SCHEMA_COMPATIBILITY: ${{ inputs.schema-compatibility }}
         GARNET_BOOTSTRAP_TENANT: ${{ inputs.bootstrap-tenant }}
+        GARNET_OIDC_ISSUER: ${{ inputs.oidc-issuer }}
+        GARNET_OIDC_AUDIENCES: ${{ inputs.oidc-audiences }}
+        GARNET_OIDC_TENANT_CLAIM: ${{ inputs.oidc-tenant-claim }}
+        GARNET_BOOTSTRAP_ADMIN_SUBJECT: ${{ inputs.bootstrap-admin-subject }}
+        GARNET_AUTHORIZATION_POLICIES: ${{ inputs.authorization-policies }}
+        GARNET_AUTHORIZATION_BINDINGS: ${{ inputs.authorization-bindings }}
         GARNET_NAT_GATEWAY_COUNT: ${{ inputs.nat-gateway-count }}
         GARNET_DATABASE_DELETION_PROTECTION: ${{ inputs.database-deletion-protection }}
         GARNET_DATABASE_BACKUP_RETENTION_DAYS: ${{ inputs.database-backup-retention-days }}
@@ -211,6 +241,7 @@ runs:
       shell: bash
       env:
         AWS_REGION: ${{ inputs.aws-region }}
+        SMOKE_AUTHORIZATION: ${{ inputs.smoke-authorization }}
       run: node .github/scripts/smoke-test.js
 
     - name: Publish stack outputs

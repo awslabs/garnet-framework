@@ -18,6 +18,13 @@ export interface GarnetBrokerProps extends NestedStackProps {
     notification_delivery_allow_origins: string
     private_notification_origin: string
     context_allow_hosts: string
+    oidc_issuer: string
+    oidc_audiences: string
+    oidc_tenant_claim: string
+    bootstrap_admin_subject: string
+    bootstrap_tenant: string
+    authorization_policies: string
+    authorization_bindings: string
     eventual_entity_reads: boolean
     temporal_history_retention_days: number
     temporal_history_retention_max_gib: number
@@ -70,6 +77,13 @@ export class GarnetBroker extends NestedStack {
             private_notification_origin:
                 props.private_notification_origin,
             context_allow_hosts: props.context_allow_hosts,
+            oidc_issuer: props.oidc_issuer,
+            oidc_audiences: props.oidc_audiences,
+            oidc_tenant_claim: props.oidc_tenant_claim,
+            bootstrap_admin_subject: props.bootstrap_admin_subject,
+            bootstrap_tenant: props.bootstrap_tenant,
+            authorization_policies: props.authorization_policies,
+            authorization_bindings: props.authorization_bindings,
             temporal_history_retention_days:
                 props.temporal_history_retention_days,
             temporal_history_retention_max_gib:

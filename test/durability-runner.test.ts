@@ -16,7 +16,6 @@ export {}
 
 const OUTPUTS = {
   GarnetEndpoint: "https://public.example",
-  GarnetApiTokenSecretArn: "arn:aws:secretsmanager:token",
   GarnetAwsRegion: "eu-west-3",
   GarnetAwsAccount: "111111111111",
   GarnetBrokerImage:

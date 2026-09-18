@@ -14,6 +14,10 @@ export const garnet_bucket =
     `${garnet_resource_prefix}-datalake-${Aws.REGION}-${Aws.ACCOUNT_ID}`
 export const garnet_bucket_athena = `${garnet_bucket}-athena-results`
 export const garnet_broker = "Garnet Broker"
+export const garnet_sigv4_server_id =
+    `garnet:${Aws.ACCOUNT_ID}:${Aws.REGION}`
+export const garnet_sts_endpoint =
+    `https://sts.${Aws.REGION}.${Aws.URL_SUFFIX}`
 
 export const garnet_constant = {
     garnet_version: version,
@@ -27,31 +31,31 @@ export const garnet_nomenclature = {
     
     garnet_ingestion_update_broker_lambda:
         garnet_resource_name("ingestion-update-broker"),
+    garnet_ingestion_update_broker_role:
+        garnet_resource_name("ingestion-update-broker-role"),
     garnet_lake_transform_lambda:
         garnet_resource_name("lake-transform"),
     garnet_iot_lifecycle_lambda:
         garnet_resource_name("iot-thing-lifecycle"),
+    garnet_iot_lifecycle_role:
+        garnet_resource_name("iot-thing-lifecycle-role"),
     garnet_iot_presence_lambda:
         garnet_resource_name("iot-presence"),
+    garnet_iot_presence_role:
+        garnet_resource_name("iot-presence-role"),
     garnet_iot_group_membership_lambda:
         garnet_resource_name("iot-group-membership"),
+    garnet_iot_group_membership_role:
+        garnet_resource_name("iot-group-membership-role"),
     garnet_iot_group_lifecycle_lambda:
         garnet_resource_name("iot-group-lifecycle"),
+    garnet_iot_group_lifecycle_role:
+        garnet_resource_name("iot-group-lifecycle-role"),
     garnet_private_sub_lambda:
         garnet_resource_name("private-subscription"),
     garnet_subscriptions_rule: "garnet_framework_subscriptions",
     garnet_iot_presence_rule: "garnet_framework_iot_presence",
     
-    // GARNET API AUTH
-    garnet_api_auth_jwt_lambda:
-        garnet_resource_name("api-auth-jwt"),
-    garnet_api_authorizer_lambda:
-        garnet_resource_name("api-authorizer"),
-    
-    garnet_api_auth_audience: `garnet-api`, 
-    garnet_api_auth_issuer: `garnet-framework`, 
-    garnet_api_auth_sub: `garnet:default-user`, 
-
     garnet_ingestion_queue:
         `${garnet_resource_prefix}-ingestion-${Aws.REGION}`,
     garnet_ingestion_dlq:
@@ -66,13 +70,20 @@ export const garnet_nomenclature = {
     garnet_lake_firehose_interval: 60, // seconds
     garnet_lake_buffer_size: 64, // MB
 
-    garnet_api_jwt_secret: `${garnet_resource_prefix}/secret/api`,
     garnet_api_client_secret:
         `${garnet_resource_prefix}/secret/api-client`,
 
     garnet_utils_az_lambda:
         garnet_resource_name("utils-get-az"),
 }
+
+export const garnet_broker_connector_role_names = Object.freeze([
+    garnet_nomenclature.garnet_ingestion_update_broker_role,
+    garnet_nomenclature.garnet_iot_lifecycle_role,
+    garnet_nomenclature.garnet_iot_presence_role,
+    garnet_nomenclature.garnet_iot_group_membership_role,
+    garnet_nomenclature.garnet_iot_group_lifecycle_role
+])
 
 
 

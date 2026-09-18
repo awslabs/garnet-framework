@@ -9,6 +9,15 @@ const IMAGE =
   `public.ecr.aws/garnet/broker@sha256:${"a".repeat(64)}`
 const LOAD_IMAGE =
   `public.ecr.aws/garnet/load@sha256:${"b".repeat(64)}`
+const AUTHORIZATION = {
+  oidc_issuer: "https://identity.example",
+  oidc_audiences: "garnet-api",
+  oidc_tenant_claim: "garnet_tenants",
+  bootstrap_admin_subject: "admin-1",
+  bootstrap_tenant: "default",
+  authorization_policies: "[]",
+  authorization_bindings: "[]"
+}
 
 const create_vpc = (stack: Stack): Vpc =>
   new Vpc(stack, "Vpc", {
@@ -55,6 +64,7 @@ const synth_broker = (
     private_notification_origin:
       "https://private.example.execute-api.eu-west-3.amazonaws.com",
     context_allow_hosts: "uri.etsi.org",
+    ...AUTHORIZATION,
     eventual_entity_reads,
     temporal_history_retention_days: 365,
     temporal_history_retention_max_gib: 500,
@@ -123,7 +133,11 @@ describe("Garnet Broker AWS runtime", () => {
           (container.Environment ?? [])
             .map((entry: any) => [entry.Name, entry.Value])
         )
-        expect(environment.AUTH_MODE).toBe("none")
+        expect(environment.AUTH_MODE).toBe(
+          entry_point === "/garnet-broker"
+            ? "oidc+sigv4"
+            : "none"
+        )
       }
     }
     expect(entry_points.sort()).toEqual([
@@ -241,13 +255,18 @@ describe("Garnet Broker AWS runtime", () => {
     const secrets =
       generator.Properties.ContainerDefinitions[0].Secrets
         .map((entry: any) => entry.Name)
-    expect(secrets).toEqual(expect.arrayContaining([
+    expect(secrets.sort()).toEqual([
       "LOAD_DATABASE_USER",
-      "LOAD_DATABASE_PASSWORD",
-      "LOAD_HEADERS_JSON"
-    ]))
-    expect(JSON.stringify(generator.Properties.ContainerDefinitions[0]))
-      .toContain("garnet-framework/secret/api-client")
+      "LOAD_DATABASE_PASSWORD"
+    ].sort())
+    expect(environment).toMatchObject({
+      LOAD_BROKER_AUTH_MODE: "sigv4",
+      LOAD_TENANT: "default"
+    })
+    expect(environment.LOAD_BROKER_SIGV4_SERVER_ID)
+      .toHaveProperty("Fn::Join")
+    expect(environment.LOAD_STS_ENDPOINT)
+      .toHaveProperty("Fn::Join")
 
     template.resourceCountIs("AWS::S3::Bucket", 1)
     template.hasResourceProperties("AWS::S3::Bucket", {
@@ -295,7 +314,11 @@ describe("Garnet Broker AWS runtime", () => {
     )
 
     expect(environment).toMatchObject({
-      AUTH_MODE: "none",
+      AUTH_MODE: "oidc+sigv4",
+      AUTHORIZATION_MODE: "policy",
+      AUTH_OIDC_ISSUERS: "https://identity.example",
+      AUTH_OIDC_AUDIENCES: "garnet-api",
+      AUTH_OIDC_TENANT_CLAIM: "garnet_tenants",
       FEDERATION_DEFAULT_LOCAL: "true",
       FEDERATION_ROUTER_URL: "http://federation:8080",
       ENTITY_EVENT_TRANSPORT: "postgres",
@@ -312,6 +335,23 @@ describe("Garnet Broker AWS runtime", () => {
       READ_DB_POOL_MAX: "8"
     })
     expect(environment.READ_DBHOST).toHaveProperty("Fn::GetAtt")
+    const authorization_bindings =
+      JSON.stringify(environment.AUTHORIZATION_BINDINGS)
+    const sigv4_grants =
+      JSON.stringify(environment.AUTH_SIGV4_TENANT_GRANTS)
+    for (const role of [
+      "garnet-framework-ingestion-update-broker-role",
+      "garnet-framework-iot-thing-lifecycle-role",
+      "garnet-framework-iot-presence-role",
+      "garnet-framework-iot-group-membership-role",
+      "garnet-framework-iot-group-lifecycle-role"
+    ]) {
+      expect(authorization_bindings).toContain(role)
+      expect(sigv4_grants).toContain(role)
+    }
+    expect(authorization_bindings).toContain(
+      "managed-policy/TenantEntityEditor"
+    )
 
     const snapshot = (Object.values(task_definitions) as any[])
       .find((resource) =>
@@ -328,6 +368,7 @@ describe("Garnet Broker AWS runtime", () => {
       SNAPSHOT_QUERY_RETRY_BASE_MS: "250",
       SNAPSHOT_QUERY_RETRY_MAX_MS: "5000",
       SNAPSHOT_QUERY_TIMEOUT_MS: "30000",
+      SNAPSHOT_BROKER_AUTH_MODE: "sigv4",
       SNAPSHOT_WORKERS: "2",
       WORKER_METRICS: "emf",
       WORKER_METRICS_NAMESPACE: "Garnet/Broker",
@@ -740,6 +781,7 @@ describe("Garnet Broker AWS runtime", () => {
       private_notification_origin:
         "https://private.example.execute-api.eu-west-3.amazonaws.com",
       context_allow_hosts: "",
+      ...AUTHORIZATION,
       eventual_entity_reads: false,
       temporal_history_retention_days: 365,
       temporal_history_retention_max_gib: 500,
@@ -782,6 +824,7 @@ describe("Garnet Broker AWS runtime", () => {
       private_notification_origin:
         "https://private.example.execute-api.eu-west-3.amazonaws.com",
       context_allow_hosts: "",
+      ...AUTHORIZATION,
       eventual_entity_reads: false,
       temporal_history_retention_days: 365,
       temporal_history_retention_max_gib: 500,

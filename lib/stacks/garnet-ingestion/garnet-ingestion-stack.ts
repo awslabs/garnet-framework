@@ -4,13 +4,17 @@ import { Code, LayerVersion, Runtime, Function,Architecture} from "aws-cdk-lib/a
 import { Queue } from "aws-cdk-lib/aws-sqs"
 import { garnet_nomenclature } from '../../../constants'
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs'
-import { Parameters } from '../../../configuration'
 import { PolicyStatement } from 'aws-cdk-lib/aws-iam'
 import { deployment_params } from '../../../architecture'
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources'
+import {
+  broker_workload_environment,
+  create_broker_workload_role
+} from '../garnet-common/security/broker-workload-role'
 
 export interface GarnetIngestionStackProps extends NestedStackProps {
   dns_context_broker: string,
+  tenant: string,
   vpc: Vpc
 }
 
@@ -65,6 +69,12 @@ export class GarnetIngestionStack extends NestedStack {
           removalPolicy: RemovalPolicy.DESTROY
         })
         const lambda_to_context_broker_path = `${__dirname}/lambda/updateContextBroker`;
+        const lambda_to_context_broker_role =
+          create_broker_workload_role(
+            this,
+            "LambdaIngestionUpdateContextBrokerRole",
+            garnet_nomenclature.garnet_ingestion_update_broker_role
+          )
         const lambda_to_context_broker = new Function(this,"LambdaIngestionUpdateContextBroker", {
             functionName: garnet_nomenclature.garnet_ingestion_update_broker_lambda,
             description: 'Garnet Ingestion- Function that updates the context broker',
@@ -79,31 +89,17 @@ export class GarnetIngestionStack extends NestedStack {
             logGroup: lambda_to_context_broker_log,
             layers: [layer_lambda],
             architecture: Architecture.ARM_64,
+            role: lambda_to_context_broker_role,
             // Batches of entities are parsed and upserted here, the default 128 MB
             // throttles CPU and lengthens every broker call
             memorySize: 512,
             environment: {
-              DNS_CONTEXT_BROKER: props.dns_context_broker
+              DNS_CONTEXT_BROKER: props.dns_context_broker,
+              ...broker_workload_environment(props.tenant)
             }
           }
         )
         lambda_to_context_broker.node.addDependency(lambda_to_context_broker_log)
-        lambda_to_context_broker.addToRolePolicy(
-          new PolicyStatement({
-            actions: [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents",
-              "ec2:CreateNetworkInterface",
-              "ec2:DescribeNetworkInterfaces",
-              "ec2:DeleteNetworkInterface",
-              "ec2:AssignPrivateIpAddresses",
-              "ec2:UnassignPrivateIpAddresses",
-            ],
-            resources: ["*"],
-          })
-        )
-    
         // ADD PERMISSION FOR LAMBDA TO ACCESS SQS
         lambda_to_context_broker.addToRolePolicy(
           new PolicyStatement({
@@ -131,4 +127,3 @@ export class GarnetIngestionStack extends NestedStack {
       
       }
     }
-

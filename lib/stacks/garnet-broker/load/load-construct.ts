@@ -26,11 +26,10 @@ import {
     BucketEncryption,
     ObjectLockRetention
 } from "aws-cdk-lib/aws-s3"
-import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
+import { ISecret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import {
     garnet_constant,
-    garnet_nomenclature,
     garnet_resource_name
 } from "../../../../constants"
 
@@ -43,6 +42,9 @@ export interface GarnetLoadProps {
     broker_image: string
     load_image: string
     capacity_provider: string
+    tenant: string
+    sigv4_server_id: string
+    sts_endpoint: string
 }
 
 /**
@@ -50,8 +52,8 @@ export interface GarnetLoadProps {
  *
  * These are task definitions, not services: they cost nothing while idle. The
  * The task defaults to the internal ALB diagnostic path. The launcher can
- * override only its non-secret URL and evidence mode for public qualification;
- * the API Authorization object always comes from Secrets Manager.
+ * override only its URL and evidence mode for public qualification. Internal
+ * requests authenticate with the task role and a short-lived STS proof.
  */
 export class GarnetLoad extends Construct {
     public readonly generator_task: TaskDefinition
@@ -124,11 +126,6 @@ export class GarnetLoad extends Construct {
                 "password"
             )
         }
-        const api_token_secret = Secret.fromSecretNameV2(
-            this,
-            "ApiTokenSecret",
-            garnet_nomenclature.garnet_api_client_secret
-        )
         const report_environment = {
             AWS_REGION: Aws.REGION,
             LOAD_REPORT_S3_BUCKET: this.report_bucket.bucketName,
@@ -154,14 +151,17 @@ export class GarnetLoad extends Construct {
                 ...database_environment,
                 ...report_environment,
                 LOAD_URL: this.broker_url,
+                LOAD_TENANT: props.tenant,
+                LOAD_BROKER_AUTH_MODE: "sigv4",
+                LOAD_BROKER_SIGV4_SERVER_ID:
+                    props.sigv4_server_id,
+                LOAD_STS_ENDPOINT: props.sts_endpoint,
                 LOAD_ENVIRONMENT: "aws-ecs-internal",
                 LOAD_GENERATOR_VCPUS: "4",
                 GARNET_IMAGE: props.broker_image
             },
             secrets: {
-                ...database_secrets,
-                LOAD_HEADERS_JSON:
-                    EcsSecret.fromSecretsManager(api_token_secret)
+                ...database_secrets
             },
             logging: LogDrivers.awsLogs({
                 streamPrefix: "garnet/load-generator",

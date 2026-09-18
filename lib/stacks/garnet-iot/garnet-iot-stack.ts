@@ -9,7 +9,8 @@ import { garnet_resource_name } from "../../../constants";
 
 export interface GarnetIotProps extends NestedStackProps {
     vpc: Vpc, 
-    dns_context_broker: string
+    dns_context_broker: string,
+    tenant: string
 }
 
 export class GarnetIot extends NestedStack {
@@ -80,11 +81,13 @@ export class GarnetIot extends NestedStack {
 
       new GarnetIotGroup(this, 'GarnetIotGroup', {
         vpc: props.vpc,
-        dns_context_broker: props.dns_context_broker
+        dns_context_broker: props.dns_context_broker,
+        tenant: props.tenant
       })
       new GarnetIotThing(this, 'GarnetIotThing',{
         vpc: props.vpc,
-        dns_context_broker: props.dns_context_broker
+        dns_context_broker: props.dns_context_broker,
+        tenant: props.tenant
       })
     }
 }

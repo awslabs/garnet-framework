@@ -70,7 +70,6 @@ describe("Garnet load deployment outputs", () => {
     ).toBe(2)
 
     for (const output of [
-      "GarnetApiTokenSecretArn",
       "GarnetLoadCluster",
       "GarnetLoadCapacityProvider",
       "GarnetLoadGeneratorTask",

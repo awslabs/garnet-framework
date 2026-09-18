@@ -10,7 +10,6 @@
 const fs = require('fs')
 const path = require('path')
 const { randomUUID } = require('crypto')
-const { execFileSync } = require('child_process')
 
 const CORE_CONTEXT =
   'https://uri.etsi.org/ngsi-ld/v1/ngsi-ld-core-context-v1.9.jsonld'
@@ -19,47 +18,18 @@ const EXPANDED_STATUS = 'https://uri.etsi.org/ngsi-ld/status'
 const excerpt = body => body.replace(/\s+/g, ' ').slice(0, 240)
 
 const load_api_token = (
-  secret_arn,
+  _unused,
   {
-    env = process.env,
-    exec_file = execFileSync
+    env = process.env
   } = {}
 ) => {
-  const secret_string = String(exec_file(
-    'aws',
-    [
-      'secretsmanager',
-      'get-secret-value',
-      '--secret-id',
-      secret_arn,
-      '--query',
-      'SecretString',
-      '--output',
-      'text'
-    ],
-    {
-      encoding: 'utf8',
-      env,
-      stdio: ['ignore', 'pipe', 'pipe']
-    }
-  )).trim()
-
-  let secret
-  try {
-    secret = JSON.parse(secret_string)
-  } catch {
-    throw new Error('Garnet API client secret is not valid JSON')
-  }
-  if (
-    !secret ||
-    typeof secret.Authorization !== 'string' ||
-    secret.Authorization.length === 0
-  ) {
+  const authorization = (env.SMOKE_AUTHORIZATION || '').trim()
+  if (!/^Bearer [^\s]+$/.test(authorization)) {
     throw new Error(
-      'Garnet API client secret has no non-empty Authorization value'
+      'SMOKE_AUTHORIZATION must contain one Bearer credential'
     )
   }
-  return secret.Authorization
+  return authorization
 }
 
 const request = async (
@@ -309,14 +279,8 @@ const main = async ({
   }
 
   const endpoint = outputs.GarnetEndpoint || outputs.garnet_endpoint
-  const token_secret_arn = outputs.GarnetApiTokenSecretArn
   if (!endpoint) throw new Error('GarnetEndpoint missing from stack outputs')
-  if (!token_secret_arn) {
-    throw new Error(
-      'GarnetApiTokenSecretArn missing from stack outputs'
-    )
-  }
-  const token = token_loader(token_secret_arn, { env })
+  const token = token_loader(undefined, { env })
 
   const base = endpoint.replace(/\/$/, '')
   const auth = { Authorization: token }

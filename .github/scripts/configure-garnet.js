@@ -2,6 +2,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const { Buffer } = require('node:buffer')
 const { URL } = require('node:url')
 
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'configuration.ts')
@@ -113,6 +114,72 @@ const tenant_setting = (env, name, fallback) => {
     throw new Error(`${name} must be a safe tenant header value`)
   }
   return value
+}
+
+const oidc_issuer_setting = (env) => {
+  const raw = optional(env, 'GARNET_OIDC_ISSUER')
+  if (raw === '') {
+    throw new Error('GARNET_OIDC_ISSUER is required')
+  }
+  let url
+  try {
+    url = new URL(raw)
+  } catch {
+    throw new Error('GARNET_OIDC_ISSUER must be an absolute HTTPS URL')
+  }
+  if (
+    url.protocol !== 'https:' ||
+    url.username !== '' ||
+    url.password !== '' ||
+    url.search !== '' ||
+    url.hash !== ''
+  ) {
+    throw new Error(
+      'GARNET_OIDC_ISSUER must be an exact HTTPS issuer URL'
+    )
+  }
+  return url.href.replace(/\/$/, '')
+}
+
+const non_empty_list = (env, name) => {
+  const raw = optional(env, name)
+  if (raw === '') throw new Error(`${name} is required`)
+  const values = raw.split(',').map(value => value.trim())
+  if (
+    values.some(value => value === '' || /[\0\r\n]/.test(value))
+  ) {
+    throw new Error(`${name} must be a comma-separated non-empty list`)
+  }
+  return [...new Set(values)].join(',')
+}
+
+const identity_value = (env, name, fallback) => {
+  const value = optional(env, name) || fallback
+  if (
+    value === '' ||
+    value.length > 1024 ||
+    /[\0\r\n]/.test(value)
+  ) {
+    throw new Error(`${name} must be a safe non-empty identity value`)
+  }
+  return value
+}
+
+const json_array = (env, name) => {
+  const raw = optional(env, name) || '[]'
+  if (Buffer.byteLength(raw) > 1048576) {
+    throw new Error(`${name} is too large`)
+  }
+  let value
+  try {
+    value = JSON.parse(raw)
+  } catch {
+    throw new Error(`${name} must be a JSON array`)
+  }
+  if (!Array.isArray(value)) {
+    throw new Error(`${name} must be a JSON array`)
+  }
+  return JSON.stringify(value)
 }
 
 const apply_configuration = (source, env) => {
@@ -241,6 +308,26 @@ const apply_configuration = (source, env) => {
     'GARNET_BOOTSTRAP_TENANT',
     'default'
   )
+  const oidc_issuer = oidc_issuer_setting(env)
+  const oidc_audiences = non_empty_list(env, 'GARNET_OIDC_AUDIENCES')
+  const oidc_tenant_claim = identity_value(
+    env,
+    'GARNET_OIDC_TENANT_CLAIM',
+    'garnet_tenants'
+  )
+  const bootstrap_admin_subject = identity_value(
+    env,
+    'GARNET_BOOTSTRAP_ADMIN_SUBJECT',
+    ''
+  )
+  const authorization_policies = json_array(
+    env,
+    'GARNET_AUTHORIZATION_POLICIES'
+  )
+  const authorization_bindings = json_array(
+    env,
+    'GARNET_AUTHORIZATION_BINDINGS'
+  )
   const public_origin = exact_origin(
     optional(env, 'GARNET_BROKER_PUBLIC_ORIGIN'),
     'GARNET_BROKER_PUBLIC_ORIGIN'
@@ -266,12 +353,18 @@ const apply_configuration = (source, env) => {
       notification_origins
     ],
     ['garnet_context_allow_hosts', context_hosts],
+    ['garnet_oidc_issuer', oidc_issuer],
+    ['garnet_oidc_audiences', oidc_audiences],
+    ['garnet_oidc_tenant_claim', oidc_tenant_claim],
+    ['garnet_bootstrap_admin_subject', bootstrap_admin_subject],
+    ['garnet_authorization_policies', authorization_policies],
+    ['garnet_authorization_bindings', authorization_bindings],
     ['garnet_bootstrap_tenant', bootstrap_tenant]
   ]
   for (const [name, value] of strings) {
     out = replace_setting(
       out,
-      new RegExp(`${name}: "[^"]*"`),
+      new RegExp(`${name}: "(?:\\\\.|[^"\\\\])*"`),
       `${name}: ${JSON.stringify(value)}`,
       name
     )
@@ -402,6 +495,12 @@ const apply_configuration = (source, env) => {
     aurora_storage,
     ecs_instance_type,
     worker_spot_scale_out,
+    oidc_issuer,
+    oidc_audiences,
+    oidc_tenant_claim,
+    bootstrap_admin_subject,
+    authorization_policies,
+    authorization_bindings,
     bootstrap_tenant,
     nat_gateway_count,
     database_deletion_protection,
@@ -429,6 +528,8 @@ const main = () => {
     ` aurora-storage=${result.aurora_storage}` +
     ` ecs-instance-type=${result.ecs_instance_type}` +
     ` worker-spot-scale-out=${result.worker_spot_scale_out}` +
+    ` oidc-issuer=${result.oidc_issuer}` +
+    ` oidc-audiences=${result.oidc_audiences.split(',').length}` +
     ` tenant=${result.bootstrap_tenant}` +
     ` nat-gateways=${result.nat_gateway_count}` +
     ` deletion-protection=${result.database_deletion_protection}` +

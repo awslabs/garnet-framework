@@ -120,10 +120,6 @@ const plan_durability_test = (
     retry_delay_ms,
     poll_interval_ms,
     endpoint,
-    token_secret_arn: required_output(
-      outputs,
-      'GarnetApiTokenSecretArn'
-    ),
     aws_region: required_output(outputs, 'GarnetAwsRegion'),
     aws_account: required_output(outputs, 'GarnetAwsAccount'),
     image: required_output(outputs, 'GarnetBrokerImage'),

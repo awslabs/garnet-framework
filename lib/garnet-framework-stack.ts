@@ -53,6 +53,16 @@ export class GarnetFrameworkStack extends Stack {
       private_notification_origin:
         garnet_privatesub.notification_origin,
       context_allow_hosts: Parameters.garnet_context_allow_hosts,
+      oidc_issuer: Parameters.garnet_oidc_issuer,
+      oidc_audiences: Parameters.garnet_oidc_audiences,
+      oidc_tenant_claim: Parameters.garnet_oidc_tenant_claim,
+      bootstrap_admin_subject:
+        Parameters.garnet_bootstrap_admin_subject,
+      bootstrap_tenant: Parameters.garnet_bootstrap_tenant,
+      authorization_policies:
+        Parameters.garnet_authorization_policies,
+      authorization_bindings:
+        Parameters.garnet_authorization_bindings,
       eventual_entity_reads:
         Parameters.garnet_eventual_entity_reads,
       temporal_history_retention_days:
@@ -66,19 +76,21 @@ export class GarnetFrameworkStack extends Stack {
     const garnet_ingestion_stack = new GarnetIngestionStack(this, 'GarnetIngestion', {
       dns_context_broker: garnet_broker_stack.dns_context_broker, 
       vpc: garnet_common.vpc,
-
+      tenant: Parameters.garnet_bootstrap_tenant
     })
     
-    const garnet_iot_stack = new GarnetIot(this, 'GarnetIoT', {
+    new GarnetIot(this, 'GarnetIoT', {
       vpc: garnet_common.vpc, 
       dns_context_broker: garnet_broker_stack.dns_context_broker,
+      tenant: Parameters.garnet_bootstrap_tenant
     })
 
     const garnet_api = new GarnetApi(this, 'GarnetApi', {
       vpc: garnet_common.vpc, 
       dns_context_broker: garnet_broker_stack.dns_context_broker,
       broker_alb: garnet_broker_stack.broker_alb,
-      secret_api_jwt: garnet_common.secret_api_jwt
+      oidc_issuer: Parameters.garnet_oidc_issuer,
+      oidc_audiences: Parameters.garnet_oidc_audiences
   })
 
     new GarnetOps(this, 'GarnetOps', {
@@ -174,10 +186,6 @@ export class GarnetFrameworkStack extends Stack {
     new CfnOutput(this, 'GarnetEndpoint', {
       value: garnet_api.broker_api_endpoint,
       description: 'Garnet Unified API'
-    })
-    new CfnOutput(this, 'GarnetApiTokenSecretArn', {
-      value: garnet_api.garnet_api_token_secret.secretArn,
-      description: 'Secrets Manager ARN containing the Garnet API Authorization header'
     })
     new CfnOutput(this, 'GarnetPrivateSubEndpoint', {
       value: garnet_privatesub.private_sub_endpoint,
