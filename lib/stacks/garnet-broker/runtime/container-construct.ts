@@ -1,5 +1,6 @@
 import {
     Annotations,
+    Arn,
     Aws,
     Duration,
     RemovalPolicy,
@@ -17,15 +18,15 @@ import {
 import {
     AlternateTarget,
     Cluster,
+    Compatibility,
     ContainerImage,
     ContainerInsights,
-    CpuArchitecture,
     DeploymentStrategy,
-    FargateTaskDefinition,
     ListenerRuleConfiguration,
     LogDrivers,
-    OperatingSystemFamily,
-    Secret as EcsSecret
+    NetworkMode,
+    Secret as EcsSecret,
+    TaskDefinition
 } from "aws-cdk-lib/aws-ecs"
 import {
     ApplicationListenerRule,
@@ -39,6 +40,7 @@ import {
 import { Rule, Schedule } from "aws-cdk-lib/aws-events"
 import { EcsTask } from "aws-cdk-lib/aws-events-targets"
 import { PolicyStatement } from "aws-cdk-lib/aws-iam"
+import { Repository } from "aws-cdk-lib/aws-ecr"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
@@ -65,6 +67,7 @@ import {
     GarnetServiceResult,
     GarnetTaskFactory
 } from "./task-factory"
+import { add_garnet_compute_capacity } from "./compute-capacity"
 
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
@@ -84,6 +87,45 @@ export interface GarnetBrokerRuntimeProps {
     temporal_history_retention_days: number
     temporal_history_retention_max_gib: number
     temporal_history_retention_max_partitions: number
+}
+
+const private_ecr_image = (
+    scope: Construct,
+    reference: string
+): ContainerImage | undefined => {
+    const match = /^(\d{12})\.dkr\.ecr\.([a-z0-9-]+)\.(?:amazonaws\.com(?:\.cn)?)\/([^@]+)@sha256:([0-9a-f]{64})$/
+        .exec(reference)
+    if (match === null) return undefined
+
+    const [, account, region, repository_name, digest] = match
+    const partition = region!.startsWith("cn-")
+        ? "aws-cn"
+        : region!.startsWith("us-gov-")
+            ? "aws-us-gov"
+            : region!.startsWith("us-iso-")
+                ? "aws-iso"
+                : region!.startsWith("us-isob-")
+                    ? "aws-iso-b"
+                    : "aws"
+    const repository = Repository.fromRepositoryAttributes(
+        scope,
+        "BrokerImageRepository",
+        {
+            repositoryName: repository_name!,
+            repositoryArn: Arn.format({
+                partition,
+                service: "ecr",
+                region,
+                account,
+                resource: "repository",
+                resourceName: repository_name
+            })
+        }
+    )
+    return ContainerImage.fromEcrRepository(
+        repository,
+        `sha256:${digest}`
+    )
 }
 
 const request_count_per_target_metric = (
@@ -112,7 +154,7 @@ const request_count_per_target_metric = (
 })
 
 export class GarnetBrokerRuntime extends Construct {
-    public readonly fargate_alb: ApplicationLoadBalancer
+    public readonly broker_alb: ApplicationLoadBalancer
     public readonly sg_broker: SecurityGroup
     public readonly cluster: Cluster
     public readonly load?: GarnetLoad
@@ -126,7 +168,9 @@ export class GarnetBrokerRuntime extends Construct {
             )
         }
 
-        const image = ContainerImage.fromRegistry(props.image)
+        const image =
+            private_ecr_image(this, props.image) ??
+            ContainerImage.fromRegistry(props.image)
         this.sg_broker = new SecurityGroup(this, "SecurityGroup", {
             vpc: props.vpc,
             description: "Garnet Broker API and worker tasks",
@@ -150,6 +194,12 @@ export class GarnetBrokerRuntime extends Construct {
                 name: "garnet-framework.local"
             }
         })
+        const compute = add_garnet_compute_capacity(
+            this,
+            this.cluster,
+            props.vpc,
+            deployment_params.ecs_instance_type
+        )
 
         const federation_token = new Secret(this, "FederationRouterToken", {
             description: "Shared capability for Garnet's private federation resolver",
@@ -199,17 +249,15 @@ export class GarnetBrokerRuntime extends Construct {
             retention: RetentionDays.ONE_MONTH,
             removalPolicy: RemovalPolicy.DESTROY
         })
-        const migration_task = new FargateTaskDefinition(
+        const migration_task = new TaskDefinition(
             this,
             "MigrationTaskDefinition",
             {
                 family: garnet_resource_name("broker-migration"),
-                cpu: 512,
-                memoryLimitMiB: 1024,
-                runtimePlatform: {
-                    cpuArchitecture: CpuArchitecture.ARM64,
-                    operatingSystemFamily: OperatingSystemFamily.LINUX
-                }
+                compatibility: Compatibility.EC2,
+                networkMode: NetworkMode.AWS_VPC,
+                cpu: "512",
+                memoryMiB: "1024"
             }
         )
         migration_task.addContainer("MigrationContainer", {
@@ -229,6 +277,7 @@ export class GarnetBrokerRuntime extends Construct {
         const migration = new GarnetMigration(this, "Migration", {
             cluster: this.cluster,
             task_definition: migration_task,
+            capacity_provider: compute.on_demand.capacityProviderName,
             vpc: props.vpc,
             security_group: this.sg_broker,
             release_id: props.image.split("@sha256:")[1],
@@ -241,7 +290,13 @@ export class GarnetBrokerRuntime extends Construct {
             security_group: this.sg_broker,
             image,
             common_environment,
-            common_secrets
+            common_secrets,
+            on_demand_capacity_provider:
+                compute.on_demand.capacityProviderName,
+            spot_capacity_provider:
+                compute.spot.capacityProviderName,
+            worker_spot_scale_out:
+                deployment_params.worker_spot_scale_out
         })
         const services: GarnetServiceResult[] = []
         const add = (service: GarnetServiceResult): GarnetServiceResult => {
@@ -369,6 +424,7 @@ export class GarnetBrokerRuntime extends Construct {
             entry_point: "/garnet-matcher",
             capacity: GARNET_SERVICE_CAPACITY.matcher,
             cpu_autoscaling: false,
+            interruption_tolerant: true,
             environment: {
                 ENTITY_EVENT_TRANSPORT: "postgres",
                 ENTITY_EVENT_POSTGRES_CLAIM_BATCH: "64",
@@ -399,6 +455,7 @@ export class GarnetBrokerRuntime extends Construct {
             name: "lake-sink",
             entry_point: "/garnet-event-sink",
             capacity: GARNET_SERVICE_CAPACITY.sink,
+            interruption_tolerant: true,
             environment: {
                 ENTITY_EVENT_SINK_NAME: "garnet-lake",
                 ENTITY_EVENT_SINK_TRANSPORT: "firehose",
@@ -426,6 +483,7 @@ export class GarnetBrokerRuntime extends Construct {
             name: "delivery",
             entry_point: "/garnet-delivery",
             capacity: GARNET_SERVICE_CAPACITY.delivery,
+            interruption_tolerant: true,
             environment: {
                 NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
                     [...new Set(notification_origins)].join(","),
@@ -448,16 +506,37 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Scheduler",
             name: "notification-scheduler",
             entry_point: "/garnet-notification-scheduler",
-            capacity: GARNET_SERVICE_CAPACITY.scheduler
+            capacity: GARNET_SERVICE_CAPACITY.scheduler,
+            interruption_tolerant: true
         }))
-        add(factory.create_service({
+        const reconciler = add(factory.create_service({
             id: "Reconciler",
             name: "subscription-reconciler",
             entry_point: "/garnet-subscription-reconciler",
             capacity: GARNET_SERVICE_CAPACITY.reconciler,
-            environment: distributed_environment,
-            secrets: distributed_secrets
+            environment: {
+                ...distributed_environment,
+                WORKER_METRICS: "emf",
+                WORKER_METRICS_NAMESPACE: "Garnet/Broker",
+                WORKER_METRICS_SERVICE:
+                    "garnet-subscription-planner",
+                WORKER_METRICS_INTERVAL_MS: "60000"
+            },
+            secrets: distributed_secrets,
+            cpu_autoscaling: false,
+            interruption_tolerant: true
         }))
+        if (reconciler.scaling === undefined) {
+            throw new Error(
+                "Garnet subscription reconciler requires task-count scaling"
+            )
+        }
+        scale_on_worker_utilization({
+            id: "ReconcilerUtilizationScaling",
+            scaling: reconciler.scaling,
+            service_name: "garnet-subscription-planner",
+            target_utilization_percent: 70
+        })
         const sg_alb = new SecurityGroup(this, "LoadBalancerSecurityGroup", {
             vpc: props.vpc,
             description: "Internal API Gateway VPC link to Garnet Broker",
@@ -468,7 +547,7 @@ export class GarnetBrokerRuntime extends Construct {
             Port.tcp(8080),
             "ALB to Garnet API tasks"
         )
-        this.fargate_alb = new ApplicationLoadBalancer(this, "LoadBalancer", {
+        this.broker_alb = new ApplicationLoadBalancer(this, "LoadBalancer", {
             vpc: props.vpc,
             internetFacing: false,
             securityGroup: sg_alb,
@@ -497,7 +576,7 @@ export class GarnetBrokerRuntime extends Construct {
             "deregistration_delay.timeout_seconds",
             "30"
         )
-        const production_listener = this.fargate_alb.addListener(
+        const production_listener = this.broker_alb.addListener(
             "ProductionListener",
             {
             port: 80,
@@ -536,7 +615,7 @@ export class GarnetBrokerRuntime extends Construct {
                     deregistrationDelay: Duration.seconds(30)
                 }
             )
-            const test_listener = this.fargate_alb.addListener(
+            const test_listener = this.broker_alb.addListener(
                 "TestListener",
                 {
                     port:
@@ -582,7 +661,7 @@ export class GarnetBrokerRuntime extends Construct {
                 {
                     vpc: props.vpc,
                     service: api.service,
-                    load_balancer: this.fargate_alb,
+                    load_balancer: this.broker_alb,
                     load_balancer_security_group: sg_alb,
                     test_listener_port:
                         deployment_params
@@ -611,11 +690,12 @@ export class GarnetBrokerRuntime extends Construct {
             entry_point: "/garnet-snapshot",
             capacity: GARNET_SERVICE_CAPACITY.snapshot,
             cpu_autoscaling: false,
+            interruption_tolerant: true,
             environment: {
                 FEDERATION_DEFAULT_LOCAL:
                     distributed_environment.FEDERATION_DEFAULT_LOCAL,
                 SNAPSHOT_BROKER_URL:
-                    `http://${this.fargate_alb.loadBalancerDnsName}`,
+                    `http://${this.broker_alb.loadBalancerDnsName}`,
                 SNAPSHOT_QUERY_MAX_ATTEMPTS: "4",
                 SNAPSHOT_QUERY_RETRY_BASE_MS: "250",
                 SNAPSHOT_QUERY_RETRY_MAX_MS: "5000",
@@ -644,9 +724,11 @@ export class GarnetBrokerRuntime extends Construct {
                 cluster: this.cluster,
                 database: props.database,
                 database_secret: props.database_secret,
-                broker_origin: this.fargate_alb.loadBalancerDnsName,
+                broker_origin: this.broker_alb.loadBalancerDnsName,
                 broker_image: props.image,
-                load_image: props.load_image
+                load_image: props.load_image,
+                capacity_provider:
+                    compute.on_demand.capacityProviderName
             })
         }
 
@@ -685,8 +767,8 @@ export class GarnetBrokerRuntime extends Construct {
                                 {
                                     id: "requests_per_target",
                                     expression:
-                                        "production_requests_per_target + " +
-                                        "alternate_requests_per_target",
+                                        "FILL(production_requests_per_target, 0) + " +
+                                        "FILL(alternate_requests_per_target, 0)",
                                     label:
                                         "Garnet API requests per active target",
                                     returnData: true
@@ -710,17 +792,15 @@ export class GarnetBrokerRuntime extends Construct {
             retention: RetentionDays.ONE_MONTH,
             removalPolicy: RemovalPolicy.DESTROY
         })
-        const maintenance_task = new FargateTaskDefinition(
+        const maintenance_task = new TaskDefinition(
             this,
             "MaintenanceTaskDefinition",
             {
                 family: garnet_resource_name("broker-maintenance"),
-                cpu: 512,
-                memoryLimitMiB: 1024,
-                runtimePlatform: {
-                    cpuArchitecture: CpuArchitecture.ARM64,
-                    operatingSystemFamily: OperatingSystemFamily.LINUX
-                }
+                compatibility: Compatibility.EC2,
+                networkMode: NetworkMode.AWS_VPC,
+                cpu: "512",
+                memoryMiB: "1024"
             }
         )
         maintenance_task.addContainer("MaintenanceContainer", {

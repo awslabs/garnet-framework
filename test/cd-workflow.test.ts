@@ -18,6 +18,16 @@ const job = (name: string, next?: string): string => {
 }
 
 describe("CD deployment concurrency", () => {
+  it("lets experimental deploy dev but reserves promotion for main", () => {
+    expect(workflow).toContain("branches: [main, experimental]")
+    expect(job("deploy-dev", "deploy-stage")).toContain(
+      "if: github.event_name == 'push'"
+    )
+    expect(job("deploy-stage", "deploy-prod")).toContain(
+      "if: github.ref_name == 'main'"
+    )
+  })
+
   it("binds every deployment to its environment account", () => {
     expect(
       workflow.match(

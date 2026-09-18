@@ -34,7 +34,7 @@ describe("tenant-safe API routing", () => {
 
     new GarnetApiGateway(stack, "Api", {
       vpc,
-      fargate_alb: load_balancer,
+      broker_alb: load_balancer,
       lambda_authorizer_arn:
         "arn:aws:lambda:eu-west-3:111111111111:function:authorizer"
     })

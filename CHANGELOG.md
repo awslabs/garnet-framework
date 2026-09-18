@@ -2,7 +2,7 @@
 
 All notable changes to the Garnet Framework will be documented in this file. 
 
-## [Unreleased]
+## [2.0.0-rc.1] - 2026-09-18
 
 ### Architecture
 
@@ -26,8 +26,13 @@ All notable changes to the Garnet Framework will be documented in this file.
 
 ### Scale and resilience
 
-- Added Aurora PostgreSQL 16.14 Serverless v2 with an 8-ACU production floor,
-  reader failover, deletion protection, 35-day backups and saturation alarms.
+- Added Aurora PostgreSQL 18.4 Serverless v2 with a 2-ACU production floor,
+  optional reader failover, standard-storage defaults, deletion protection,
+  35-day backups and saturation alarms.
+- Replaced Fargate with ECS capacity providers backed by ARM64 EC2. Deployment
+  selects the newest available Graviton generation, keeps the service floor on
+  On-Demand instances and uses Spot only for interruption-safe worker overflow.
+- Added least-privilege pulls for digest-pinned private ECR broker images.
 - Enabled dual-limit Temporal retention by default: daily maintenance keeps at
   most one queryable year or 500 GiB in Aurora and truncates complete daily or
   legacy monthly partitions.
@@ -232,19 +237,3 @@ This new version fixes some bugs, introduces new features and potential breaking
 ## [1.0.0] - 2023-11-02
 
 Initial commit of the Garnet Framework.
-# Unreleased
-
-- Added the separate `GarnetFramework` stack for Garnet Broker, with
-  `garnet-framework-*` physical resource names and a collision regression test
-  against the maintenance stack.
-- Added native ECS API blue/green validation, rollback alarms and retained
-  rolling circuit breakers for workers.
-- Added an enforced schema-compatibility declaration: unchanged releases only
-  verify the current schema, backward-compatible releases may migrate, and
-  writer-drain changes are blocked from automated deployment.
-- Replaced the JSON S3 event archive with a tenant/day-partitioned Iceberg v2
-  event table delivered through Firehose.
-- Added tenant-aware SQS ingestion and tenant-isolated private notification
-  topics.
-- Removed the dormant Scorpio deployment and obsolete custom-resource
-  implementations.

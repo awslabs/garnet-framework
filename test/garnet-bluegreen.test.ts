@@ -180,8 +180,8 @@ describe("Garnet API blue/green deployment", () => {
               Metrics: Match.arrayWith([
                 Match.objectLike({
                   Expression:
-                    "production_requests_per_target + " +
-                    "alternate_requests_per_target"
+                    "FILL(production_requests_per_target, 0) + " +
+                    "FILL(alternate_requests_per_target, 0)"
                 }),
                 Match.objectLike({
                   MetricStat: Match.objectLike({

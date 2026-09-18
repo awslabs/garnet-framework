@@ -34,6 +34,30 @@ inputs:
     description: Use the Aurora reader endpoint for eligible Entity reads
     required: false
     default: 'false'
+  database-reader-enabled:
+    description: Keep an Aurora reader as a warm failover target
+    required: false
+    default: 'true'
+  aurora-min-acu:
+    description: Aurora Serverless v2 minimum capacity
+    required: false
+    default: '2'
+  aurora-max-acu:
+    description: Aurora Serverless v2 maximum capacity
+    required: false
+    default: '128'
+  aurora-storage:
+    description: standard or io-optimized
+    required: false
+    default: standard
+  worker-spot-scale-out:
+    description: Use EC2 Spot after each worker service's on-demand floor
+    required: false
+    default: 'true'
+  ecs-instance-type:
+    description: auto or an ARM64 Graviton EC2 instance type
+    required: false
+    default: auto
   deployment-strategy:
     description: rolling or bluegreen
     required: false
@@ -109,6 +133,33 @@ runs:
         allowed-account-ids: ${{ inputs.aws-account-id }}
         role-session-name: garnet-deploy-${{ github.run_id }}
 
+    - name: Select newest available Graviton generation
+      shell: bash
+      env:
+        REQUESTED_INSTANCE_TYPE: ${{ inputs.ecs-instance-type }}
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: |
+        selected="$REQUESTED_INSTANCE_TYPE"
+        if [[ "$selected" == "auto" ]]; then
+          for candidate in c9g.2xlarge c8g.2xlarge c7g.2xlarge c6g.2xlarge; do
+            count="$(aws ec2 describe-instance-type-offerings \
+              --region "$AWS_REGION" \
+              --location-type region \
+              --filters "Name=instance-type,Values=$candidate" \
+              --query 'length(InstanceTypeOfferings)' \
+              --output text)"
+            if [[ "$count" != "0" ]]; then
+              selected="$candidate"
+              break
+            fi
+          done
+        fi
+        if [[ "$selected" == "auto" ]]; then
+          echo "No supported Graviton ECS instance type is offered in $AWS_REGION" >&2
+          exit 1
+        fi
+        echo "GARNET_ECS_INSTANCE_TYPE=$selected" >> "$GITHUB_ENV"
+
     - name: Apply deployment configuration
       shell: bash
       env:
@@ -118,6 +169,11 @@ runs:
         GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: ${{ inputs.notification-origins }}
         GARNET_CONTEXT_ALLOW_HOSTS: ${{ inputs.context-hosts }}
         GARNET_EVENTUAL_ENTITY_READS: ${{ inputs.eventual-entity-reads }}
+        GARNET_DATABASE_READER_ENABLED: ${{ inputs.database-reader-enabled }}
+        GARNET_AURORA_MIN_ACU: ${{ inputs.aurora-min-acu }}
+        GARNET_AURORA_MAX_ACU: ${{ inputs.aurora-max-acu }}
+        GARNET_AURORA_STORAGE: ${{ inputs.aurora-storage }}
+        GARNET_WORKER_SPOT_SCALE_OUT: ${{ inputs.worker-spot-scale-out }}
         GARNET_DEPLOYMENT_STRATEGY: ${{ inputs.deployment-strategy }}
         GARNET_SCHEMA_COMPATIBILITY: ${{ inputs.schema-compatibility }}
         GARNET_BOOTSTRAP_TENANT: ${{ inputs.bootstrap-tenant }}

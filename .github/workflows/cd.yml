@@ -6,7 +6,7 @@ name: CD
 # human decides when a release moves forward.
 on:
   push:
-    branches: [main]
+    branches: [main, experimental]
   workflow_dispatch:
     inputs:
       environment:
@@ -74,6 +74,12 @@ jobs:
           notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
+          database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
+          aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
+          aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}
+          worker-spot-scale-out: ${{ vars.GARNET_WORKER_SPOT_SCALE_OUT || 'true' }}
+          ecs-instance-type: ${{ vars.GARNET_ECS_INSTANCE_TYPE || 'auto' }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
           schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
@@ -88,6 +94,7 @@ jobs:
   deploy-stage:
     name: Deploy stage
     needs: deploy-dev
+    if: github.ref_name == 'main'
     concurrency:
       group: garnet-deploy-stage
       cancel-in-progress: false
@@ -111,6 +118,12 @@ jobs:
           notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
+          database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
+          aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
+          aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}
+          worker-spot-scale-out: ${{ vars.GARNET_WORKER_SPOT_SCALE_OUT || 'true' }}
+          ecs-instance-type: ${{ vars.GARNET_ECS_INSTANCE_TYPE || 'auto' }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
           schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
@@ -147,6 +160,12 @@ jobs:
           notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
+          database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
+          aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
+          aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}
+          worker-spot-scale-out: ${{ vars.GARNET_WORKER_SPOT_SCALE_OUT || 'true' }}
+          ecs-instance-type: ${{ vars.GARNET_ECS_INSTANCE_TYPE || 'auto' }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
           schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}
@@ -186,6 +205,12 @@ jobs:
           notification-origins: ${{ vars.GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS }}
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
+          database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
+          aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
+          aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}
+          worker-spot-scale-out: ${{ vars.GARNET_WORKER_SPOT_SCALE_OUT || 'true' }}
+          ecs-instance-type: ${{ vars.GARNET_ECS_INSTANCE_TYPE || 'auto' }}
           deployment-strategy: ${{ vars.GARNET_DEPLOYMENT_STRATEGY }}
           schema-compatibility: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
           bootstrap-tenant: ${{ vars.GARNET_BOOTSTRAP_TENANT || 'default' }}

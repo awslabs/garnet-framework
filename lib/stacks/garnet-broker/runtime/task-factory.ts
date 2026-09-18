@@ -2,19 +2,20 @@ import { Duration, RemovalPolicy } from "aws-cdk-lib"
 import { SecurityGroup, SubnetType } from "aws-cdk-lib/aws-ec2"
 import {
     AppProtocol,
+    AvailabilityZoneRebalancing,
+    BaseService,
     Cluster,
+    Compatibility,
     ContainerDefinition,
     ContainerImage,
-    CpuArchitecture,
     DeploymentStrategy,
-    FargatePlatformVersion,
-    FargateService,
-    FargateTaskDefinition,
+    Ec2Service,
     LogDrivers,
-    OperatingSystemFamily,
+    NetworkMode,
     PropagatedTagSource,
     ScalableTaskCount,
-    Secret as EcsSecret
+    Secret as EcsSecret,
+    TaskDefinition
 } from "aws-cdk-lib/aws-ecs"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Construct } from "constructs"
@@ -35,13 +36,14 @@ export interface GarnetServiceSpec {
     }
     service_connect_client?: boolean
     cpu_autoscaling?: boolean
+    interruption_tolerant?: boolean
     deployment_strategy?: DeploymentStrategy
     bake_time?: Duration
 }
 
 export interface GarnetServiceResult {
-    service: FargateService
-    task_definition: FargateTaskDefinition
+    service: BaseService
+    task_definition: TaskDefinition
     container: ContainerDefinition
     scaling?: ScalableTaskCount
 }
@@ -52,6 +54,9 @@ export interface GarnetTaskFactoryProps {
     image: ContainerImage
     common_environment: Record<string, string>
     common_secrets: Record<string, EcsSecret>
+    on_demand_capacity_provider: string
+    spot_capacity_provider: string
+    worker_spot_scale_out: boolean
 }
 
 export class GarnetTaskFactory extends Construct {
@@ -68,17 +73,15 @@ export class GarnetTaskFactory extends Construct {
             retention: RetentionDays.ONE_MONTH,
             removalPolicy: RemovalPolicy.DESTROY
         })
-        const task_definition = new FargateTaskDefinition(
+        const task_definition = new TaskDefinition(
             this,
             `${spec.id}TaskDefinition`,
             {
                 family: garnet_resource_name(`broker-${spec.name}`),
-                cpu: spec.capacity.cpu,
-                memoryLimitMiB: spec.capacity.memory_mib,
-                runtimePlatform: {
-                    cpuArchitecture: CpuArchitecture.ARM64,
-                    operatingSystemFamily: OperatingSystemFamily.LINUX
-                }
+                compatibility: Compatibility.EC2,
+                networkMode: NetworkMode.AWS_VPC,
+                cpu: String(spec.capacity.cpu),
+                memoryMiB: String(spec.capacity.memory_mib)
             }
         )
         const environment = {
@@ -123,13 +126,35 @@ export class GarnetTaskFactory extends Construct {
 
         const namespace =
             this.props.cluster.defaultCloudMapNamespace?.namespaceName
-        const service = new FargateService(this, `${spec.id}Service`, {
+        const service = new Ec2Service(this, `${spec.id}Service`, {
             cluster: this.props.cluster,
             taskDefinition: task_definition,
             serviceName: `garnet-${spec.name}`,
             desiredCount: spec.capacity.min_tasks,
             assignPublicIp: false,
-            platformVersion: FargatePlatformVersion.LATEST,
+            availabilityZoneRebalancing:
+                AvailabilityZoneRebalancing.ENABLED,
+            capacityProviderStrategies:
+                spec.interruption_tolerant === true &&
+                this.props.worker_spot_scale_out
+                    ? [
+                        {
+                            capacityProvider:
+                                this.props.on_demand_capacity_provider,
+                            base: spec.capacity.min_tasks,
+                            weight: 1
+                        },
+                        {
+                            capacityProvider:
+                                this.props.spot_capacity_provider,
+                            weight: 4
+                        }
+                    ]
+                    : [{
+                        capacityProvider:
+                            this.props.on_demand_capacity_provider,
+                        weight: 1
+                    }],
             securityGroups: [this.props.security_group],
             vpcSubnets: {
                 subnetType: SubnetType.PRIVATE_WITH_EGRESS

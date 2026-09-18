@@ -12,7 +12,7 @@ import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 export interface GarnetApiProps extends NestedStackProps {
      readonly vpc: Vpc,
      readonly dns_context_broker: string,
-     readonly fargate_alb: ApplicationLoadBalancer
+     readonly broker_alb: ApplicationLoadBalancer
      readonly secret_api_jwt: Secret
      
 }
@@ -35,7 +35,7 @@ export class GarnetApi extends NestedStack {
 
       const api_gateway_construct = new GarnetApiGateway(this, "Api", {
         vpc: props.vpc,
-        fargate_alb: props.fargate_alb,
+        broker_alb: props.broker_alb,
         lambda_authorizer_arn: api_auth_construct.lambda_authorizer_arn
       })
 

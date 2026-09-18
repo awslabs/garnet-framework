@@ -1,6 +1,6 @@
 import { CustomResource, Duration } from "aws-cdk-lib"
 import { SecurityGroup, SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
-import { Cluster, FargateTaskDefinition } from "aws-cdk-lib/aws-ecs"
+import { Cluster, TaskDefinition } from "aws-cdk-lib/aws-ecs"
 import { PolicyStatement } from "aws-cdk-lib/aws-iam"
 import { Code, Function, Runtime } from "aws-cdk-lib/aws-lambda"
 import { Provider } from "aws-cdk-lib/custom-resources"
@@ -8,7 +8,8 @@ import { Construct } from "constructs"
 
 export interface GarnetMigrationProps {
     cluster: Cluster
-    task_definition: FargateTaskDefinition
+    task_definition: TaskDefinition
+    capacity_provider: string
     vpc: Vpc
     security_group: SecurityGroup
     release_id: string
@@ -33,7 +34,8 @@ export class GarnetMigration extends Construct {
             TASK_DEFINITION_ARN: props.task_definition.taskDefinitionArn,
             SUBNET_IDS: subnets.join(","),
             SECURITY_GROUP_IDS: props.security_group.securityGroupId,
-            CONTAINER_NAME: "MigrationContainer"
+            CONTAINER_NAME: "MigrationContainer",
+            CAPACITY_PROVIDER: props.capacity_provider
         }
         const on_event = new Function(this, "OnEvent", {
             runtime: Runtime.NODEJS_24_X,

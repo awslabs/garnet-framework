@@ -21,7 +21,7 @@ import { garnet_resource_name } from "../../../../constants"
 
 export interface GarnetApiGatewayProps {
     readonly vpc: Vpc,
-    readonly fargate_alb: ApplicationLoadBalancer
+    readonly broker_alb: ApplicationLoadBalancer
     readonly lambda_authorizer_arn: string
 }
 
@@ -34,8 +34,8 @@ export class GarnetApiGateway extends Construct{
         if (!props.vpc){
             throw new Error('The property vpc is required')
         }
-        if (!props.fargate_alb){
-            throw new Error('The property fargate_alb is required')
+        if (!props.broker_alb){
+            throw new Error('The property broker_alb is required')
         }
         if (!props.lambda_authorizer_arn) {
             throw new Error('The property lambda_authorizer_arn is required')
@@ -46,7 +46,7 @@ export class GarnetApiGateway extends Construct{
             vpc: props.vpc
         })
         const [alb_security_group] =
-            props.fargate_alb.connections.securityGroups
+            props.broker_alb.connections.securityGroups
         if (alb_security_group === undefined) {
             throw new Error(
                 "The Garnet Broker load balancer requires a security group"
@@ -106,7 +106,7 @@ export class GarnetApiGateway extends Construct{
             connectionType: "VPC_LINK",
             description: "API Integration",
             connectionId: vpc_link.ref, 
-            integrationUri: props.fargate_alb.listeners[0].listenerArn,
+            integrationUri: props.broker_alb.listeners[0].listenerArn,
             payloadFormatVersion: "1.0",
             requestParameters: {
                 "overwrite:header.NGSILD-Tenant":

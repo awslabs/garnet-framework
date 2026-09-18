@@ -13,7 +13,7 @@ export const GARNET_SERVICE_CAPACITY = {
     api: {
         cpu: 2048,
         memory_mib: 4096,
-        min_tasks: 3,
+        min_tasks: 2,
         max_tasks: 64,
         database_pool: 16,
         reader_database_pool: 8
@@ -28,7 +28,7 @@ export const GARNET_SERVICE_CAPACITY = {
     matcher: {
         cpu: 1024,
         memory_mib: 2048,
-        min_tasks: 2,
+        min_tasks: 1,
         max_tasks: 16,
         database_pool: 8
     },

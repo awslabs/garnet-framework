@@ -14,6 +14,7 @@ export {}
 
 const OUTPUTS = {
   GarnetLoadCluster: "garnet-cluster",
+  GarnetLoadCapacityProvider: "garnet-graviton",
   GarnetLoadGeneratorTask: "generator-task:1",
   GarnetLoadAggregateTask: "aggregate-task:1",
   GarnetLoadSecurityGroup: "sg-123",

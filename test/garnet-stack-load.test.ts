@@ -67,11 +67,12 @@ describe("Garnet load deployment outputs", () => {
         (resource) =>
           resource.Properties.MaxCapacity === 64
       )?.Properties.MinCapacity
-    ).toBe(3)
+    ).toBe(2)
 
     for (const output of [
       "GarnetApiTokenSecretArn",
       "GarnetLoadCluster",
+      "GarnetLoadCapacityProvider",
       "GarnetLoadGeneratorTask",
       "GarnetLoadAggregateTask",
       "GarnetLoadSecurityGroup",

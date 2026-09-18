@@ -283,6 +283,8 @@ const plan_load_test = (outputs, env = process.env, now = new Date()) => {
 
   return {
     cluster: required_output(outputs, 'GarnetLoadCluster'),
+    capacity_provider:
+      required_output(outputs, 'GarnetLoadCapacityProvider'),
     generator_task: required_output(outputs, 'GarnetLoadGeneratorTask'),
     aggregate_task: required_output(outputs, 'GarnetLoadAggregateTask'),
     network_configuration,

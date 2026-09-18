@@ -3,6 +3,7 @@ import { Vpc } from "aws-cdk-lib/aws-ec2"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { Construct } from "constructs"
+import { deployment_params } from "../../../architecture"
 import { GarnetBrokerDatabase } from "./database/database-construct"
 import { GarnetFederationState } from "./federation-state/federation-state-construct"
 import { GarnetBrokerRuntime } from "./runtime/container-construct"
@@ -25,13 +26,22 @@ export interface GarnetBrokerProps extends NestedStackProps {
 
 export class GarnetBroker extends NestedStack {
     public readonly dns_context_broker: string
-    public readonly fargate_alb: ApplicationLoadBalancer
+    public readonly broker_alb: ApplicationLoadBalancer
     public readonly load?: GarnetLoad
     public readonly cluster_name: string
     public readonly database_cluster_identifier: string
 
     constructor(scope: Construct, id: string, props: GarnetBrokerProps) {
         super(scope, id, props)
+
+        if (
+            props.eventual_entity_reads &&
+            !deployment_params.database_reader_enabled
+        ) {
+            throw new Error(
+                "Eventual Entity reads require an Aurora reader"
+            )
+        }
 
         const database = new GarnetBrokerDatabase(this, "Database", {
             vpc: props.vpc
@@ -69,8 +79,8 @@ export class GarnetBroker extends NestedStack {
         })
         federation_state.allow_connections_from(runtime.sg_broker)
 
-        this.fargate_alb = runtime.fargate_alb
-        this.dns_context_broker = runtime.fargate_alb.loadBalancerDnsName
+        this.broker_alb = runtime.broker_alb
+        this.dns_context_broker = runtime.broker_alb.loadBalancerDnsName
         this.load = runtime.load
         this.cluster_name = runtime.cluster.clusterName
         this.database_cluster_identifier =

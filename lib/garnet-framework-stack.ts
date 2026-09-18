@@ -77,7 +77,7 @@ export class GarnetFrameworkStack extends Stack {
     const garnet_api = new GarnetApi(this, 'GarnetApi', {
       vpc: garnet_common.vpc, 
       dns_context_broker: garnet_broker_stack.dns_context_broker,
-      fargate_alb: garnet_broker_stack.fargate_alb,
+      broker_alb: garnet_broker_stack.broker_alb,
       secret_api_jwt: garnet_common.secret_api_jwt
   })
 
@@ -126,9 +126,9 @@ export class GarnetFrameworkStack extends Stack {
       description: 'Aurora cluster used by Garnet Broker'
     })
     new CfnOutput(this, 'GarnetDatabaseTopology', {
-      value: Parameters.garnet_eventual_entity_reads
+      value: Parameters.database_reader_enabled
         ? 'writer-reader'
-        : 'shared',
+        : 'writer-only',
       description:
         'Database topology required by native qualification telemetry'
     })
@@ -148,6 +148,9 @@ export class GarnetFrameworkStack extends Stack {
       const load = garnet_broker_stack.load
       new CfnOutput(this, 'GarnetLoadCluster', {
         value: load.cluster_name
+      })
+      new CfnOutput(this, 'GarnetLoadCapacityProvider', {
+        value: load.capacity_provider
       })
       new CfnOutput(this, 'GarnetLoadGeneratorTask', {
         value: load.generator_task.taskDefinitionArn

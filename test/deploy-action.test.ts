@@ -28,6 +28,37 @@ describe("deployment action", () => {
     )
   })
 
+  it("uses cost-aware production database and worker defaults", () => {
+    expect(action).toMatch(
+      /database-reader-enabled:[\s\S]*?default: 'true'/
+    )
+    expect(action).toMatch(
+      /aurora-min-acu:[\s\S]*?default: '2'/
+    )
+    expect(action).toMatch(
+      /aurora-max-acu:[\s\S]*?default: '128'/
+    )
+    expect(action).toMatch(
+      /aurora-storage:[\s\S]*?default: standard/
+    )
+    expect(action).toMatch(
+      /worker-spot-scale-out:[\s\S]*?default: 'true'/
+    )
+    expect(action).toMatch(
+      /ecs-instance-type:[\s\S]*?default: auto/
+    )
+    expect(action).toContain("c9g.2xlarge c8g.2xlarge c7g.2xlarge c6g.2xlarge")
+    for (const setting of [
+      "GARNET_DATABASE_READER_ENABLED",
+      "GARNET_AURORA_MIN_ACU",
+      "GARNET_AURORA_MAX_ACU",
+      "GARNET_AURORA_STORAGE",
+      "GARNET_WORKER_SPOT_SCALE_OUT"
+    ]) {
+      expect(action).toContain(`${setting}:`)
+    }
+  })
+
   it("keeps production Temporal history bounded by default", () => {
     expect(action).toMatch(
       /temporal-history-retention-days:[\s\S]*?default: '365'/

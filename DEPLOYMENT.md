@@ -23,6 +23,8 @@ classes must be coordinated across both stacks.
 - npm
 - AWS CDK bootstrap in the target account and region
 - a digest-pinned Linux ARM64 or multi-architecture Garnet Broker image
+- permission for ECS task execution roles to pull the image when it is in a
+  private ECR repository
 - AWS credentials only for `diff` and deployment
 - an exact `AWS_ACCOUNT_ID` GitHub Environment variable for every deployment
   environment; the credentials action rejects any other assumed account
@@ -52,6 +54,12 @@ CI and CD use `.github/scripts/configure-garnet.js`. The deployment inputs are:
 | `GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS` | no | Exact comma-separated callback origins |
 | `GARNET_CONTEXT_ALLOW_HOSTS` | no | Exact comma-separated JSON-LD hosts |
 | `GARNET_EVENTUAL_ENTITY_READS` | no | Route eligible reads to the Aurora reader |
+| `GARNET_DATABASE_READER_ENABLED` | no | Keep a warm Aurora reader; default `true`, may be `false` for disposable environments |
+| `GARNET_AURORA_MIN_ACU` | no | Aurora Serverless v2 minimum capacity; default `2` |
+| `GARNET_AURORA_MAX_ACU` | no | Aurora Serverless v2 maximum capacity; default `128` |
+| `GARNET_AURORA_STORAGE` | no | `standard` (default) or `io-optimized`; select from measured I/O cost |
+| `GARNET_ECS_INSTANCE_TYPE` | no | ARM64 EC2 type; CD `auto` selects C9g, then C8g/C7g/C6g by regional availability |
+| `GARNET_WORKER_SPOT_SCALE_OUT` | no | Keep worker floors on On-Demand EC2 and prefer Spot for interruption-safe scale-out; default `true` |
 | `GARNET_BOOTSTRAP_TENANT` | no | Tenant bound to the bootstrap credential; default `default` |
 | `GARNET_NAT_GATEWAY_COUNT` | no | `2` for production; `1` accepts an egress AZ dependency |
 | `GARNET_DATABASE_DELETION_PROTECTION` | no | Default `true`; set `false` only for disposable environments |
@@ -79,6 +87,20 @@ node .github/scripts/smoke-test.js
 CI synthesizes both rolling and blue/green profiles. CD assumes a short-lived
 OIDC role, synthesizes once with the target environment's inputs, diffs that
 exact cloud assembly, and deploys the same assembly through CloudFormation.
+Pushes to `experimental` stop after the `dev` environment. The stage and
+production jobs run only from `main`.
+
+The deployment input should use an immutable digest, even when a human-friendly
+release tag exists. The first release candidate is published as
+`2.0.0-rc.1`; the stack must receive its `@sha256:...` reference so tag changes
+cannot alter an already reviewed deployment.
+
+The runtime uses ECS on EC2, not EKS and not Fargate. The deployment action
+queries the target Region and selects the newest available 8-vCPU Graviton
+compute instance, currently preferring `c9g.2xlarge`. Two On-Demand instances
+form the production floor across Availability Zones. A separate Spot capacity
+provider starts at zero and is eligible only for interruption-safe worker
+scale-out.
 
 ## Deployment strategies
 
@@ -208,7 +230,7 @@ zone. `Parameters.nat_gateway_count = 1` is available only as a lower-cost test
 profile and deliberately gives up zone-independent internet egress. S3 traffic
 from private application subnets uses a gateway endpoint rather than NAT.
 
-The API profile uses 2 vCPU / 4 GiB ARM64 tasks, starts at three tasks and may
+The API profile uses 2 vCPU / 4 GiB ARM64 tasks, starts at two tasks and may
 scale to 64. Request target tracking is configured at 60,000 requests per
 healthy target per minute (1,000 requests/s), not 60,000 requests/s. Rolling
 deployments use native `ALBRequestCountPerTarget`. Because AWS does not support
@@ -238,11 +260,12 @@ across worker replicas.
 Entity matching uses direct PostgreSQL partition ownership. The deployment has
 no broker-internal relay or Entity-event SQS queue: API writes commit the
 authoritative outbox row, and dedicated matcher tasks claim it from Aurora.
-Matchers start at two tasks so one warm peer remains available after a task
-loss. Target tracking divides the bounded count of non-empty logical partitions
-by live matcher membership, while separate alarms cover oldest-event age,
-membership loss, failed health samples and quarantined events. A single hot
-partition is deliberately not treated as parallel work.
+Matchers start at one on-demand task and scale independently. When enabled,
+interruption-safe worker scale-out prefers EC2 Spot after each service's
+On-Demand EC2 floor. Target tracking divides the bounded count of non-empty
+logical partitions by live matcher membership, while separate alarms cover
+oldest-event age, membership loss, failed health samples and quarantined
+events. A single hot partition is deliberately not treated as parallel work.
 
 A public 10,000 requests/s test also reaches the default API Gateway
 account/Region throttle, which is shared by all APIs. Request quota headroom

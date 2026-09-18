@@ -11,12 +11,12 @@ import {
 } from "aws-cdk-lib/aws-ec2"
 import {
     Cluster,
+    Compatibility,
     ContainerImage,
-    CpuArchitecture,
-    FargateTaskDefinition,
     LogDrivers,
-    OperatingSystemFamily,
-    Secret as EcsSecret
+    NetworkMode,
+    Secret as EcsSecret,
+    TaskDefinition
 } from "aws-cdk-lib/aws-ecs"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
@@ -42,6 +42,7 @@ export interface GarnetLoadProps {
     broker_origin: string
     broker_image: string
     load_image: string
+    capacity_provider: string
 }
 
 /**
@@ -53,8 +54,9 @@ export interface GarnetLoadProps {
  * the API Authorization object always comes from Secrets Manager.
  */
 export class GarnetLoad extends Construct {
-    public readonly generator_task: FargateTaskDefinition
-    public readonly aggregate_task: FargateTaskDefinition
+    public readonly generator_task: TaskDefinition
+    public readonly aggregate_task: TaskDefinition
+    public readonly capacity_provider: string
     public readonly security_group: SecurityGroup
     public readonly report_bucket: Bucket
     public readonly subnet_ids: string[]
@@ -75,6 +77,7 @@ export class GarnetLoad extends Construct {
 
         this.broker_url = `http://${props.broker_origin}`
         this.cluster_name = props.cluster.clusterName
+        this.capacity_provider = props.capacity_provider
         this.subnet_ids = props.vpc.selectSubnets({
             subnetType: SubnetType.PRIVATE_WITH_EGRESS
         }).subnetIds
@@ -132,17 +135,15 @@ export class GarnetLoad extends Construct {
             LOAD_REPORT_S3_PREFIX: "garnet-load"
         }
 
-        this.generator_task = new FargateTaskDefinition(
+        this.generator_task = new TaskDefinition(
             this,
             "GeneratorTask",
             {
                 family: garnet_resource_name("load-generator"),
-                cpu: 4096,
-                memoryLimitMiB: 8192,
-                runtimePlatform: {
-                    cpuArchitecture: CpuArchitecture.ARM64,
-                    operatingSystemFamily: OperatingSystemFamily.LINUX
-                }
+                compatibility: Compatibility.EC2,
+                networkMode: NetworkMode.AWS_VPC,
+                cpu: "4096",
+                memoryMiB: "8192"
             }
         )
         this.generator_task.addContainer("Generator", {
@@ -172,17 +173,15 @@ export class GarnetLoad extends Construct {
             "garnet-load/*"
         )
 
-        this.aggregate_task = new FargateTaskDefinition(
+        this.aggregate_task = new TaskDefinition(
             this,
             "AggregateTask",
             {
                 family: garnet_resource_name("load-aggregate"),
-                cpu: 1024,
-                memoryLimitMiB: 2048,
-                runtimePlatform: {
-                    cpuArchitecture: CpuArchitecture.ARM64,
-                    operatingSystemFamily: OperatingSystemFamily.LINUX
-                }
+                compatibility: Compatibility.EC2,
+                networkMode: NetworkMode.AWS_VPC,
+                cpu: "1024",
+                memoryMiB: "2048"
             }
         )
         this.aggregate_task.addContainer("Aggregate", {

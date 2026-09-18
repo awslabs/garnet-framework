@@ -46,6 +46,37 @@ export const Parameters = {
     garnet_eventual_entity_reads: false,
 
     /**
+     * Keep a warm Aurora reader as a failover target. Eventual reads may also use
+     * it, but ordinary strongly consistent reads continue to use the writer.
+     * Disposable development deployments may disable it to remove one database
+     * instance from the baseline cost.
+     */
+    database_reader_enabled: true,
+
+    /**
+     * Aurora Serverless v2 starts at a modest production floor and can grow
+     * without pre-provisioning peak capacity. Standard storage is cheaper for
+     * low-to-moderate I/O; switch to I/O-Optimized only after measured I/O
+     * charges justify it.
+     */
+    aurora_min_capacity: 2,
+    aurora_max_capacity: 128,
+    aurora_storage: "standard" as "standard" | "io-optimized",
+
+    /**
+     * ECS runs on ARM64 EC2 capacity rather than Fargate. CD resolves "auto"
+     * to the newest available Graviton generation; this repository default is
+     * the Graviton5 C9g profile available in us-east-1.
+     */
+    ecs_instance_type: "c9g.2xlarge",
+
+    /**
+     * Keep every durable worker's minimum on On-Demand EC2 and use a separate
+     * Spot capacity provider only for interruption-safe scale-out.
+     */
+    worker_spot_scale_out: true,
+
+    /**
      * See regions in which you can deploy Garnet: 
      * https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-vpc-links.html#http-api-vpc-link-availability
     */

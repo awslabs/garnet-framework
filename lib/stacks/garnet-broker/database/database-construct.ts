@@ -38,7 +38,7 @@ export class GarnetBrokerDatabase extends Construct {
         super(scope, id)
 
         const engine = DatabaseClusterEngine.auroraPostgres({
-            version: AuroraPostgresEngineVersion.of("16.14", "16")
+            version: AuroraPostgresEngineVersion.of("18.4", "18")
         })
         this.security_group = new SecurityGroup(this, "SecurityGroup", {
             vpc: props.vpc,
@@ -67,13 +67,15 @@ export class GarnetBrokerDatabase extends Construct {
                 caCertificate: CaCertificate.RDS_CA_RSA4096_G1,
                 enablePerformanceInsights: true
             }),
-            readers: [
-                ClusterInstance.serverlessV2("reader", {
-                    caCertificate: CaCertificate.RDS_CA_RSA4096_G1,
-                    enablePerformanceInsights: true,
-                    scaleWithWriter: true
-                })
-            ],
+            readers: deployment_params.database_reader_enabled
+                ? [
+                    ClusterInstance.serverlessV2("reader", {
+                        caCertificate: CaCertificate.RDS_CA_RSA4096_G1,
+                        enablePerformanceInsights: true,
+                        scaleWithWriter: true
+                    })
+                ]
+                : [],
             serverlessV2MinCapacity: deployment_params.aurora_min_capacity,
             serverlessV2MaxCapacity: deployment_params.aurora_max_capacity,
             storageType: deployment_params.aurora_storage_type,
@@ -101,19 +103,21 @@ export class GarnetBrokerDatabase extends Construct {
             datapointsToAlarm: 3,
             treatMissingData: TreatMissingData.NOT_BREACHING
         })
-        new Alarm(this, "ReplicaLagAlarm", {
-            alarmName:
-                `${garnet_resource_name("broker-aurora-replica-lag")}-${Aws.REGION}`,
-            alarmDescription:
-                "Garnet eventual Entity reads exceed the accepted Aurora replica-lag bound.",
-            metric: this.cluster.metric("AuroraReplicaLagMaximum", {
-                period: Duration.minutes(1),
-                statistic: "Maximum"
-            }),
-            threshold: 1_000,
-            evaluationPeriods: 3,
-            datapointsToAlarm: 2,
-            treatMissingData: TreatMissingData.BREACHING
-        })
+        if (deployment_params.database_reader_enabled) {
+            new Alarm(this, "ReplicaLagAlarm", {
+                alarmName:
+                    `${garnet_resource_name("broker-aurora-replica-lag")}-${Aws.REGION}`,
+                alarmDescription:
+                    "Garnet eventual Entity reads exceed the accepted Aurora replica-lag bound.",
+                metric: this.cluster.metric("AuroraReplicaLagMaximum", {
+                    period: Duration.minutes(1),
+                    statistic: "Maximum"
+                }),
+                threshold: 1_000,
+                evaluationPeriods: 3,
+                datapointsToAlarm: 2,
+                treatMissingData: TreatMissingData.BREACHING
+            })
+        }
     }
 }

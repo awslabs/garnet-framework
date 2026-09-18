@@ -7,6 +7,7 @@ const { URL } = require('node:url')
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'configuration.ts')
 const DIGEST_IMAGE = /^[^@\s]+@sha256:[0-9a-f]{64}$/
 const STRATEGIES = new Set(['rolling', 'bluegreen'])
+const AURORA_STORAGE_TYPES = new Set(['standard', 'io-optimized'])
 const SCHEMA_COMPATIBILITIES = new Set([
   'unchanged',
   'backward-compatible'
@@ -145,6 +146,56 @@ const apply_configuration = (source, env) => {
     'GARNET_EVENTUAL_ENTITY_READS',
     false
   )
+  const database_reader_enabled = boolean_setting(
+    env,
+    'GARNET_DATABASE_READER_ENABLED',
+    true
+  )
+  if (eventual_reads && !database_reader_enabled) {
+    throw new Error(
+      'GARNET_EVENTUAL_ENTITY_READS requires ' +
+        'GARNET_DATABASE_READER_ENABLED=true'
+    )
+  }
+  const aurora_min_capacity = integer_setting(
+    env,
+    'GARNET_AURORA_MIN_ACU',
+    2,
+    1,
+    256
+  )
+  const aurora_max_capacity = integer_setting(
+    env,
+    'GARNET_AURORA_MAX_ACU',
+    128,
+    1,
+    256
+  )
+  if (aurora_min_capacity > aurora_max_capacity) {
+    throw new Error(
+      'GARNET_AURORA_MIN_ACU cannot exceed GARNET_AURORA_MAX_ACU'
+    )
+  }
+  const aurora_storage =
+    (optional(env, 'GARNET_AURORA_STORAGE') || 'standard')
+      .toLowerCase()
+  if (!AURORA_STORAGE_TYPES.has(aurora_storage)) {
+    throw new Error(
+      'GARNET_AURORA_STORAGE must be standard or io-optimized'
+    )
+  }
+  const worker_spot_scale_out = boolean_setting(
+    env,
+    'GARNET_WORKER_SPOT_SCALE_OUT',
+    true
+  )
+  const ecs_instance_type =
+    optional(env, 'GARNET_ECS_INSTANCE_TYPE') || 'c9g.2xlarge'
+  if (!/^[cmr]\d+g[a-z]*\.(?:xlarge|\d+xlarge)$/.test(ecs_instance_type)) {
+    throw new Error(
+      'GARNET_ECS_INSTANCE_TYPE must be a Graviton C, M, or R instance type'
+    )
+  }
   const database_deletion_protection = boolean_setting(
     env,
     'GARNET_DATABASE_DELETION_PROTECTION',
@@ -239,6 +290,42 @@ const apply_configuration = (source, env) => {
   )
   out = replace_setting(
     out,
+    /database_reader_enabled: (?:true|false)/,
+    `database_reader_enabled: ${database_reader_enabled}`,
+    'database_reader_enabled'
+  )
+  out = replace_setting(
+    out,
+    /aurora_min_capacity: \d+/,
+    `aurora_min_capacity: ${aurora_min_capacity}`,
+    'aurora_min_capacity'
+  )
+  out = replace_setting(
+    out,
+    /aurora_max_capacity: \d+/,
+    `aurora_max_capacity: ${aurora_max_capacity}`,
+    'aurora_max_capacity'
+  )
+  out = replace_setting(
+    out,
+    /aurora_storage: "(?:standard|io-optimized)"/,
+    `aurora_storage: "${aurora_storage}"`,
+    'aurora_storage'
+  )
+  out = replace_setting(
+    out,
+    /worker_spot_scale_out: (?:true|false)/,
+    `worker_spot_scale_out: ${worker_spot_scale_out}`,
+    'worker_spot_scale_out'
+  )
+  out = replace_setting(
+    out,
+    /ecs_instance_type: "[^"]+"/,
+    `ecs_instance_type: "${ecs_instance_type}"`,
+    'ecs_instance_type'
+  )
+  out = replace_setting(
+    out,
     /deployment_strategy: "(?:rolling|bluegreen)"/,
     `deployment_strategy: "${strategy}"`,
     'deployment_strategy'
@@ -309,6 +396,12 @@ const apply_configuration = (source, env) => {
     notification_origins,
     context_hosts,
     eventual_reads,
+    database_reader_enabled,
+    aurora_min_capacity,
+    aurora_max_capacity,
+    aurora_storage,
+    ecs_instance_type,
+    worker_spot_scale_out,
     bootstrap_tenant,
     nat_gateway_count,
     database_deletion_protection,
@@ -329,6 +422,13 @@ const main = () => {
     `Configured Garnet: strategy=${result.strategy}` +
     ` schema=${result.schema_compatibility}` +
     ` eventual-reads=${result.eventual_reads}` +
+    ` database-reader=${result.database_reader_enabled}` +
+    ` aurora-acu=${result.aurora_min_capacity}-${
+      result.aurora_max_capacity
+    }` +
+    ` aurora-storage=${result.aurora_storage}` +
+    ` ecs-instance-type=${result.ecs_instance_type}` +
+    ` worker-spot-scale-out=${result.worker_spot_scale_out}` +
     ` tenant=${result.bootstrap_tenant}` +
     ` nat-gateways=${result.nat_gateway_count}` +
     ` deletion-protection=${result.database_deletion_protection}` +

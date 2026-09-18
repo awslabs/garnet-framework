@@ -34,12 +34,15 @@ type DeploymentParams = {
     lambda_broker_batch_size: number,
     lambda_broker_concurent_sqs: number,
     nat_gateway_count: 1 | 2,
+    database_reader_enabled: boolean,
+    ecs_instance_type: string,
+    worker_spot_scale_out: boolean,
     database_deletion_protection: boolean,
     database_backup_retention_days: number,
     temporal_history_retention_days: number,
     temporal_history_retention_max_gib: number,
     temporal_history_retention_max_partitions: number,
-    aurora_storage_type?: DBClusterStorageType,
+    aurora_storage_type: DBClusterStorageType,
     aurora_min_capacity: number, 
     aurora_max_capacity: number
 }
@@ -48,9 +51,16 @@ type DeploymentParams = {
 
 export const deployment_params: DeploymentParams = {
         architecture: ARCHITECTURE.Distributed,
-        aurora_min_capacity: 8,
-        aurora_max_capacity: 256,
+        aurora_min_capacity: Parameters.aurora_min_capacity,
+        aurora_max_capacity: Parameters.aurora_max_capacity,
+        aurora_storage_type:
+            Parameters.aurora_storage === "io-optimized"
+                ? DBClusterStorageType.AURORA_IOPT1
+                : DBClusterStorageType.AURORA,
         nat_gateway_count: Parameters.nat_gateway_count,
+        database_reader_enabled: Parameters.database_reader_enabled,
+        ecs_instance_type: Parameters.ecs_instance_type,
+        worker_spot_scale_out: Parameters.worker_spot_scale_out,
         database_deletion_protection:
             Parameters.database_deletion_protection,
         database_backup_retention_days:
@@ -75,5 +85,3 @@ export const deployment_params: DeploymentParams = {
         lambda_broker_batch_size: 20, 
         lambda_broker_concurent_sqs: 30
 }
-
-deployment_params.aurora_storage_type = DBClusterStorageType.AURORA_IOPT1

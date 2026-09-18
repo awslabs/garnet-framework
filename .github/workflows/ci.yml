@@ -5,7 +5,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main, dev]
+    branches: [main, dev, experimental]
   workflow_dispatch:
 
 # A new push to the same PR makes the in-flight run obsolete
@@ -137,6 +137,7 @@ jobs:
           GARNET_CONTEXT_ALLOW_HOSTS: uri.etsi.org,contexts.example
           GARNET_DEPLOYMENT_STRATEGY: ${{ matrix.strategy }}
           GARNET_SCHEMA_COMPATIBILITY: unchanged
+          GARNET_ECS_INSTANCE_TYPE: c9g.2xlarge
           GARNET_REGION: us-east-1
 
       # No AWS credentials needed: a region is enough to resolve the template.

@@ -2,6 +2,7 @@ import { App, Stack } from "aws-cdk-lib"
 import { Match, Template } from "aws-cdk-lib/assertions"
 import { SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
+import { deployment_params } from "../architecture"
 import { GarnetBroker } from "../lib/stacks/garnet-broker/garnet-broker-stack"
 
 const IMAGE =
@@ -30,7 +31,8 @@ const create_vpc = (stack: Stack): Vpc =>
   })
 
 const synth_broker = (
-  eventual_entity_reads = true
+  eventual_entity_reads = true,
+  image = IMAGE
 ): Template => {
   const app = new App()
   const stack = new Stack(app, "TestStack", {
@@ -46,7 +48,7 @@ const synth_broker = (
   const broker = new GarnetBroker(stack, "Broker", {
     vpc,
     delivery_stream: stream,
-    image: IMAGE,
+    image,
     load_image: LOAD_IMAGE,
     public_origin: "https://broker.example",
     notification_delivery_allow_origins: "https://callbacks.example",
@@ -70,14 +72,15 @@ describe("Garnet Broker AWS runtime", () => {
     template.resourceCountIs("AWS::RDS::DBProxy", 0)
     template.hasResourceProperties("AWS::RDS::DBCluster", {
       Engine: "aurora-postgresql",
-      EngineVersion: "16.14",
+      EngineVersion: "18.4",
       DatabaseName: "garnet",
       DBClusterIdentifier: "garnet-framework-broker-aurora",
       BackupRetentionPeriod: 35,
       DeletionProtection: true,
+      StorageType: "aurora",
       ServerlessV2ScalingConfiguration: {
-        MinCapacity: 8,
-        MaxCapacity: 256
+        MinCapacity: 2,
+        MaxCapacity: 128
       }
     })
     template.hasResourceProperties("AWS::RDS::DBClusterParameterGroup", {
@@ -87,19 +90,31 @@ describe("Garnet Broker AWS runtime", () => {
     })
   })
 
-  it("creates every long-lived role and on-demand task on ARM64", () => {
+  it("can remove the warm reader for a disposable writer-only deployment", () => {
+    const original = deployment_params.database_reader_enabled
+    deployment_params.database_reader_enabled = false
+    try {
+      const template = synth_broker(false)
+      template.resourceCountIs("AWS::RDS::DBInstance", 1)
+      expect(JSON.stringify(template.toJSON()))
+        .not.toContain("AuroraReplicaLagMaximum")
+    } finally {
+      deployment_params.database_reader_enabled = original
+    }
+  })
+
+  it("creates every long-lived role and task on Graviton ECS capacity", () => {
     const template = synth_broker()
     const task_definitions =
       template.findResources("AWS::ECS::TaskDefinition")
 
     expect(Object.keys(task_definitions)).toHaveLength(12)
     template.resourceCountIs("AWS::ECS::Service", 8)
+    template.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 2)
     const entry_points: string[] = []
     for (const resource of Object.values(task_definitions) as any[]) {
-      expect(resource.Properties.RuntimePlatform).toEqual({
-        CpuArchitecture: "ARM64",
-        OperatingSystemFamily: "LINUX"
-      })
+      expect(resource.Properties.RequiresCompatibilities).toEqual(["EC2"])
+      expect(resource.Properties.RuntimePlatform).toBeUndefined()
       const container = resource.Properties.ContainerDefinitions[0]
       const entry_point = container.EntryPoint[0]
       entry_points.push(entry_point)
@@ -125,6 +140,41 @@ describe("Garnet Broker AWS runtime", () => {
       "/garnet-snapshot",
       "/garnet-subscription-reconciler"
     ].sort())
+  })
+
+  it("keeps worker floors on demand and uses Spot only for scale-out", () => {
+    const template = synth_broker()
+    const services = Object.values(
+      template.findResources("AWS::ECS::Service")
+    ) as any[]
+    const spot_services = services.filter(
+      (service) =>
+        service.Properties.CapacityProviderStrategy?.length === 2
+    )
+
+    expect(spot_services).toHaveLength(6)
+    for (const service of spot_services) {
+      expect(service.Properties.DesiredCount).toBe(1)
+      expect(service.Properties.CapacityProviderStrategy[0])
+        .toMatchObject({ Base: 1, Weight: 1 })
+      expect(service.Properties.CapacityProviderStrategy[1])
+        .toMatchObject({ Weight: 4 })
+      expect(service.Properties.AvailabilityZoneRebalancing)
+        .toBe("ENABLED")
+    }
+    for (const service of services) {
+      expect(service.Properties.AvailabilityZoneRebalancing)
+        .toBe("ENABLED")
+    }
+    const api = services.find(
+      (service) => service.Properties.ServiceName === "garnet-api"
+    )
+    const federation = services.find(
+      (service) => service.Properties.ServiceName ===
+        "garnet-federation"
+    )
+    expect(api.Properties.CapacityProviderStrategy).toHaveLength(1)
+    expect(federation.Properties.CapacityProviderStrategy).toHaveLength(1)
   })
 
   it("bounds Aurora Temporal history through scheduled maintenance", () => {
@@ -409,8 +459,8 @@ describe("Garnet Broker AWS runtime", () => {
             Metrics: Match.arrayWith([
               Match.objectLike({
                 Expression:
-                  "production_requests_per_target + " +
-                  "alternate_requests_per_target"
+                  "FILL(production_requests_per_target, 0) + " +
+                  "FILL(alternate_requests_per_target, 0)"
               }),
               Match.objectLike({
                 MetricStat: {
@@ -440,7 +490,7 @@ describe("Garnet Broker AWS runtime", () => {
     )
     expect(apiTarget).toBeDefined()
     expect(apiTarget.Properties).toMatchObject({
-      MinCapacity: 3,
+      MinCapacity: 2,
       MaxCapacity: 64
     })
   })
@@ -518,7 +568,7 @@ describe("Garnet Broker AWS runtime", () => {
     ) as any[]
     expect(
       scalable_targets.some((resource) =>
-        resource.Properties.MinCapacity === 2 &&
+        resource.Properties.MinCapacity === 1 &&
         resource.Properties.MaxCapacity === 16
       )
     ).toBe(true)
@@ -695,6 +745,23 @@ describe("Garnet Broker AWS runtime", () => {
       temporal_history_retention_max_gib: 500,
       temporal_history_retention_max_partitions: 12
     })).toThrow(/digest-pinned/)
+  })
+
+  it("grants task execution roles least-privilege private ECR pull access", () => {
+    const private_image =
+      `111111111111.dkr.ecr.us-east-1.amazonaws.com/garnet-broker@sha256:${
+        "c".repeat(64)
+      }`
+    const template = synth_broker(false, private_image)
+    const rendered = JSON.stringify(template.toJSON())
+
+    expect(rendered).toContain(private_image)
+    expect(rendered).toContain(
+      "arn:aws:ecr:us-east-1:111111111111:repository/garnet-broker"
+    )
+    expect(rendered).toContain("ecr:GetAuthorizationToken")
+    expect(rendered).toContain("ecr:BatchGetImage")
+    expect(rendered).toContain("ecr:GetDownloadUrlForLayer")
   })
 
   it("rejects a mutable load image without affecting normal deployments", () => {

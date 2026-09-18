@@ -16,9 +16,9 @@ import {
 } from "aws-cdk-lib/aws-ec2"
 import {
   AlarmBehavior,
+  BaseService,
   DeploymentLifecycleLambdaTarget,
-  DeploymentLifecycleStage,
-  FargateService
+  DeploymentLifecycleStage
 } from "aws-cdk-lib/aws-ecs"
 import {
   ApplicationLoadBalancer,
@@ -40,7 +40,7 @@ import { garnet_resource_name } from "../../../../constants"
 
 export interface GarnetApiDeploymentGuardProps {
   vpc: Vpc
-  service: FargateService
+  service: BaseService
   load_balancer: ApplicationLoadBalancer
   load_balancer_security_group: SecurityGroup
   test_listener_port: number

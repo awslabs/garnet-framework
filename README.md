@@ -1,6 +1,6 @@
 ## Garnet Framework 
 
-#### [Version 1.6.0](./CHANGELOG.md#160---2026-03-18)
+#### [Version 2.0.0-rc.1](./CHANGELOG.md#200-rc1---2026-09-18)
 
 __Explore the [documentation website of Garnet Framework](https://garnet-framework.tech/docs) to get started.__ 
 
@@ -22,6 +22,10 @@ database. The runtime is distributed and ARM64, supports rolling or API
 blue/green deployment, and writes immutable broker events to a tenant/day
 partitioned Iceberg lake. Queryable Temporal history is bounded in Aurora by
 independent age and size ceilings rather than growing indefinitely.
+
+The release candidate is developed on `experimental`. Pushes to that branch
+may deploy only the `dev` GitHub Environment; stage and production promotion
+remain restricted to `main`.
 
 ## Getting Started 
 

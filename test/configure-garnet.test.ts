@@ -31,6 +31,12 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_CONTEXT_ALLOW_HOSTS:
         "URI.ETSI.ORG,contexts.example:8443,uri.etsi.org",
       GARNET_EVENTUAL_ENTITY_READS: "true",
+      GARNET_DATABASE_READER_ENABLED: "true",
+      GARNET_AURORA_MIN_ACU: "4",
+      GARNET_AURORA_MAX_ACU: "96",
+      GARNET_AURORA_STORAGE: "io-optimized",
+      GARNET_ECS_INSTANCE_TYPE: "c9g.2xlarge",
+      GARNET_WORKER_SPOT_SCALE_OUT: "false",
       GARNET_BOOTSTRAP_TENANT: "factory-a",
       GARNET_NAT_GATEWAY_COUNT: "1",
       GARNET_DATABASE_DELETION_PROTECTION: "false",
@@ -50,6 +56,12 @@ describe("Garnet-only deployment configuration", () => {
         "https://hooks.example,http://private.example:8080",
       context_hosts: "uri.etsi.org,contexts.example:8443",
       eventual_reads: true,
+      database_reader_enabled: true,
+      aurora_min_capacity: 4,
+      aurora_max_capacity: 96,
+      aurora_storage: "io-optimized",
+      ecs_instance_type: "c9g.2xlarge",
+      worker_spot_scale_out: false,
       bootstrap_tenant: "factory-a",
       nat_gateway_count: 1,
       database_deletion_protection: false,
@@ -67,6 +79,20 @@ describe("Garnet-only deployment configuration", () => {
     )
     expect(result.source).toContain(
       "garnet_eventual_entity_reads: true"
+    )
+    expect(result.source).toContain(
+      "database_reader_enabled: true"
+    )
+    expect(result.source).toContain("aurora_min_capacity: 4")
+    expect(result.source).toContain("aurora_max_capacity: 96")
+    expect(result.source).toContain(
+      'aurora_storage: "io-optimized"'
+    )
+    expect(result.source).toContain(
+      'ecs_instance_type: "c9g.2xlarge"'
+    )
+    expect(result.source).toContain(
+      "worker_spot_scale_out: false"
     )
     expect(result.source).toContain('aws_region: "eu-west-3"')
     expect(result.source).toContain(
@@ -113,6 +139,12 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.strategy).toBe("bluegreen")
     expect(result.schema_compatibility).toBe("unchanged")
     expect(result.eventual_reads).toBe(false)
+    expect(result.database_reader_enabled).toBe(true)
+    expect(result.aurora_min_capacity).toBe(2)
+    expect(result.aurora_max_capacity).toBe(128)
+    expect(result.aurora_storage).toBe("standard")
+    expect(result.ecs_instance_type).toBe("c9g.2xlarge")
+    expect(result.worker_spot_scale_out).toBe(true)
     expect(result.bootstrap_tenant).toBe("default")
     expect(result.nat_gateway_count).toBe(2)
     expect(result.database_deletion_protection).toBe(true)
@@ -141,6 +173,20 @@ describe("Garnet-only deployment configuration", () => {
     }
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_EVENTUAL_ENTITY_READS: "sometimes"
+    }))).toThrow(/true or false/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_EVENTUAL_ENTITY_READS: "true",
+      GARNET_DATABASE_READER_ENABLED: "false"
+    }))).toThrow(/requires/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_AURORA_MIN_ACU: "129",
+      GARNET_AURORA_MAX_ACU: "128"
+    }))).toThrow(/cannot exceed/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_AURORA_STORAGE: "limitless"
+    }))).toThrow(/standard or io-optimized/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_WORKER_SPOT_SCALE_OUT: "sometimes"
     }))).toThrow(/true or false/)
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_BROKER_PUBLIC_ORIGIN: "https://broker.example/path"
