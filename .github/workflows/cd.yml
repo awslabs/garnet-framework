@@ -48,6 +48,8 @@ jobs:
   deploy-dev:
     name: Deploy dev
     needs: verify
+    outputs:
+      configured: ${{ steps.deployment-config.outputs.configured }}
     concurrency:
       group: garnet-deploy-dev
       cancel-in-progress: false
@@ -61,8 +63,36 @@ jobs:
       id-token: write   # required to mint the OIDC token
       contents: read
     steps:
+      - name: Check automatic deployment configuration
+        id: deployment-config
+        shell: bash
+        env:
+          GARNET_AUTOMATIC_DEV_ENABLED: ${{ vars.GARNET_AUTOMATIC_DEV_ENABLED }}
+          AWS_DEPLOY_ROLE_ARN: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          AWS_REGION: ${{ vars.AWS_REGION }}
+          AWS_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+          GARNET_BROKER_IMAGE: ${{ vars.GARNET_BROKER_IMAGE }}
+          GARNET_SCHEMA_COMPATIBILITY: ${{ vars.GARNET_SCHEMA_COMPATIBILITY }}
+        run: |
+          missing=()
+          [[ "$GARNET_AUTOMATIC_DEV_ENABLED" == "true" ]] || missing+=("GARNET_AUTOMATIC_DEV_ENABLED=true")
+          [[ -n "$AWS_DEPLOY_ROLE_ARN" ]] || missing+=("AWS_DEPLOY_ROLE_ARN")
+          [[ -n "$AWS_REGION" ]] || missing+=("AWS_REGION")
+          [[ -n "$AWS_ACCOUNT_ID" ]] || missing+=("AWS_ACCOUNT_ID")
+          [[ -n "$GARNET_BROKER_IMAGE" ]] || missing+=("GARNET_BROKER_IMAGE")
+          [[ -n "$GARNET_SCHEMA_COMPATIBILITY" ]] || missing+=("GARNET_SCHEMA_COMPATIBILITY")
+          if (( ${#missing[@]} > 0 )); then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Skipping automatic dev deployment; configure: ${missing[*]}"
+            exit 0
+          fi
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+
       - uses: actions/checkout@v6
+        if: steps.deployment-config.outputs.configured == 'true'
+
       - uses: ./.github/actions/deploy
+        if: steps.deployment-config.outputs.configured == 'true'
         # Repo/environment configuration, not secrets in the code
         with:
           aws-role-arn: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
@@ -94,7 +124,12 @@ jobs:
   deploy-stage:
     name: Deploy stage
     needs: deploy-dev
-    if: github.ref_name == 'main'
+    # These promotion switches are repository variables because environment
+    # variables are unavailable while a job-level condition is evaluated.
+    if: >-
+      needs.deploy-dev.outputs.configured == 'true' &&
+      github.ref_name == 'main' &&
+      vars.GARNET_REPOSITORY_STAGE_PROMOTION_ENABLED == 'true'
     concurrency:
       group: garnet-deploy-stage
       cancel-in-progress: false
@@ -138,6 +173,7 @@ jobs:
   deploy-prod:
     name: Deploy prod
     needs: deploy-stage
+    if: vars.GARNET_REPOSITORY_PROD_PROMOTION_ENABLED == 'true'
     concurrency:
       group: garnet-deploy-prod
       cancel-in-progress: false

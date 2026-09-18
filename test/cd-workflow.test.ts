@@ -24,8 +24,32 @@ describe("CD deployment concurrency", () => {
       "if: github.event_name == 'push'"
     )
     expect(job("deploy-stage", "deploy-prod")).toContain(
-      "if: github.ref_name == 'main'"
+      "needs.deploy-dev.outputs.configured == 'true'"
     )
+    expect(job("deploy-stage", "deploy-prod")).toContain(
+      "github.ref_name == 'main'"
+    )
+    expect(job("deploy-stage", "deploy-prod")).toContain(
+      "vars.GARNET_REPOSITORY_STAGE_PROMOTION_ENABLED == 'true'"
+    )
+    expect(job("deploy-prod", "deploy-manual")).toContain(
+      "vars.GARNET_REPOSITORY_PROD_PROMOTION_ENABLED == 'true'"
+    )
+  })
+
+  it("skips automatic deployment cleanly when environment inputs are absent", () => {
+    const dev = job("deploy-dev", "deploy-stage")
+    expect(dev).toContain(
+      "configured: ${{ steps.deployment-config.outputs.configured }}"
+    )
+    expect(dev).toContain("configured=false")
+    expect(dev).toContain("Skipping automatic dev deployment")
+    expect(dev).toContain("GARNET_AUTOMATIC_DEV_ENABLED=true")
+    expect(
+      dev.match(
+        /if: steps[.]deployment-config[.]outputs[.]configured == 'true'/g
+      )
+    ).toHaveLength(2)
   })
 
   it("binds every deployment to its environment account", () => {

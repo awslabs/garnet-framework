@@ -69,6 +69,8 @@ jobs:
     needs: [lint, typecheck]
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -94,11 +96,16 @@ jobs:
         continue-on-error: true
         run: npm audit
 
-      # Catches a credential committed in the diff before it reaches main
-      - name: Scan for committed secrets
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Run the open-source CLI directly over complete Git history.
+      # gitleaks-action requires a separate organization license; the digest
+      # keeps the scanner supply chain fixed.
+      - name: Scan Git history for committed secrets
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/repo" \
+            -w /repo \
+            ghcr.io/gitleaks/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+            git --redact --verbose --no-banner --platform github .
 
   # Stage 4: build the deployable artifact. For CDK that is the synthesized
   # cloud assembly: templates plus Lambda assets, deployable without re-synth.

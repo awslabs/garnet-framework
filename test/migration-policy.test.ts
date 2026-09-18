@@ -71,7 +71,7 @@ describe("Garnet schema migration policy", () => {
 
     await expect(handler({
       RequestType: "Update",
-      RequestId: "62be9e62-31f1-4a09-9c81-8fb6793d2617",
+      RequestId: "migration-request-1",
       ResourceProperties: {
         ReleaseId: "abc123",
         SchemaCompatibility: "unchanged"
@@ -86,7 +86,7 @@ describe("Garnet schema migration policy", () => {
 
     expect(send).toHaveBeenCalledTimes(1)
     expect(send.mock.calls[0]![0].input).toMatchObject({
-      clientToken: "62be9e62-31f1-4a09-9c81-8fb6793d2617",
+      clientToken: "migration-request-1",
       overrides: {
         containerOverrides: [{
           name: "MigrationContainer",
