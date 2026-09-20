@@ -29,7 +29,7 @@ describe("private notification infrastructure", () => {
       RuleName: "garnet_framework_subscriptions",
       TopicRulePayload: Match.objectLike({
         Sql:
-          "SELECT *, topic(3) AS _garnetTenant " +
+          "SELECT *, topic(3) AS garnetTenant " +
           "FROM 'garnet-framework/tenants/+/subscriptions/+'"
       })
     })
@@ -42,7 +42,20 @@ describe("private notification infrastructure", () => {
             "tenant=!{partitionKeyFromQuery:tenant}/" +
             "type=!{partitionKeyFromQuery:type}/" +
             "dt=!{timestamp:yyyy}-!{timestamp:MM}-" +
-            "!{timestamp:dd}-!{timestamp:HH}/"
+            "!{timestamp:dd}-!{timestamp:HH}/",
+          ProcessingConfiguration: Match.objectLike({
+            Processors: Match.arrayWith([
+              Match.objectLike({
+                Parameters: Match.arrayWith([
+                  Match.objectLike({
+                    ParameterName: "MetadataExtractionQuery",
+                    ParameterValue:
+                      "{tenant:.garnetTenant,type:.type}"
+                  })
+                ])
+              })
+            ])
+          })
         })
       }
     )

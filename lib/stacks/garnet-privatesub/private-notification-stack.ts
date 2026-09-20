@@ -196,7 +196,7 @@ export class GarnetPrivateSub extends NestedStack {
                                 parameterName:
                                     "MetadataExtractionQuery",
                                 parameterValue:
-                                    "{tenant:._garnetTenant,type:.type}"
+                                    "{tenant:.garnetTenant,type:.type}"
                             },
                             {
                                 parameterName: "JsonParsingEngine",
@@ -240,7 +240,7 @@ export class GarnetPrivateSub extends NestedStack {
                 awsIotSqlVersion: "2016-03-23",
                 ruleDisabled: false,
                 sql:
-                    "SELECT *, topic(3) AS _garnetTenant " +
+                    "SELECT *, topic(3) AS garnetTenant " +
                     "FROM 'garnet-framework/tenants/+/subscriptions/+'",
                 actions: [{
                     firehose: {
