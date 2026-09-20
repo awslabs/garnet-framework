@@ -127,19 +127,17 @@ describe("Garnet multi-tenant Iceberg lake", () => {
           }],
           ProcessingConfiguration: {
             Enabled: true,
-            Processors: Match.arrayWith([
-              Match.objectLike({
-                Type: "RecordDeAggregation"
-              }),
-              Match.objectLike({
-                Type: "Lambda"
-              })
-            ])
-          },
-          S3BackupMode: "FailedDataOnly"
+            Processors: [Match.objectLike({
+              Type: "Lambda"
+            })]
+          }
         })
       }
     )
+    expect(JSON.stringify(template.toJSON()))
+      .not.toContain("S3BackupMode")
+    expect(JSON.stringify(template.toJSON()))
+      .not.toContain("RecordDeAggregation")
     template.hasResourceProperties("AWS::Lambda::Function", {
       FunctionName: "garnet-framework-lake-transform",
       Architectures: ["arm64"],

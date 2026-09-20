@@ -137,36 +137,27 @@ export class GarnetDataLakeStream extends Construct {
         }],
         processingConfiguration: {
           enabled: true,
-          processors: [
-            {
-              type: "RecordDeAggregation",
-              parameters: [{
-                parameterName: "SubRecordType",
-                parameterValue: "JSON"
-              }]
-            },
-            {
-              type: "Lambda",
-              parameters: [
-                {
-                  parameterName: "LambdaArn",
-                  parameterValue: transform.functionArn
-                },
-                {
-                  parameterName: "NumberOfRetries",
-                  parameterValue: "3"
-                },
-                {
-                  parameterName: "BufferSizeInMBs",
-                  parameterValue: "3"
-                },
-                {
-                  parameterName: "BufferIntervalInSeconds",
-                  parameterValue: "60"
-                }
-              ]
-            }
-          ]
+          processors: [{
+            type: "Lambda",
+            parameters: [
+              {
+                parameterName: "LambdaArn",
+                parameterValue: transform.functionArn
+              },
+              {
+                parameterName: "NumberOfRetries",
+                parameterValue: "3"
+              },
+              {
+                parameterName: "BufferSizeInMBs",
+                parameterValue: "3"
+              },
+              {
+                parameterName: "BufferIntervalInSeconds",
+                parameterValue: "60"
+              }
+            ]
+          }]
         },
         retryOptions: {
           durationInSeconds: 300
@@ -188,10 +179,6 @@ export class GarnetDataLakeStream extends Construct {
         }
       }
     })
-    stream.addOverride(
-      "Properties.IcebergDestinationConfiguration.S3BackupMode",
-      "FailedDataOnly"
-    )
     stream.node.addDependency(transform)
     stream.node.addDependency(delivery_log_stream)
 
