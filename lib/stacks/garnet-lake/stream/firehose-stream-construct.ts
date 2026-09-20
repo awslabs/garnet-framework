@@ -4,6 +4,7 @@ import {
   RemovalPolicy
 } from "aws-cdk-lib"
 import {
+  Policy,
   PolicyStatement,
   Role,
   ServicePrincipal
@@ -107,6 +108,10 @@ export class GarnetDataLakeStream extends Construct {
       actions: ["lambda:GetFunctionConfiguration"],
       resources: [transform.functionArn]
     }))
+    const role_policy = role.node.tryFindChild("DefaultPolicy")
+    if (!(role_policy instanceof Policy)) {
+      throw new Error("Firehose role policy was not synthesized")
+    }
 
     const stream = new CfnDeliveryStream(this, "Firehose", {
       deliveryStreamName:
@@ -179,6 +184,7 @@ export class GarnetDataLakeStream extends Construct {
         }
       }
     })
+    stream.node.addDependency(role_policy)
     stream.node.addDependency(transform)
     stream.node.addDependency(delivery_log_stream)
 

@@ -134,6 +134,14 @@ describe("Garnet multi-tenant Iceberg lake", () => {
         })
       }
     )
+    const streams = template.findResources(
+      "AWS::KinesisFirehose::DeliveryStream"
+    )
+    const stream = Object.values(streams)[0]
+    expect(stream.DependsOn).toEqual(expect.arrayContaining([
+      expect.stringMatching(/CatalogEntityEvents/),
+      expect.stringMatching(/StreamFirehoseRoleDefaultPolicy/)
+    ]))
     expect(JSON.stringify(template.toJSON()))
       .not.toContain("S3BackupMode")
     expect(JSON.stringify(template.toJSON()))
