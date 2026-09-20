@@ -7,6 +7,7 @@ import {
 import {
     InstanceType,
     LaunchTemplate,
+    SecurityGroup,
     SubnetType,
     UserData,
     Vpc
@@ -36,6 +37,7 @@ const capacity_provider = (
     vpc: Vpc,
     id: string,
     instance_type: string,
+    security_group: SecurityGroup,
     spot: boolean
 ): AsgCapacityProvider => {
     const role = new Role(scope, `${id}InstanceRole`, {
@@ -53,6 +55,7 @@ const capacity_provider = (
         machineImage:
             EcsOptimizedImage.amazonLinux2023(AmiHardwareType.ARM),
         userData: UserData.forLinux(),
+        securityGroup: security_group,
         role,
         requireImdsv2: true,
         detailedMonitoring: false
@@ -113,12 +116,23 @@ export const add_garnet_compute_capacity = (
     vpc: Vpc,
     instance_type: string
 ): GarnetComputeCapacity => {
+    const host_security_group = new SecurityGroup(
+        scope,
+        "HostSecurityGroup",
+        {
+            vpc,
+            description:
+                "Egress-only security group for Garnet ECS hosts",
+            allowAllOutbound: true
+        }
+    )
     const on_demand = capacity_provider(
         scope,
         cluster,
         vpc,
         "OnDemand",
         instance_type,
+        host_security_group,
         false
     )
     const spot = capacity_provider(
@@ -127,6 +141,7 @@ export const add_garnet_compute_capacity = (
         vpc,
         "Spot",
         instance_type,
+        host_security_group,
         true
     )
     cluster.addDefaultCapacityProviderStrategy([{

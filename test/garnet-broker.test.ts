@@ -132,6 +132,30 @@ describe("Garnet Broker AWS runtime", () => {
     const task_definitions =
       template.findResources("AWS::ECS::TaskDefinition")
 
+    const host_security_groups = template.findResources(
+      "AWS::EC2::SecurityGroup",
+      {
+        Properties: {
+          GroupDescription:
+            "Egress-only security group for Garnet ECS hosts"
+        }
+      }
+    )
+    expect(Object.keys(host_security_groups)).toHaveLength(1)
+    const host_security_group_id =
+      Object.keys(host_security_groups)[0]
+    const launch_templates = template.findResources(
+      "AWS::EC2::LaunchTemplate"
+    )
+    expect(Object.values(launch_templates)).toHaveLength(2)
+    for (const launch_template of Object.values(launch_templates) as any[]) {
+      expect(
+        launch_template.Properties.LaunchTemplateData.SecurityGroupIds
+      ).toEqual([{
+        "Fn::GetAtt": [host_security_group_id, "GroupId"]
+      }])
+    }
+
     expect(Object.keys(task_definitions)).toHaveLength(12)
     template.resourceCountIs("AWS::ECS::Service", 8)
     template.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 2)
