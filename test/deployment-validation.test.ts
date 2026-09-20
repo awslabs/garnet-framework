@@ -1,5 +1,11 @@
 export {}
 
+jest.mock("/opt/nodejs/broker-auth.js", () => ({
+  create_broker_headers: () => async () => ({
+    Authorization: "SigV4-STS proof"
+  })
+}), { virtual: true })
+
 const {
   handler,
   requireEntityCollection,
@@ -45,7 +51,8 @@ describe("Garnet API deployment validation", () => {
         "/ngsi-ld/v1/entities?limit=1&local=true",
       expect.objectContaining({
         headers: {
-          Accept: "application/ld+json"
+          Accept: "application/ld+json",
+          Authorization: "SigV4-STS proof"
         }
       })
     )

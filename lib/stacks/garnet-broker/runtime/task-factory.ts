@@ -17,6 +17,7 @@ import {
     Secret as EcsSecret,
     TaskDefinition
 } from "aws-cdk-lib/aws-ecs"
+import { IRole } from "aws-cdk-lib/aws-iam"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Construct } from "constructs"
 import { garnet_resource_name } from "../../../../constants"
@@ -39,6 +40,7 @@ export interface GarnetServiceSpec {
     interruption_tolerant?: boolean
     deployment_strategy?: DeploymentStrategy
     bake_time?: Duration
+    task_role?: IRole
 }
 
 export interface GarnetServiceResult {
@@ -81,7 +83,8 @@ export class GarnetTaskFactory extends Construct {
                 compatibility: Compatibility.EC2,
                 networkMode: NetworkMode.AWS_VPC,
                 cpu: String(spec.capacity.cpu),
-                memoryMiB: String(spec.capacity.memory_mib)
+                memoryMiB: String(spec.capacity.memory_mib),
+                taskRole: spec.task_role
             }
         )
         const environment = {

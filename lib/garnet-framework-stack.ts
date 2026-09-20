@@ -129,6 +129,12 @@ export class GarnetFrameworkStack extends Stack {
       value: Parameters.garnet_broker_image,
       description: 'Immutable Garnet Broker image used by every service'
     })
+    new CfnOutput(this, 'GarnetAuthorizationConfigurationDigest', {
+      value:
+        garnet_broker_stack.authorization_configuration_digest,
+      description:
+        'Canonical non-secret identity and authorization configuration digest'
+    })
     new CfnOutput(this, 'GarnetBrokerCluster', {
       value: garnet_broker_stack.cluster_name,
       description: 'ECS cluster containing Garnet Broker services'

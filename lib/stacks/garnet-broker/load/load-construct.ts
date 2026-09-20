@@ -21,6 +21,10 @@ import {
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
 import {
+    Role,
+    ServicePrincipal
+} from "aws-cdk-lib/aws-iam"
+import {
     BlockPublicAccess,
     Bucket,
     BucketEncryption,
@@ -56,6 +60,8 @@ export interface GarnetLoadProps {
  * requests authenticate with the task role and a short-lived STS proof.
  */
 export class GarnetLoad extends Construct {
+    public static readonly generator_role_name =
+        garnet_resource_name("load-generator-role")
     public readonly generator_task: TaskDefinition
     public readonly aggregate_task: TaskDefinition
     public readonly capacity_provider: string
@@ -108,6 +114,10 @@ export class GarnetLoad extends Construct {
             removalPolicy: RemovalPolicy.DESTROY
         })
         const image = ContainerImage.fromRegistry(props.load_image)
+        const generator_role = new Role(this, "GeneratorRole", {
+            roleName: GarnetLoad.generator_role_name,
+            assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com")
+        })
         const database_environment = {
             LOAD_DATABASE_HOST: props.database.clusterEndpoint.hostname,
             LOAD_DATABASE_PORT: Token.asString(
@@ -140,7 +150,8 @@ export class GarnetLoad extends Construct {
                 compatibility: Compatibility.EC2,
                 networkMode: NetworkMode.AWS_VPC,
                 cpu: "4096",
-                memoryMiB: "8192"
+                memoryMiB: "8192",
+                taskRole: generator_role
             }
         )
         this.generator_task.addContainer("Generator", {

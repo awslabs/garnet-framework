@@ -220,6 +220,15 @@ runs:
       shell: bash
       run: npx cdk synth --quiet
 
+    - name: Guard authorization configuration cutover
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+      run: >-
+        node .github/scripts/authorization-deployment-guard.js
+        cdk.out/GarnetFramework.template.json
+        GarnetFramework
+
     - name: Show what will change
       shell: bash
       # --fail is intentionally absent, so an ordinary diff exits zero while

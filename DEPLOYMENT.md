@@ -61,6 +61,12 @@ CI and CD use `.github/scripts/configure-garnet.js`. The deployment inputs are:
 | `GARNET_ECS_INSTANCE_TYPE` | no | ARM64 EC2 type; CD `auto` selects C9g, then C8g/C7g/C6g by regional availability |
 | `GARNET_WORKER_SPOT_SCALE_OUT` | no | Keep worker floors on On-Demand EC2 and prefer Spot for interruption-safe scale-out; default `true` |
 | `GARNET_BOOTSTRAP_TENANT` | no | Tenant bound to the bootstrap credential; default `default` |
+| `GARNET_OIDC_ISSUER` | yes | Exact HTTPS issuer accepted by API authentication |
+| `GARNET_OIDC_AUDIENCES` | yes | Comma-separated accepted OAuth audiences |
+| `GARNET_OIDC_TENANT_CLAIM` | no | Claim containing tenant grants; default `garnet_tenants` |
+| `GARNET_BOOTSTRAP_ADMIN_SUBJECT` | yes | Exact OIDC subject receiving `TenantAdministrator` |
+| `GARNET_AUTHORIZATION_POLICIES` | no | JSON array of additional policy documents |
+| `GARNET_AUTHORIZATION_BINDINGS` | no | JSON array of additional exact principal attachments |
 | `GARNET_NAT_GATEWAY_COUNT` | no | `2` for production; `1` accepts an egress AZ dependency |
 | `GARNET_DATABASE_DELETION_PROTECTION` | no | Default `true`; set `false` only for disposable environments |
 | `GARNET_DATABASE_BACKUP_RETENTION_DAYS` | no | `1` to `35`; default `35` |
@@ -76,6 +82,8 @@ rewriting `configuration.ts`.
 ```bash
 node .github/scripts/configure-garnet.js
 npx cdk synth --quiet
+node .github/scripts/authorization-deployment-guard.js \
+  cdk.out/GarnetFramework.template.json GarnetFramework
 npx cdk diff --app cdk.out --method change-set
 npx cdk deploy --app cdk.out \
   --require-approval never \
@@ -94,6 +102,21 @@ The deployment input should use an immutable digest, even when a human-friendly
 release tag exists. The first release candidate is published as
 `2.0.0-rc.1`; the stack must receive its `@sha256:...` reference so tag changes
 cannot alter an already reviewed deployment.
+
+Every Broker authorization executor receives byte-identical `AUTH_MODE`,
+`AUTHORIZATION_MODE`, `AUTHORIZATION_POLICIES`, and
+`AUTHORIZATION_BINDINGS` values. This includes the API, Entity-event matcher,
+periodic notification scheduler, notification delivery worker, and distributed
+Subscription reconciler. The stack exports
+`GarnetAuthorizationConfigurationDigest`, a canonical SHA-256 digest covering
+those policy inputs and the non-secret OIDC/SigV4 identity boundary.
+
+After synthesis, the deployment action reads the existing stack output directly
+from CloudFormation. Initial stack creation is allowed. For an existing stack,
+the candidate and deployed authorization digests must match exactly. A missing
+legacy digest or any policy, binding, tenant grant, issuer, audience, or
+workload-principal change blocks both rolling and blue/green deployment before
+`cdk diff` or `cdk deploy`.
 
 The runtime uses ECS on EC2, not EKS and not Fargate. The deployment action
 queries the target Region and selects the newest available 8-vCPU Graviton
@@ -175,6 +198,32 @@ They are not called production-qualified until a real AWS deployment has
 demonstrated validation failure, alarm rollback, traffic shift, bake retention
 and zero-downtime rollback.
 
+### Authorization policy cutover
+
+Authorization changes cannot use an ordinary rolling or API-only blue/green
+deployment. Those strategies temporarily run multiple task revisions, and the
+durable asynchronous paths would then evaluate the same work under different
+policy bundles.
+
+The repository deliberately provides no bypass flag or partially automated
+cutover. A separately reviewed environment runbook must:
+
+1. stop new external and internal Broker admissions;
+2. let the API, matcher, periodic scheduler, delivery worker, and Subscription
+   reconciler reach observable idle checkpoints, then stop all five;
+3. replace every task definition and task while no authorization executor is
+   running;
+4. restart workers before reopening API traffic;
+5. verify allowed and denied Entity reads and writes, scoped Subscription
+   matching, periodic execution, revocation, and notification delivery;
+6. confirm the deployed
+   `GarnetAuthorizationConfigurationDigest`, then reopen admission.
+
+The first deployment introducing this digest to a pre-existing stack also
+requires that explicit cutover because the previous deployed policy generation
+cannot be proven. Implementing and qualifying the environment-specific drain
+and restart orchestration is intentionally outside this bounded patch.
+
 ## Multi-tenancy
 
 Garnet Broker owns NGSI-LD tenant semantics. Framework ingress preserves them:
@@ -188,6 +237,9 @@ Garnet Broker owns NGSI-LD tenant semantics. Framework ingress preserves them:
   `Parameters.garnet_bootstrap_tenant`. Additional users, custom JSON-LD
   policies, and exact policy attachments are supplied through the deployment
   authorization arrays and validated before the API opens its port;
+- the API and all four durable authorization workers evaluate one canonical
+  policy bundle. Ordinary deployment fails closed if that bundle differs from
+  the currently deployed digest;
 - Snapshot workers authenticate to the private Broker listener with a
   short-lived, deployment-bound STS proof signed by their ECS task role. No
   symmetric API signing secret or generated bootstrap token is deployed;
@@ -195,6 +247,8 @@ Garnet Broker owns NGSI-LD tenant semantics. Framework ingress preserves them:
   deterministic, separate execution roles. Each role receives only the
   `TenantEntityEditor` policy for the configured bootstrap tenant, and the
   Lambda rejects a payload naming another tenant before sending it;
+- the API blue/green validation Lambda uses the same short-lived SigV4 workload
+  proof and receives only `TenantReadOnly` for the bootstrap tenant;
 - a bare SQS entity targets the default tenant;
 - `{ "tenant": "factory-a", "entity": { ... } }` forwards
   `NGSILD-Tenant: factory-a`;

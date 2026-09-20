@@ -39,7 +39,11 @@ import {
 } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { Rule, Schedule } from "aws-cdk-lib/aws-events"
 import { EcsTask } from "aws-cdk-lib/aws-events-targets"
-import { PolicyStatement } from "aws-cdk-lib/aws-iam"
+import {
+    PolicyStatement,
+    Role,
+    ServicePrincipal
+} from "aws-cdk-lib/aws-iam"
 import { Repository } from "aws-cdk-lib/aws-ecr"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
@@ -71,6 +75,13 @@ import {
     GarnetTaskFactory
 } from "./task-factory"
 import { add_garnet_compute_capacity } from "./compute-capacity"
+import {
+    authorization_configuration,
+    canonical_json
+} from "./authorization-configuration"
+import {
+    create_broker_workload_role
+} from "../../garnet-common/security/broker-workload-role"
 
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
@@ -163,11 +174,25 @@ const request_count_per_target_metric = (
     }
 })
 
+const assumed_role_principal = (role_name: string): string =>
+    `arn:${Aws.PARTITION}:sts::${Aws.ACCOUNT_ID}:assumed-role/${role_name}`
+
+const canonical_assumed_role_principal = (role_name: string): string =>
+    `arn:\${AWS::Partition}:sts::\${AWS::AccountId}:` +
+    `assumed-role/${role_name}`
+
+const managed_policy = (name: string) => ({
+    identifier:
+        `arn:garnet:authorization::garnet:managed-policy/${name}`,
+    version: "v1"
+})
+
 export class GarnetBrokerRuntime extends Construct {
     public readonly broker_alb: ApplicationLoadBalancer
     public readonly sg_broker: SecurityGroup
     public readonly cluster: Cluster
     public readonly load?: GarnetLoad
+    public readonly authorization_configuration_digest: string
 
     constructor(scope: Construct, id: string, props: GarnetBrokerRuntimeProps) {
         super(scope, id)
@@ -210,6 +235,129 @@ export class GarnetBrokerRuntime extends Construct {
                 "Garnet authorization policies must be a JSON array"
             )
         }
+        const normalized_oidc_issuer =
+            oidc_issuer.href.replace(/\/$/, "")
+        const bootstrap_principal =
+            `${normalized_oidc_issuer}#` +
+            encodeURIComponent(props.bootstrap_admin_subject)
+        const snapshot_role_name =
+            garnet_resource_name("broker-snapshot-role")
+        const validation_role_name =
+            garnet_resource_name("api-deployment-validation-role")
+        const workload_bindings = [
+            {
+                role_name: snapshot_role_name,
+                policy: "TenantReadOnly"
+            },
+            {
+                role_name: validation_role_name,
+                policy: "TenantReadOnly"
+            },
+            ...garnet_broker_connector_role_names.map((role_name) => ({
+                role_name,
+                policy: "TenantEntityEditor"
+            })),
+            ...(
+                props.load_image.trim() === ""
+                    ? []
+                    : [{
+                        role_name: GarnetLoad.generator_role_name,
+                        policy: "TenantAdministrator"
+                    }]
+            )
+        ]
+        const bootstrap_binding = {
+            principalKind: "oidc",
+            principalId: bootstrap_principal,
+            tenant: props.bootstrap_tenant,
+            policies: [managed_policy("TenantAdministrator")]
+        }
+        const generated_bindings = workload_bindings.map((binding) => ({
+            principalKind: "sigv4",
+            principalId: assumed_role_principal(binding.role_name),
+            tenant: props.bootstrap_tenant,
+            policies: [managed_policy(binding.policy)]
+        }))
+        const canonical_generated_bindings =
+            workload_bindings.map((binding) => ({
+                principalKind: "sigv4",
+                principalId:
+                    canonical_assumed_role_principal(binding.role_name),
+                tenant: props.bootstrap_tenant,
+                policies: [managed_policy(binding.policy)]
+            }))
+        const authorization_bindings = [
+            bootstrap_binding,
+            ...generated_bindings,
+            ...configured_bindings
+        ]
+        const canonical_authorization_bindings = [
+            bootstrap_binding,
+            ...canonical_generated_bindings,
+            ...configured_bindings
+        ]
+        const sigv4_tenant_grants = Object.fromEntries(
+            workload_bindings.map((binding) => [
+                assumed_role_principal(binding.role_name),
+                [props.bootstrap_tenant]
+            ])
+        )
+        const canonical_sigv4_tenant_grants = Object.fromEntries(
+            workload_bindings.map((binding) => [
+                canonical_assumed_role_principal(binding.role_name),
+                [props.bootstrap_tenant]
+            ])
+        )
+        const auth_configuration = authorization_configuration({
+            policies: configured_policies,
+            bindings: authorization_bindings,
+            canonical_bindings: canonical_authorization_bindings,
+            identity: {
+                oidc: {
+                    issuers: [normalized_oidc_issuer],
+                    audiences: oidc_audiences,
+                    tenantClaim: props.oidc_tenant_claim,
+                    tenantGrants: {
+                        [props.bootstrap_admin_subject]: [
+                            props.bootstrap_tenant
+                        ]
+                    }
+                },
+                sigv4: {
+                    serverId:
+                        "garnet:${AWS::AccountId}:${AWS::Region}",
+                    stsEndpoint:
+                        "https://sts.${AWS::Region}.${AWS::URLSuffix}",
+                    tenantGrants: canonical_sigv4_tenant_grants
+                }
+            }
+        })
+        const authorization_environment = auth_configuration.environment
+        const authorization_executor_environment = {
+            ...authorization_environment,
+            AUTH_OIDC_ISSUERS: normalized_oidc_issuer,
+            AUTH_OIDC_AUDIENCES: oidc_audiences.join(","),
+            AUTH_OIDC_TENANT_CLAIM: props.oidc_tenant_claim,
+            AUTH_OIDC_TENANT_GRANTS: canonical_json({
+                [props.bootstrap_admin_subject]: [
+                    props.bootstrap_tenant
+                ]
+            }),
+            AUTH_SIGV4_SERVER_ID: garnet_sigv4_server_id,
+            AUTH_SIGV4_STS_ENDPOINT: garnet_sts_endpoint,
+            AUTH_SIGV4_TENANT_GRANTS:
+                canonical_json(sigv4_tenant_grants)
+        }
+        this.authorization_configuration_digest = auth_configuration.digest
+        const snapshot_task_role = new Role(this, "SnapshotTaskRole", {
+            roleName: snapshot_role_name,
+            assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com")
+        })
+        const validation_role = create_broker_workload_role(
+            this,
+            "ApiDeploymentValidationRole",
+            validation_role_name
+        )
 
         const image =
             private_ecr_image(this, props.image) ??
@@ -413,20 +561,7 @@ export class GarnetBrokerRuntime extends Construct {
             capacity: GARNET_SERVICE_CAPACITY.api,
             environment: {
                 ...distributed_environment,
-                AUTH_MODE: "oidc+sigv4",
-                AUTHORIZATION_MODE: "policy",
-                AUTH_OIDC_ISSUERS: oidc_issuer.href.replace(/\/$/, ""),
-                AUTH_OIDC_AUDIENCES: oidc_audiences.join(","),
-                AUTH_OIDC_TENANT_CLAIM: props.oidc_tenant_claim,
-                AUTH_OIDC_TENANT_GRANTS: JSON.stringify({
-                    [props.bootstrap_admin_subject]: [
-                        props.bootstrap_tenant
-                    ]
-                }),
-                AUTH_SIGV4_SERVER_ID: sigv4_server_id,
-                AUTH_SIGV4_STS_ENDPOINT: sts_endpoint,
-                AUTHORIZATION_POLICIES:
-                    JSON.stringify(configured_policies),
+                ...authorization_executor_environment,
                 PORT: "8080",
                 BROKER_WORKERS: "2",
                 ...(
@@ -484,6 +619,7 @@ export class GarnetBrokerRuntime extends Construct {
             cpu_autoscaling: false,
             interruption_tolerant: true,
             environment: {
+                ...authorization_executor_environment,
                 ENTITY_EVENT_TRANSPORT: "postgres",
                 ENTITY_EVENT_POSTGRES_CLAIM_BATCH: "64",
                 ENTITY_EVENT_POSTGRES_LEASE_MS: "60000",
@@ -543,6 +679,7 @@ export class GarnetBrokerRuntime extends Construct {
             capacity: GARNET_SERVICE_CAPACITY.delivery,
             interruption_tolerant: true,
             environment: {
+                ...authorization_executor_environment,
                 NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
                     [...new Set(notification_origins)].join(","),
                 WORKER_METRICS: "emf",
@@ -565,7 +702,8 @@ export class GarnetBrokerRuntime extends Construct {
             name: "notification-scheduler",
             entry_point: "/garnet-notification-scheduler",
             capacity: GARNET_SERVICE_CAPACITY.scheduler,
-            interruption_tolerant: true
+            interruption_tolerant: true,
+            environment: authorization_executor_environment
         }))
         const reconciler = add(factory.create_service({
             id: "Reconciler",
@@ -573,6 +711,7 @@ export class GarnetBrokerRuntime extends Construct {
             entry_point: "/garnet-subscription-reconciler",
             capacity: GARNET_SERVICE_CAPACITY.reconciler,
             environment: {
+                ...authorization_executor_environment,
                 ...distributed_environment,
                 WORKER_METRICS: "emf",
                 WORKER_METRICS_NAMESPACE: "Garnet/Broker",
@@ -725,7 +864,9 @@ export class GarnetBrokerRuntime extends Construct {
                         deployment_params
                             .deployment_test_listener_port,
                     production_target,
-                    test_target: alternate_target
+                    test_target: alternate_target,
+                    validation_role,
+                    tenant: props.bootstrap_tenant
                 }
             )
         } else {
@@ -749,6 +890,7 @@ export class GarnetBrokerRuntime extends Construct {
             capacity: GARNET_SERVICE_CAPACITY.snapshot,
             cpu_autoscaling: false,
             interruption_tolerant: true,
+            task_role: snapshot_task_role,
             environment: {
                 FEDERATION_DEFAULT_LOCAL:
                     distributed_environment.FEDERATION_DEFAULT_LOCAL,
@@ -769,62 +911,6 @@ export class GarnetBrokerRuntime extends Construct {
                 WORKER_METRICS_INTERVAL_MS: "60000"
             }
         }))
-        const snapshot_principal =
-            `arn:${Aws.PARTITION}:sts::${Aws.ACCOUNT_ID}:assumed-role/` +
-            snapshot.task_definition.taskRole.roleName
-        const connector_principals =
-            garnet_broker_connector_role_names.map((role_name) =>
-                `arn:${Aws.PARTITION}:sts::${Aws.ACCOUNT_ID}:` +
-                `assumed-role/${role_name}`
-            )
-        const bootstrap_principal =
-            `${oidc_issuer.href.replace(/\/$/, "")}#` +
-            encodeURIComponent(props.bootstrap_admin_subject)
-        const sigv4_tenant_grants: Record<string, string[]> = {
-            [snapshot_principal]: [props.bootstrap_tenant],
-            ...Object.fromEntries(
-                connector_principals.map((principal) => [
-                    principal,
-                    [props.bootstrap_tenant]
-                ])
-            )
-        }
-        const authorization_bindings: unknown[] = [
-            {
-                principalKind: "oidc",
-                principalId: bootstrap_principal,
-                tenant: props.bootstrap_tenant,
-                policies: [{
-                    identifier:
-                        "arn:garnet:authorization::garnet:" +
-                        "managed-policy/TenantAdministrator",
-                    version: "v1"
-                }]
-            },
-            {
-                principalKind: "sigv4",
-                principalId: snapshot_principal,
-                tenant: props.bootstrap_tenant,
-                policies: [{
-                    identifier:
-                        "arn:garnet:authorization::garnet:" +
-                        "managed-policy/TenantReadOnly",
-                    version: "v1"
-                }]
-            },
-            ...connector_principals.map((principal) => ({
-                principalKind: "sigv4",
-                principalId: principal,
-                tenant: props.bootstrap_tenant,
-                policies: [{
-                    identifier:
-                        "arn:garnet:authorization::garnet:" +
-                        "managed-policy/TenantEntityEditor",
-                    version: "v1"
-                }]
-            })),
-            ...configured_bindings
-        ]
         snapshot.service.node.addDependency(api.service)
         if (snapshot.scaling === undefined) {
             throw new Error("Garnet snapshot requires task-count scaling")
@@ -851,32 +937,7 @@ export class GarnetBrokerRuntime extends Construct {
                 capacity_provider:
                     compute.on_demand.capacityProviderName
             })
-            const load_principal =
-                `arn:${Aws.PARTITION}:sts::${Aws.ACCOUNT_ID}:assumed-role/` +
-                this.load.generator_task.taskRole.roleName
-            sigv4_tenant_grants[load_principal] = [
-                props.bootstrap_tenant
-            ]
-            authorization_bindings.push({
-                principalKind: "sigv4",
-                principalId: load_principal,
-                tenant: props.bootstrap_tenant,
-                policies: [{
-                    identifier:
-                        "arn:garnet:authorization::garnet:" +
-                        "managed-policy/TenantAdministrator",
-                    version: "v1"
-                }]
-            })
         }
-        api.container.addEnvironment(
-            "AUTH_SIGV4_TENANT_GRANTS",
-            JSON.stringify(sigv4_tenant_grants)
-        )
-        api.container.addEnvironment(
-            "AUTHORIZATION_BINDINGS",
-            JSON.stringify(authorization_bindings)
-        )
 
         if (api.scaling === undefined) {
             throw new Error("Garnet API requires task-count scaling")

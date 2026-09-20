@@ -158,9 +158,25 @@ describe("Garnet API blue/green deployment", () => {
       Runtime: "nodejs24.x",
       Environment: {
         Variables: {
-          TEST_ORIGIN: Match.anyValue()
+          TEST_ORIGIN: Match.anyValue(),
+          GARNET_SIGV4_SERVER_ID: Match.anyValue(),
+          GARNET_STS_ENDPOINT: Match.anyValue(),
+          GARNET_TENANT: "default"
         }
-      }
+      },
+      Layers: [Match.anyValue()],
+      Role: Match.anyValue()
+    })
+    template.hasResourceProperties("AWS::IAM::Role", {
+      RoleName:
+        "garnet-framework-api-deployment-validation-role",
+      AssumeRolePolicyDocument: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Principal: { Service: "lambda.amazonaws.com" }
+          })
+        ])
+      })
     })
     template.hasResourceProperties("AWS::EC2::SecurityGroupIngress", {
       Description:

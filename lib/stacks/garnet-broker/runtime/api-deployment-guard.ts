@@ -29,14 +29,19 @@ import {
   Architecture,
   Code,
   Function,
+  LayerVersion,
   Runtime
 } from "aws-cdk-lib/aws-lambda"
+import { IRole } from "aws-cdk-lib/aws-iam"
 import {
   LogGroup,
   RetentionDays
 } from "aws-cdk-lib/aws-logs"
 import { Construct } from "constructs"
 import { garnet_resource_name } from "../../../../constants"
+import {
+  broker_workload_environment
+} from "../../garnet-common/security/broker-workload-role"
 
 export interface GarnetApiDeploymentGuardProps {
   vpc: Vpc
@@ -46,6 +51,8 @@ export interface GarnetApiDeploymentGuardProps {
   test_listener_port: number
   production_target: ApplicationTargetGroup
   test_target: ApplicationTargetGroup
+  validation_role: IRole
+  tenant: string
 }
 
 export class GarnetApiDeploymentGuard extends Construct {
@@ -76,6 +83,10 @@ export class GarnetApiDeploymentGuard extends Construct {
       retention: RetentionDays.ONE_MONTH,
       removalPolicy: RemovalPolicy.DESTROY
     })
+    const validation_layer = new LayerVersion(this, "ValidationLayer", {
+      code: Code.fromAsset(`${__dirname}/../../../layers`),
+      compatibleRuntimes: [Runtime.NODEJS_24_X]
+    })
     const validation = new Function(this, "Validation", {
       functionName:
         garnet_resource_name("api-deployment-validation"),
@@ -90,6 +101,8 @@ export class GarnetApiDeploymentGuard extends Construct {
       timeout: Duration.seconds(30),
       memorySize: 256,
       logGroup: validation_logs,
+      layers: [validation_layer],
+      role: props.validation_role,
       vpc: props.vpc,
       vpcSubnets: {
         subnetType: SubnetType.PRIVATE_WITH_EGRESS
@@ -98,7 +111,8 @@ export class GarnetApiDeploymentGuard extends Construct {
       environment: {
         TEST_ORIGIN:
           `http://${props.load_balancer.loadBalancerDnsName}:` +
-          String(props.test_listener_port)
+          String(props.test_listener_port),
+        ...broker_workload_environment(props.tenant)
       }
     })
     props.service.addLifecycleHook(

@@ -81,14 +81,29 @@ describe("deployment action", () => {
 
   it("diffs and deploys one environment-specific cloud assembly", () => {
     const synth = action.indexOf("run: npx cdk synth --quiet")
+    const authorizationGuard = action.indexOf(
+      "authorization-deployment-guard.js"
+    )
     const diff = action.indexOf(
       "run: npx cdk diff --app cdk.out --method change-set"
     )
     const deploy = action.indexOf("npx cdk deploy --app cdk.out")
 
     expect(synth).toBeGreaterThan(-1)
+    expect(authorizationGuard).toBeGreaterThan(synth)
+    expect(diff).toBeGreaterThan(authorizationGuard)
     expect(diff).toBeGreaterThan(synth)
     expect(deploy).toBeGreaterThan(diff)
+  })
+
+  it("blocks ordinary deployment when authorization changes", () => {
+    expect(action).toContain(
+      "Guard authorization configuration cutover"
+    )
+    expect(action).toContain(
+      "cdk.out/GarnetFramework.template.json"
+    )
+    expect(action).toContain("GarnetFramework")
   })
 
   it("does not hide diff failures", () => {

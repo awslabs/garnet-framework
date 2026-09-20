@@ -81,6 +81,7 @@ describe("Garnet load deployment outputs", () => {
       "GarnetAwsRegion",
       "GarnetAwsAccount",
       "GarnetBrokerImage",
+      "GarnetAuthorizationConfigurationDigest",
       "GarnetBrokerCluster",
       "GarnetDatabaseCluster",
       "GarnetDatabaseTopology",
@@ -92,6 +93,9 @@ describe("Garnet load deployment outputs", () => {
     }
     template.hasOutput("GarnetDatabaseTopology", {
       Value: "writer-reader"
+    })
+    template.hasOutput("GarnetAuthorizationConfigurationDigest", {
+      Value: Match.stringLikeRegexp("^sha256:[0-9a-f]{64}$")
     })
     expect(template.toJSON().Outputs).not.toHaveProperty("GarnetApiToken")
   })

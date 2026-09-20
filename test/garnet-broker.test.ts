@@ -18,6 +18,20 @@ const AUTHORIZATION = {
   authorization_policies: "[]",
   authorization_bindings: "[]"
 }
+const AUTHORIZATION_EXECUTORS = new Set([
+  "/garnet-broker",
+  "/garnet-matcher",
+  "/garnet-notification-scheduler",
+  "/garnet-delivery",
+  "/garnet-subscription-reconciler"
+])
+const AUTHORIZATION_ENVIRONMENT = [
+  "AUTH_MODE",
+  "AUTHORIZATION_MODE",
+  "AUTHORIZATION_POLICIES",
+  "AUTHORIZATION_BINDINGS",
+  "AUTHORIZATION_CONFIGURATION_DIGEST"
+]
 
 const create_vpc = (stack: Stack): Vpc =>
   new Vpc(stack, "Vpc", {
@@ -134,7 +148,7 @@ describe("Garnet Broker AWS runtime", () => {
             .map((entry: any) => [entry.Name, entry.Value])
         )
         expect(environment.AUTH_MODE).toBe(
-          entry_point === "/garnet-broker"
+          AUTHORIZATION_EXECUTORS.has(entry_point)
             ? "oidc+sigv4"
             : "none"
         )
@@ -154,6 +168,51 @@ describe("Garnet Broker AWS runtime", () => {
       "/garnet-snapshot",
       "/garnet-subscription-reconciler"
     ].sort())
+  })
+
+  it("pins one byte-identical authorization bundle to every executor", () => {
+    const template = synth_broker()
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const environments = new Map<string, Record<string, unknown>>()
+
+    for (const resource of Object.values(task_definitions) as any[]) {
+      const container = resource.Properties.ContainerDefinitions[0]
+      const entry_point = container.EntryPoint[0]
+      if (!AUTHORIZATION_EXECUTORS.has(entry_point)) continue
+      environments.set(entry_point, Object.fromEntries(
+        container.Environment.map(
+          (entry: any) => [entry.Name, entry.Value]
+        )
+      ))
+    }
+
+    expect(environments.size).toBe(AUTHORIZATION_EXECUTORS.size)
+    const api = environments.get("/garnet-broker")!
+    const expected = Object.fromEntries(
+      AUTHORIZATION_ENVIRONMENT.map((name) => [name, api[name]])
+    )
+    for (const environment of environments.values()) {
+      expect(Object.fromEntries(
+        AUTHORIZATION_ENVIRONMENT.map(
+          (name) => [name, environment[name]]
+        )
+      )).toEqual(expected)
+    }
+    expect(expected).toMatchObject({
+      AUTH_MODE: "oidc+sigv4",
+      AUTHORIZATION_MODE: "policy",
+      AUTHORIZATION_POLICIES: "[]",
+      AUTHORIZATION_CONFIGURATION_DIGEST:
+        expect.stringMatching(/^sha256:[0-9a-f]{64}$/)
+    })
+    const bindings = JSON.stringify(
+      expected.AUTHORIZATION_BINDINGS
+    )
+    expect(bindings).toContain(
+      "garnet-framework-api-deployment-validation-role"
+    )
+    expect(bindings).toContain("managed-policy/TenantReadOnly")
   })
 
   it("keeps worker floors on demand and uses Spot only for scale-out", () => {
@@ -351,6 +410,9 @@ describe("Garnet Broker AWS runtime", () => {
     }
     expect(authorization_bindings).toContain(
       "managed-policy/TenantEntityEditor"
+    )
+    expect(authorization_bindings).toContain(
+      "garnet-framework-api-deployment-validation-role"
     )
 
     const snapshot = (Object.values(task_definitions) as any[])

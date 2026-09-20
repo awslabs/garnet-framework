@@ -37,6 +37,7 @@ export class GarnetBroker extends NestedStack {
     public readonly load?: GarnetLoad
     public readonly cluster_name: string
     public readonly database_cluster_identifier: string
+    public readonly authorization_configuration_digest: string
 
     constructor(scope: Construct, id: string, props: GarnetBrokerProps) {
         super(scope, id, props)
@@ -99,6 +100,8 @@ export class GarnetBroker extends NestedStack {
         this.cluster_name = runtime.cluster.clusterName
         this.database_cluster_identifier =
             database.cluster.clusterIdentifier
+        this.authorization_configuration_digest =
+            runtime.authorization_configuration_digest
 
         new CfnOutput(this, "BrokerLoadBalancer", {
             value: this.dns_context_broker
