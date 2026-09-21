@@ -68,6 +68,17 @@ describe("Garnet load deployment outputs", () => {
           resource.Properties.MaxCapacity === 64
       )?.Properties.MinCapacity
     ).toBe(2)
+    broker_template.hasResourceProperties(
+      "AWS::EC2::SecurityGroupIngress",
+      {
+        Description:
+          "Load generators to the production API listener",
+        FromPort: 80,
+        IpProtocol: "tcp",
+        ToPort: 80,
+        SourceSecurityGroupId: Match.anyValue()
+      }
+    )
 
     for (const output of [
       "GarnetLoadCluster",

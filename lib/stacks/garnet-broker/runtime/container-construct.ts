@@ -906,6 +906,7 @@ export class GarnetBrokerRuntime extends Construct {
                 database: props.database,
                 database_secret: props.database_secret,
                 broker_origin: this.broker_alb.loadBalancerDnsName,
+                broker_security_group: sg_alb,
                 broker_image: props.image,
                 load_image: props.load_image,
                 tenant: props.bootstrap_tenant,

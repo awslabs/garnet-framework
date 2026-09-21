@@ -5,6 +5,8 @@ import {
     Token
 } from "aws-cdk-lib"
 import {
+    ISecurityGroup,
+    Port,
     SecurityGroup,
     SubnetType,
     Vpc
@@ -49,6 +51,7 @@ export interface GarnetLoadProps {
     database: DatabaseCluster
     database_secret: ISecret
     broker_origin: string
+    broker_security_group: ISecurityGroup
     broker_image: string
     load_image: string
     capacity_provider: string
@@ -100,6 +103,11 @@ export class GarnetLoad extends Construct {
             description: "On-demand Garnet load generators",
             allowAllOutbound: true
         })
+        props.broker_security_group.addIngressRule(
+            this.security_group,
+            Port.tcp(80),
+            "Load generators to the production API listener"
+        )
         props.database.connections.allowDefaultPortFrom(
             this.security_group,
             "Durable load-test reconciliation"
