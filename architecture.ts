@@ -35,6 +35,7 @@ type DeploymentParams = {
     lambda_broker_concurent_sqs: number,
     nat_gateway_count: 1 | 2,
     database_reader_enabled: boolean,
+    aws_iot_core_mqtt_connector_enabled: boolean,
     ecs_instance_type: string,
     worker_spot_scale_out: boolean,
     database_deletion_protection: boolean,
@@ -59,6 +60,8 @@ export const deployment_params: DeploymentParams = {
                 : DBClusterStorageType.AURORA,
         nat_gateway_count: Parameters.nat_gateway_count,
         database_reader_enabled: Parameters.database_reader_enabled,
+        aws_iot_core_mqtt_connector_enabled:
+            Parameters.aws_iot_core_mqtt_connector_enabled,
         ecs_instance_type: Parameters.ecs_instance_type,
         worker_spot_scale_out: Parameters.worker_spot_scale_out,
         database_deletion_protection:

@@ -33,6 +33,9 @@ describe("deployment action", () => {
       /database-reader-enabled:[\s\S]*?default: 'true'/
     )
     expect(action).toMatch(
+      /aws-iot-core-mqtt-connector-enabled:[\s\S]*?default: 'false'/
+    )
+    expect(action).toMatch(
       /aurora-min-acu:[\s\S]*?default: '2'/
     )
     expect(action).toMatch(
@@ -50,6 +53,7 @@ describe("deployment action", () => {
     expect(action).toContain("c9g.2xlarge c8g.2xlarge c7g.2xlarge c6g.2xlarge")
     for (const setting of [
       "GARNET_DATABASE_READER_ENABLED",
+      "GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED",
       "GARNET_AURORA_MIN_ACU",
       "GARNET_AURORA_MAX_ACU",
       "GARNET_AURORA_STORAGE",

@@ -11,11 +11,9 @@ maintenance stack:
 
 The maintenance stack and this stack may coexist in one account and region.
 `test/resource-name-isolation.test.ts` synthesizes the complete stack and
-rejects reuse of known maintenance physical names. AWS IoT event configuration
-is account-wide shared state rather than a named resource; both stacks enable
-the same event classes. This stack uses a stable custom-resource identity and
-does not disable the shared setting on deletion. Future changes to those event
-classes must be coordinated across both stacks.
+rejects reuse of known maintenance physical names. The Garnet core stack has
+no AWS IoT registry, Thing, Thing Group, presence, shadow, lifecycle-event, or
+availability-zone dependency.
 
 ## Prerequisites
 
@@ -55,6 +53,7 @@ CI and CD use `.github/scripts/configure-garnet.js`. The deployment inputs are:
 | `GARNET_CONTEXT_ALLOW_HOSTS` | no | Exact comma-separated JSON-LD hosts |
 | `GARNET_EVENTUAL_ENTITY_READS` | no | Route eligible reads to the Aurora reader |
 | `GARNET_DATABASE_READER_ENABLED` | no | Keep a warm Aurora reader; default `true`, may be `false` for disposable environments |
+| `GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED` | no | Enable the tenant-bound Subscription-to-IoT-Core MQTT connector; default `false` |
 | `GARNET_AURORA_MIN_ACU` | no | Aurora Serverless v2 minimum capacity; default `2` |
 | `GARNET_AURORA_MAX_ACU` | no | Aurora Serverless v2 maximum capacity; default `128` |
 | `GARNET_AURORA_STORAGE` | no | `standard` (default) or `io-optimized`; select from measured I/O cost |
@@ -76,6 +75,49 @@ CI and CD use `.github/scripts/configure-garnet.js`. The deployment inputs are:
 
 The script validates images, origins, hosts, booleans and strategy before
 rewriting `configuration.ts`.
+
+## Built-in connectors
+
+Garnet Framework owns ingestion and third-party integration. Garnet Broker
+owns NGSI-LD semantics and contains no AWS IoT machinery.
+
+The core deployment includes the SQS ingestion connector. The AWS IoT Core
+MQTT connector is optional and disabled by default. Enabling it creates only a
+one-way path from NGSI-LD Subscription notifications to AWS IoT Core MQTT. It
+does not create or synchronize IoT Things, Thing Groups, registry state,
+presence, shadows, lifecycle events, IoT rules, Firehose streams, or archive
+storage.
+
+The connector is bound to `GARNET_BOOTSTRAP_TENANT`. Its private API requires
+both the deployment VPC endpoint and an API-key capability. Retrieve the value
+for the exported `GarnetAwsIotCoreMqttConnectorApiKeyId` with narrowly scoped
+AWS credentials, then provide it through the standard NGSI-LD endpoint
+`receiverInfo`:
+
+```json
+{
+  "notification": {
+    "endpoint": {
+      "uri": "<GarnetAwsIotCoreMqttConnectorEndpoint>",
+      "accept": "application/ld+json",
+      "receiverInfo": [
+        {
+          "key": "x-api-key",
+          "value": "<retrieved API key value>"
+        }
+      ]
+    }
+  }
+}
+```
+
+Notifications are published without representation rewriting to
+`garnet-framework/tenants/<tenant-sha256>/subscriptions/<subscription-sha256>`.
+The connector uses QoS 1, does not retain messages, sets a five-minute message
+expiry, and rejects payloads above the AWS IoT Core 128 KiB limit. QoS 1 is
+at-least-once: subscribers must tolerate duplicates. A publish failure returns
+a sanitized gateway error so Garnet Broker's durable delivery worker can apply
+its configured retry policy.
 
 ## Synthesis and deployment
 
@@ -243,18 +285,19 @@ Garnet Broker owns NGSI-LD tenant semantics. Framework ingress preserves them:
 - Snapshot workers authenticate to the private Broker listener with a
   short-lived, deployment-bound STS proof signed by their ECS task role. No
   symmetric API signing secret or generated bootstrap token is deployed;
-- ingestion and IoT connector Lambdas use the same proof mechanism with
-  deterministic, separate execution roles. Each role receives only the
-  `TenantEntityEditor` policy for the configured bootstrap tenant, and the
-  Lambda rejects a payload naming another tenant before sending it;
+- the SQS ingestion Lambda uses the same proof mechanism with a deterministic
+  execution role. It receives only the `TenantEntityEditor` policy for the
+  configured bootstrap tenant and rejects a payload naming another tenant
+  before sending it;
 - the API blue/green validation Lambda uses the same short-lived SigV4 workload
   proof and receives only `TenantReadOnly` for the bootstrap tenant;
 - a bare SQS entity targets the default tenant;
 - `{ "tenant": "factory-a", "entity": { ... } }` forwards
   `NGSILD-Tenant: factory-a`;
 - records are batched only with the same tenant and content type;
-- private notification IoT topics hash the full tenant and full Subscription
-  identifier, preventing cross-tenant topic collisions.
+- when enabled, the IoT Core MQTT connector requires a private VPC path plus an
+  API-key capability, enforces its configured tenant, and hashes the full
+  tenant and Subscription identifiers in the topic.
 
 The event lake is one Iceberg v2 table, `garnet_framework.entity_events`,
 partitioned by tenant identity and committed day. This avoids one Glue table per

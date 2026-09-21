@@ -218,6 +218,11 @@ const apply_configuration = (source, env) => {
     'GARNET_DATABASE_READER_ENABLED',
     true
   )
+  const aws_iot_core_mqtt_connector_enabled = boolean_setting(
+    env,
+    'GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED',
+    false
+  )
   if (eventual_reads && !database_reader_enabled) {
     throw new Error(
       'GARNET_EVENTUAL_ENTITY_READS requires ' +
@@ -389,6 +394,14 @@ const apply_configuration = (source, env) => {
   )
   out = replace_setting(
     out,
+    /aws_iot_core_mqtt_connector_enabled: (?:true|false)/,
+    `aws_iot_core_mqtt_connector_enabled: ${
+      aws_iot_core_mqtt_connector_enabled
+    }`,
+    'aws_iot_core_mqtt_connector_enabled'
+  )
+  out = replace_setting(
+    out,
     /aurora_min_capacity: \d+/,
     `aurora_min_capacity: ${aurora_min_capacity}`,
     'aurora_min_capacity'
@@ -490,6 +503,7 @@ const apply_configuration = (source, env) => {
     context_hosts,
     eventual_reads,
     database_reader_enabled,
+    aws_iot_core_mqtt_connector_enabled,
     aurora_min_capacity,
     aurora_max_capacity,
     aurora_storage,

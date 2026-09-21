@@ -681,7 +681,8 @@ export class GarnetBrokerRuntime extends Construct {
                 .map((origin) => origin.trim())
                 .filter((origin) => origin !== ""),
             props.private_notification_origin
-        ]
+        ].map((origin) => origin.trim())
+            .filter((origin) => origin !== "")
         const delivery = add(factory.create_service({
             id: "Delivery",
             name: "delivery",

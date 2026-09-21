@@ -38,6 +38,10 @@ inputs:
     description: Keep an Aurora reader as a warm failover target
     required: false
     default: 'true'
+  aws-iot-core-mqtt-connector-enabled:
+    description: Enable the tenant-bound Subscription to IoT Core MQTT connector
+    required: false
+    default: 'false'
   aurora-min-acu:
     description: Aurora Serverless v2 minimum capacity
     required: false
@@ -194,6 +198,7 @@ runs:
         GARNET_CONTEXT_ALLOW_HOSTS: ${{ inputs.context-hosts }}
         GARNET_EVENTUAL_ENTITY_READS: ${{ inputs.eventual-entity-reads }}
         GARNET_DATABASE_READER_ENABLED: ${{ inputs.database-reader-enabled }}
+        GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: ${{ inputs.aws-iot-core-mqtt-connector-enabled }}
         GARNET_AURORA_MIN_ACU: ${{ inputs.aurora-min-acu }}
         GARNET_AURORA_MAX_ACU: ${{ inputs.aurora-max-acu }}
         GARNET_AURORA_STORAGE: ${{ inputs.aurora-storage }}

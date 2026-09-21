@@ -35,6 +35,7 @@ describe("Garnet-only deployment configuration", () => {
         "URI.ETSI.ORG,contexts.example:8443,uri.etsi.org",
       GARNET_EVENTUAL_ENTITY_READS: "true",
       GARNET_DATABASE_READER_ENABLED: "true",
+      GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: "true",
       GARNET_AURORA_MIN_ACU: "4",
       GARNET_AURORA_MAX_ACU: "96",
       GARNET_AURORA_STORAGE: "io-optimized",
@@ -66,6 +67,7 @@ describe("Garnet-only deployment configuration", () => {
       context_hosts: "uri.etsi.org,contexts.example:8443",
       eventual_reads: true,
       database_reader_enabled: true,
+      aws_iot_core_mqtt_connector_enabled: true,
       aurora_min_capacity: 4,
       aurora_max_capacity: 96,
       aurora_storage: "io-optimized",
@@ -95,6 +97,9 @@ describe("Garnet-only deployment configuration", () => {
     )
     expect(result.source).toContain(
       "database_reader_enabled: true"
+    )
+    expect(result.source).toContain(
+      "aws_iot_core_mqtt_connector_enabled: true"
     )
     expect(result.source).toContain("aurora_min_capacity: 4")
     expect(result.source).toContain("aurora_max_capacity: 96")
@@ -156,6 +161,7 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.schema_compatibility).toBe("unchanged")
     expect(result.eventual_reads).toBe(false)
     expect(result.database_reader_enabled).toBe(true)
+    expect(result.aws_iot_core_mqtt_connector_enabled).toBe(false)
     expect(result.aurora_min_capacity).toBe(2)
     expect(result.aurora_max_capacity).toBe(128)
     expect(result.aurora_storage).toBe("standard")
@@ -192,6 +198,9 @@ describe("Garnet-only deployment configuration", () => {
     }
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_EVENTUAL_ENTITY_READS: "sometimes"
+    }))).toThrow(/true or false/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: "sometimes"
     }))).toThrow(/true or false/)
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_EVENTUAL_ENTITY_READS: "true",

@@ -1,11 +1,12 @@
 import { App, Stack } from "aws-cdk-lib"
 import { Match, Template } from "aws-cdk-lib/assertions"
 import { Vpc } from "aws-cdk-lib/aws-ec2"
-import { Bucket } from "aws-cdk-lib/aws-s3"
-import { GarnetPrivateSub } from "../lib/stacks/garnet-privatesub/private-notification-stack"
+import {
+  AwsIotCoreMqttConnector
+} from "../lib/connectors/aws-iot-core-mqtt/aws-iot-core-mqtt-connector"
 
-describe("private notification infrastructure", () => {
-  it("routes and archives notifications by tenant key", () => {
+describe("AWS IoT Core MQTT connector", () => {
+  it("publishes through a private API-key protected endpoint", () => {
     const app = new App()
     const parent = new Stack(app, "Parent", {
       env: {
@@ -14,53 +15,53 @@ describe("private notification infrastructure", () => {
       }
     })
     const vpc = new Vpc(parent, "Vpc", { maxAzs: 2 })
-    const bucket = new Bucket(parent, "Bucket")
-    const notifications = new GarnetPrivateSub(
+    const connector = new AwsIotCoreMqttConnector(
       parent,
-      "Notifications",
+      "Connector",
       {
         vpc,
-        bucket_name: bucket.bucketName
+        tenant: "factory-a"
       }
     )
-    const template = Template.fromStack(notifications)
+    const template = Template.fromStack(connector)
 
-    template.hasResourceProperties("AWS::IoT::TopicRule", {
-      RuleName: "garnet_framework_subscriptions",
-      TopicRulePayload: Match.objectLike({
-        Sql:
-          "SELECT *, topic(3) AS garnetTenant " +
-          "FROM 'garnet-framework/tenants/+/subscriptions/+'"
+    template.resourceCountIs("AWS::IoT::TopicRule", 0)
+    template.resourceCountIs(
+      "AWS::KinesisFirehose::DeliveryStream",
+      0
+    )
+    template.resourceCountIs("AWS::ApiGateway::ApiKey", 1)
+    template.resourceCountIs("AWS::ApiGateway::UsagePlan", 1)
+    template.hasResourceProperties("AWS::ApiGateway::Method", {
+      ApiKeyRequired: true
+    })
+    template.hasResourceProperties("AWS::ApiGateway::RestApi", {
+      EndpointConfiguration: Match.objectLike({
+        Types: ["PRIVATE"]
+      }),
+      Policy: Match.objectLike({
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Effect: "Deny",
+            Condition: Match.objectLike({
+              StringNotEquals: Match.objectLike({
+                "aws:SourceVpce": Match.anyValue()
+              })
+            })
+          })
+        ])
       })
     })
-    template.hasResourceProperties(
-      "AWS::KinesisFirehose::DeliveryStream",
-      {
-        DeliveryStreamName: "garnet-framework-subscriptions",
-        ExtendedS3DestinationConfiguration: Match.objectLike({
-          Prefix:
-            "tenant=!{partitionKeyFromQuery:tenant}/" +
-            "type=!{partitionKeyFromQuery:type}/" +
-            "dt=!{timestamp:yyyy}-!{timestamp:MM}-" +
-            "!{timestamp:dd}-!{timestamp:HH}/",
-          ProcessingConfiguration: Match.objectLike({
-            Processors: Match.arrayWith([
-              Match.objectLike({
-                Parameters: Match.arrayWith([
-                  Match.objectLike({
-                    ParameterName: "MetadataExtractionQuery",
-                    ParameterValue:
-                      "{tenant:.garnetTenant,type:.type}"
-                  })
-                ])
-              })
-            ])
-          })
-        })
-      }
-    )
     expect(JSON.stringify(template.toJSON())).toContain(
       "topic/garnet-framework/tenants/*/subscriptions/*"
+    )
+    expect(JSON.stringify(template.toJSON())).toContain("iot:Publish")
+    expect(JSON.stringify(template.toJSON())).toContain(
+      "GARNET_TENANT"
+    )
+    expect(JSON.stringify(template.toJSON())).toContain("factory-a")
+    expect(JSON.stringify(template.toJSON())).not.toContain(
+      "AwsIotThing"
     )
   })
 })

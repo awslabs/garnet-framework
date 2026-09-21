@@ -119,10 +119,12 @@ jobs:
         include:
           - profile: garnet-rolling
             strategy: rolling
+            connector_enabled: 'false'
             broker_image: public.ecr.aws/garnet/broker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             load_image: public.ecr.aws/garnet/load@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           - profile: garnet-bluegreen
             strategy: bluegreen
+            connector_enabled: 'true'
             broker_image: public.ecr.aws/garnet/broker@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
             load_image: public.ecr.aws/garnet/load@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     steps:
@@ -142,6 +144,7 @@ jobs:
           GARNET_BROKER_PUBLIC_ORIGIN: https://broker.example
           GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: https://callbacks.example
           GARNET_CONTEXT_ALLOW_HOSTS: uri.etsi.org,contexts.example
+          GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: ${{ matrix.connector_enabled }}
           GARNET_DEPLOYMENT_STRATEGY: ${{ matrix.strategy }}
           GARNET_SCHEMA_COMPATIBILITY: unchanged
           GARNET_ECS_INSTANCE_TYPE: c9g.2xlarge

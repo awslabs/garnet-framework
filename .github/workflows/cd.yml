@@ -113,6 +113,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aws-iot-core-mqtt-connector-enabled: ${{ vars.GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED || 'false' }}
           aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
           aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
           aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}
@@ -169,6 +170,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aws-iot-core-mqtt-connector-enabled: ${{ vars.GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED || 'false' }}
           aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
           aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
           aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}
@@ -219,6 +221,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aws-iot-core-mqtt-connector-enabled: ${{ vars.GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED || 'false' }}
           aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
           aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
           aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}
@@ -271,6 +274,7 @@ jobs:
           context-hosts: ${{ vars.GARNET_CONTEXT_ALLOW_HOSTS }}
           eventual-entity-reads: ${{ vars.GARNET_EVENTUAL_ENTITY_READS }}
           database-reader-enabled: ${{ vars.GARNET_DATABASE_READER_ENABLED || 'true' }}
+          aws-iot-core-mqtt-connector-enabled: ${{ vars.GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED || 'false' }}
           aurora-min-acu: ${{ vars.GARNET_AURORA_MIN_ACU || '2' }}
           aurora-max-acu: ${{ vars.GARNET_AURORA_MAX_ACU || '128' }}
           aurora-storage: ${{ vars.GARNET_AURORA_STORAGE || 'standard' }}

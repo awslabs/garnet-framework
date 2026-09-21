@@ -55,7 +55,9 @@ const create_vpc = (stack: Stack): Vpc =>
 
 const synth_broker = (
   eventual_entity_reads = true,
-  image = IMAGE
+  image = IMAGE,
+  private_notification_origin =
+    "https://private.example.execute-api.eu-west-3.amazonaws.com"
 ): Template => {
   const app = new App()
   const stack = new Stack(app, "TestStack", {
@@ -75,8 +77,7 @@ const synth_broker = (
     load_image: LOAD_IMAGE,
     public_origin: "https://broker.example",
     notification_delivery_allow_origins: "https://callbacks.example",
-    private_notification_origin:
-      "https://private.example.execute-api.eu-west-3.amazonaws.com",
+    private_notification_origin,
     context_allow_hosts: "uri.etsi.org",
     ...AUTHORIZATION,
     eventual_entity_reads,
@@ -426,15 +427,15 @@ describe("Garnet Broker AWS runtime", () => {
     const sigv4_grants =
       JSON.stringify(environment.AUTH_SIGV4_TENANT_GRANTS)
     for (const role of [
-      "garnet-framework-ingestion-update-broker-role",
-      "garnet-framework-iot-thing-lifecycle-role",
-      "garnet-framework-iot-presence-role",
-      "garnet-framework-iot-group-membership-role",
-      "garnet-framework-iot-group-lifecycle-role"
+      "garnet-framework-ingestion-update-broker-role"
     ]) {
       expect(authorization_bindings).toContain(role)
       expect(sigv4_grants).toContain(role)
     }
+    expect(authorization_bindings).not.toContain(
+      "garnet-framework-iot-"
+    )
+    expect(sigv4_grants).not.toContain("garnet-framework-iot-")
     expect(authorization_bindings).toContain(
       "managed-policy/TenantEntityEditor"
     )
@@ -673,6 +674,24 @@ describe("Garnet Broker AWS runtime", () => {
     expect(environment).not.toHaveProperty("READ_DBHOST")
     expect(environment).not.toHaveProperty("READ_CONSISTENCY")
     expect(environment).not.toHaveProperty("READ_DB_POOL_MAX")
+  })
+
+  it("does not add an empty connector origin to delivery policy", () => {
+    const template = synth_broker(false, IMAGE, "")
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const delivery = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-delivery"
+      )
+    const environment = Object.fromEntries(
+      delivery.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+
+    expect(environment.NOTIFICATION_DELIVERY_ALLOW_ORIGINS)
+      .toBe("https://callbacks.example")
   })
 
   it("scales direct matchers by independent PostgreSQL partitions", () => {

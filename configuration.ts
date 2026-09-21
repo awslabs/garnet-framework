@@ -34,6 +34,13 @@ export const Parameters = {
     garnet_notification_delivery_allow_origins: "",
 
     /**
+     * Optional built-in connector that publishes NGSI-LD Subscription
+     * notifications to AWS IoT Core MQTT. Disabled by default: the core
+     * architecture creates no AWS IoT resources or registry synchronization.
+     */
+    aws_iot_core_mqtt_connector_enabled: false,
+
+    /**
      * Comma-separated remote JSON-LD context hosts approved for this environment. Empty is the
      * secure deny-all default.
      */
