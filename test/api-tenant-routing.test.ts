@@ -8,6 +8,8 @@ import {
   "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { GarnetApiGateway } from
   "../lib/stacks/garnet-api/apigateway/api-gateway-construct"
+import { GarnetApiCommon } from
+  "../lib/stacks/garnet-api/apicommon/api-common-construct"
 
 describe("tenant-safe API routing", () => {
   it("uses native OIDC while preserving the signed caller request", () => {
@@ -106,5 +108,52 @@ describe("tenant-safe API routing", () => {
       ToPort: 80
     })
     expect(ingress.Properties).not.toHaveProperty("CidrIp")
+  })
+
+  it("grants the version Lambda only the production health listener", () => {
+    const app = new App()
+    const stack = new Stack(app, "ApiVersionHealth", {
+      env: {
+        account: "111111111111",
+        region: "us-east-1"
+      }
+    })
+    const vpc = new Vpc(stack, "Vpc", { maxAzs: 2 })
+    const load_balancer = new ApplicationLoadBalancer(
+      stack,
+      "LoadBalancer",
+      {
+        vpc,
+        internetFacing: false
+      }
+    )
+    load_balancer.addListener("Listener", {
+      port: 80,
+      defaultAction: ListenerAction.fixedResponse(404)
+    })
+
+    new GarnetApiCommon(stack, "Common", {
+      api_ref: "api-id",
+      vpc,
+      broker_alb: load_balancer,
+      dns_context_broker: load_balancer.loadBalancerDnsName
+    })
+    const template = Template.fromStack(stack)
+    const ingress = Object.values(
+      template.findResources("AWS::EC2::SecurityGroupIngress")
+    ).find(
+      (resource: any) =>
+        resource.Properties.Description ===
+          "Version Lambda health check to the production Broker listener"
+    ) as any
+
+    expect(ingress.Properties).toMatchObject({
+      FromPort: 80,
+      IpProtocol: "tcp",
+      SourceSecurityGroupId: expect.anything(),
+      ToPort: 80
+    })
+    expect(ingress.Properties).not.toHaveProperty("CidrIp")
+    expect(ingress.Properties).not.toHaveProperty("CidrIpv6")
   })
 })

@@ -1,6 +1,7 @@
 import { Aws, Duration, RemovalPolicy } from "aws-cdk-lib";
 import { CfnIntegration, CfnRoute } from "aws-cdk-lib/aws-apigatewayv2";
-import { Vpc } from "aws-cdk-lib/aws-ec2";
+import { CfnSecurityGroupIngress, Vpc } from "aws-cdk-lib/aws-ec2";
+import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import {
   Runtime,
   Function,
@@ -20,7 +21,8 @@ import {
 export interface GarnetApiCommonProps {
   readonly api_ref: string;
   readonly vpc: Vpc;
-  dns_context_broker: string;
+  readonly broker_alb: ApplicationLoadBalancer;
+  readonly dns_context_broker: string;
 }
 
 export class GarnetApiCommon extends Construct {
@@ -69,6 +71,24 @@ export class GarnetApiCommon extends Construct {
       },
     });
     lambda_garnet_version.node.addDependency(lambda_garnet_version_log);
+    for (const [index, security_group] of
+      props.broker_alb.connections.securityGroups.entries()) {
+      new CfnSecurityGroupIngress(
+        this,
+        `BrokerHealthIngress${index}`,
+        {
+          description:
+            "Version Lambda health check to the production Broker listener",
+          groupId: security_group.securityGroupId,
+          ipProtocol: "tcp",
+          fromPort: 80,
+          toPort: 80,
+          sourceSecurityGroupId:
+            lambda_garnet_version.connections.securityGroups[0]
+              .securityGroupId
+        }
+      )
+    }
     const garnet_version_integration = new CfnIntegration(
       this,
       "GarnetVersionIntegration",
