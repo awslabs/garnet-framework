@@ -688,17 +688,28 @@ describe("Garnet Broker AWS runtime", () => {
         }
       }
     )
-    const scalable_targets = Object.values(
-      template.findResources(
-        "AWS::ApplicationAutoScaling::ScalableTarget"
-      )
-    ) as any[]
-    expect(
-      scalable_targets.some((resource) =>
+    const scalable_targets = template.findResources(
+      "AWS::ApplicationAutoScaling::ScalableTarget"
+    )
+    const [matcher_target_id] = Object.entries(scalable_targets)
+      .filter(([, resource]: [string, any]) =>
         resource.Properties.MinCapacity === 1 &&
         resource.Properties.MaxCapacity === 16
       )
-    ).toBe(true)
+      .map(([logical_id]) => logical_id)
+    expect(matcher_target_id).toBeDefined()
+    const matcher_policy = Object.values(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalingPolicy"
+      )
+    ).find(
+      (resource: any) =>
+        resource.Properties.TargetTrackingScalingPolicyConfiguration
+          ?.TargetValue === 4
+    ) as any
+    expect(matcher_policy.DependsOn).toEqual(
+      expect.arrayContaining([matcher_target_id])
+    )
   })
 
   it("uses one TLS single-shard Valkey group for replica-safe federation state", () => {

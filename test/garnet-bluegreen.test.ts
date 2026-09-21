@@ -250,6 +250,18 @@ describe("Garnet API blue/green deployment", () => {
           "RunningTaskCount"
       )
     ).toBe(false)
+    const [api_target_id] = Object.entries(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalableTarget"
+      )
+    ).filter(([, resource]: [string, any]) =>
+      resource.Properties.MinCapacity === 2 &&
+      resource.Properties.MaxCapacity === 64
+    ).map(([logical_id]) => logical_id)
+    expect(api_target_id).toBeDefined()
+    expect(bluegreen_policy.DependsOn).toEqual(
+      expect.arrayContaining([api_target_id])
+    )
     const scaling_policies = Object.values(
       template.findResources(
         "AWS::ApplicationAutoScaling::ScalingPolicy"

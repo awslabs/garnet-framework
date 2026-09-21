@@ -24,7 +24,7 @@ export const scale_on_matcher_partitions = (
     props: MatcherScalingProps
 ): void => {
     const target = props.scaling.scalableTargetRef
-    new CfnScalingPolicy(props.scope, props.id, {
+    const policy = new CfnScalingPolicy(props.scope, props.id, {
         policyName: garnet_resource_name(
             "matcher-partition-scaling"
         ),
@@ -83,4 +83,5 @@ export const scale_on_matcher_partitions = (
             }
         }
     })
+    policy.node.addDependency(props.scaling)
 }

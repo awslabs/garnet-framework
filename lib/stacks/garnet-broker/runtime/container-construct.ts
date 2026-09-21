@@ -958,7 +958,7 @@ export class GarnetBrokerRuntime extends Construct {
             })
         } else {
             const target = api.scaling.scalableTargetRef
-            new CfnScalingPolicy(
+            const policy = new CfnScalingPolicy(
                 this,
                 "ApiBlueGreenRequestScaling",
                 {
@@ -998,6 +998,7 @@ export class GarnetBrokerRuntime extends Construct {
                     }
                 }
             )
+            policy.node.addDependency(api.scaling)
         }
 
         const maintenance_log = new LogGroup(this, "MaintenanceLogs", {
