@@ -966,9 +966,7 @@ export class GarnetBrokerRuntime extends Construct {
                         "api-bluegreen-request-scaling"
                     ),
                     policyType: "TargetTrackingScaling",
-                    resourceId: target.resourceId,
-                    scalableDimension: target.scalableDimension,
-                    serviceNamespace: target.serviceNamespace,
+                    scalingTargetId: target.resourceId,
                     targetTrackingScalingPolicyConfiguration: {
                         targetValue:
                             GARNET_API_REQUESTS_PER_TARGET_MINUTE,

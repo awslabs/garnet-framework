@@ -620,6 +620,38 @@ describe("Garnet Broker AWS runtime", () => {
       MinCapacity: 2,
       MaxCapacity: 64
     })
+    const [api_target_id] = Object.entries(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalableTarget"
+      )
+    )
+      .filter(([, resource]: [string, any]) =>
+        resource.Properties.MinCapacity === 2 &&
+        resource.Properties.MaxCapacity === 64
+      )
+      .map(([logical_id]) => logical_id)
+    const api_policy = Object.values(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalingPolicy"
+      )
+    ).find(
+      (resource: any) =>
+        resource.Properties.TargetTrackingScalingPolicyConfiguration
+          ?.TargetValue === 60000
+    ) as any
+    expect(api_policy.Properties).toMatchObject({
+      ScalingTargetId: { Ref: api_target_id }
+    })
+    expect(api_policy.Properties).not.toHaveProperty("ResourceId")
+    expect(api_policy.Properties).not.toHaveProperty(
+      "ScalableDimension"
+    )
+    expect(api_policy.Properties).not.toHaveProperty(
+      "ServiceNamespace"
+    )
+    expect(api_policy.DependsOn).toEqual(
+      expect.arrayContaining([api_target_id])
+    )
   })
 
   it("keeps eventual Entity reads opt-in", () => {
@@ -707,6 +739,16 @@ describe("Garnet Broker AWS runtime", () => {
         resource.Properties.TargetTrackingScalingPolicyConfiguration
           ?.TargetValue === 4
     ) as any
+    expect(matcher_policy.Properties).toMatchObject({
+      ScalingTargetId: { Ref: matcher_target_id }
+    })
+    expect(matcher_policy.Properties).not.toHaveProperty("ResourceId")
+    expect(matcher_policy.Properties).not.toHaveProperty(
+      "ScalableDimension"
+    )
+    expect(matcher_policy.Properties).not.toHaveProperty(
+      "ServiceNamespace"
+    )
     expect(matcher_policy.DependsOn).toEqual(
       expect.arrayContaining([matcher_target_id])
     )

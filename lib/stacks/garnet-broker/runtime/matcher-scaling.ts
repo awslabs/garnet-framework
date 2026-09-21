@@ -29,9 +29,7 @@ export const scale_on_matcher_partitions = (
             "matcher-partition-scaling"
         ),
         policyType: "TargetTrackingScaling",
-        resourceId: target.resourceId,
-        scalableDimension: target.scalableDimension,
-        serviceNamespace: target.serviceNamespace,
+        scalingTargetId: target.resourceId,
         targetTrackingScalingPolicyConfiguration: {
             targetValue:
                 props.target_pending_partitions_per_worker,
