@@ -57,7 +57,8 @@ const synth_broker = (
   eventual_entity_reads = true,
   image = IMAGE,
   private_notification_origin =
-    "https://private.example.execute-api.eu-west-3.amazonaws.com"
+    "https://private.example.execute-api.eu-west-3.amazonaws.com",
+  load_image = LOAD_IMAGE
 ): Template => {
   const app = new App()
   const stack = new Stack(app, "TestStack", {
@@ -74,7 +75,7 @@ const synth_broker = (
     vpc,
     delivery_stream: stream,
     image,
-    load_image: LOAD_IMAGE,
+    load_image,
     public_origin: "https://broker.example",
     notification_delivery_allow_origins: "https://callbacks.example",
     private_notification_origin,
@@ -986,6 +987,32 @@ describe("Garnet Broker AWS runtime", () => {
     expect(rendered).toContain("ecr:GetAuthorizationToken")
     expect(rendered).toContain("ecr:BatchGetImage")
     expect(rendered).toContain("ecr:GetDownloadUrlForLayer")
+  })
+
+  it("grants both load execution roles private ECR pull access", () => {
+    const private_load_image =
+      `111111111111.dkr.ecr.us-east-1.amazonaws.com/garnet-load@sha256:${
+        "d".repeat(64)
+      }`
+    const template = synth_broker(
+      false,
+      IMAGE,
+      "https://private.example.execute-api.eu-west-3.amazonaws.com",
+      private_load_image
+    )
+    const rendered = JSON.stringify(template.toJSON())
+
+    expect(rendered).toContain("garnet-load")
+    expect(rendered).toContain("d".repeat(64))
+    expect(rendered).toContain(
+      "arn:aws:ecr:us-east-1:111111111111:repository/garnet-load"
+    )
+    expect(
+      rendered.match(/ecr:BatchGetImage/g)
+    ).toHaveLength(2)
+    expect(
+      rendered.match(/ecr:GetDownloadUrlForLayer/g)
+    ).toHaveLength(2)
   })
 
   it("rejects a mutable load image without affecting normal deployments", () => {

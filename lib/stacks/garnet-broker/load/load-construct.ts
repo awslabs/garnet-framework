@@ -39,6 +39,9 @@ import {
 import {
     pin_arm64_runtime
 } from "../runtime/arm64-task-definition"
+import {
+    private_ecr_image
+} from "../runtime/private-ecr-image"
 
 export interface GarnetLoadProps {
     vpc: Vpc
@@ -116,7 +119,13 @@ export class GarnetLoad extends Construct {
             retention: RetentionDays.ONE_MONTH,
             removalPolicy: RemovalPolicy.DESTROY
         })
-        const image = ContainerImage.fromRegistry(props.load_image)
+        const image =
+            private_ecr_image(
+                this,
+                "LoadImageRepository",
+                props.load_image
+            ) ??
+            ContainerImage.fromRegistry(props.load_image)
         const generator_role = new Role(this, "GeneratorRole", {
             roleName: GarnetLoad.generator_role_name,
             assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com")

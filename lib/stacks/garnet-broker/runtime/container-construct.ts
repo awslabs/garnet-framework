@@ -1,6 +1,5 @@
 import {
     Annotations,
-    Arn,
     Aws,
     Duration,
     RemovalPolicy,
@@ -44,7 +43,6 @@ import {
     Role,
     ServicePrincipal
 } from "aws-cdk-lib/aws-iam"
-import { Repository } from "aws-cdk-lib/aws-ecr"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import {
@@ -86,6 +84,7 @@ import {
     create_broker_workload_role
 } from "../../garnet-common/security/broker-workload-role"
 import { pin_arm64_runtime } from "./arm64-task-definition"
+import { private_ecr_image } from "./private-ecr-image"
 
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
@@ -113,45 +112,6 @@ export interface GarnetBrokerRuntimeProps {
     temporal_history_retention_days: number
     temporal_history_retention_max_gib: number
     temporal_history_retention_max_partitions: number
-}
-
-const private_ecr_image = (
-    scope: Construct,
-    reference: string
-): ContainerImage | undefined => {
-    const match = /^(\d{12})\.dkr\.ecr\.([a-z0-9-]+)\.(?:amazonaws\.com(?:\.cn)?)\/([^@]+)@sha256:([0-9a-f]{64})$/
-        .exec(reference)
-    if (match === null) return undefined
-
-    const [, account, region, repository_name, digest] = match
-    const partition = region!.startsWith("cn-")
-        ? "aws-cn"
-        : region!.startsWith("us-gov-")
-            ? "aws-us-gov"
-            : region!.startsWith("us-iso-")
-                ? "aws-iso"
-                : region!.startsWith("us-isob-")
-                    ? "aws-iso-b"
-                    : "aws"
-    const repository = Repository.fromRepositoryAttributes(
-        scope,
-        "BrokerImageRepository",
-        {
-            repositoryName: repository_name!,
-            repositoryArn: Arn.format({
-                partition,
-                service: "ecr",
-                region,
-                account,
-                resource: "repository",
-                resourceName: repository_name
-            })
-        }
-    )
-    return ContainerImage.fromEcrRepository(
-        repository,
-        `sha256:${digest}`
-    )
 }
 
 const request_count_per_target_metric = (
@@ -368,7 +328,11 @@ export class GarnetBrokerRuntime extends Construct {
         )
 
         const image =
-            private_ecr_image(this, props.image) ??
+            private_ecr_image(
+                this,
+                "BrokerImageRepository",
+                props.image
+            ) ??
             ContainerImage.fromRegistry(props.image)
         this.sg_broker = new SecurityGroup(this, "SecurityGroup", {
             vpc: props.vpc,
