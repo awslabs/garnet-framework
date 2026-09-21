@@ -47,7 +47,10 @@ import {
 import { Repository } from "aws-cdk-lib/aws-ecr"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
-import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
+import {
+    CfnDBInstance,
+    DatabaseCluster
+} from "aws-cdk-lib/aws-rds"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import {
@@ -86,6 +89,7 @@ import {
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
     database: DatabaseCluster
+    database_writer: CfnDBInstance
     database_secret: ISecret
     federation_state_host: string
     federation_state_port: number
@@ -474,6 +478,7 @@ export class GarnetBrokerRuntime extends Construct {
             schema_compatibility:
                 deployment_params.schema_compatibility
         })
+        migration.resource.node.addDependency(props.database_writer)
 
         const factory = new GarnetTaskFactory(this, "Services", {
             cluster: this.cluster,

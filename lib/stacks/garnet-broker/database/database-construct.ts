@@ -4,6 +4,7 @@ import { SecurityGroup, SubnetType, Vpc } from "aws-cdk-lib/aws-ec2"
 import {
     AuroraPostgresEngineVersion,
     CaCertificate,
+    CfnDBInstance,
     ClusterInstance,
     Credentials,
     DatabaseCluster,
@@ -31,6 +32,7 @@ export interface GarnetBrokerDatabaseProps {
  */
 export class GarnetBrokerDatabase extends Construct {
     public readonly cluster: DatabaseCluster
+    public readonly writer: CfnDBInstance
     public readonly security_group: SecurityGroup
     public readonly secret: ISecret
 
@@ -90,6 +92,7 @@ export class GarnetBrokerDatabase extends Construct {
                 deployment_params.database_deletion_protection,
             removalPolicy: RemovalPolicy.SNAPSHOT
         })
+        this.writer = this.cluster.node.findChild("writer") as CfnDBInstance
         this.secret = this.cluster.secret!
 
         new Alarm(this, "AcuUtilizationAlarm", {

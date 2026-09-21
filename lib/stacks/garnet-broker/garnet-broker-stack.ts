@@ -64,6 +64,7 @@ export class GarnetBroker extends NestedStack {
         const runtime = new GarnetBrokerRuntime(this, "Runtime", {
             vpc: props.vpc,
             database: database.cluster,
+            database_writer: database.writer,
             database_secret: database.secret,
             federation_state_host: federation_state.endpoint,
             federation_state_port: federation_state.port,

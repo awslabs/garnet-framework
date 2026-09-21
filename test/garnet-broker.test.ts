@@ -775,6 +775,14 @@ describe("Garnet Broker AWS runtime", () => {
     ).toMatchObject({
       SchemaCompatibility: "unchanged"
     })
+    const [writer_resource_id] = Object.keys(
+      template.findResources("AWS::RDS::DBInstance")
+    ).filter((logical_id) =>
+      logical_id.toLowerCase().includes("writer")
+    )
+    expect(writer_resource_id).toBeDefined()
+    expect(custom_resources[migration_resource_id!].DependsOn)
+      .toEqual(expect.arrayContaining([writer_resource_id]))
 
     const services = template.findResources("AWS::ECS::Service")
     for (const service of Object.values(services) as any[]) {
