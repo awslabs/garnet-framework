@@ -18,15 +18,28 @@ const {
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const aws_cli = args => {
-  const output = execFileSync('aws', [...args, '--output', 'json'], {
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'inherit']
-  })
-  return JSON.parse(output)
+const aws_cli = (region, exec_file_sync = execFileSync) => {
+  const deployed_region = region?.trim()
+  if (!deployed_region) {
+    throw new Error('GarnetAwsRegion is missing from the deployed stack outputs')
+  }
+  return args => {
+    const output = exec_file_sync(
+      'aws',
+      [...args, '--region', deployed_region, '--output', 'json'],
+      {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'inherit']
+      }
+    )
+    return JSON.parse(output)
+  }
 }
 
-const read_report = (telemetry, aws = aws_cli) => {
+const aws_cli_for_outputs = (outputs, exec_file_sync = execFileSync) =>
+  aws_cli(outputs.GarnetAwsRegion, exec_file_sync)
+
+const read_report = (telemetry, aws) => {
   const directory = fs.mkdtempSync(
     path.join(os.tmpdir(), 'garnet-load-report-')
   )
@@ -66,7 +79,7 @@ const metric_window = report => {
 const collect_telemetry_evidence = async (
   plan,
   {
-    aws = aws_cli,
+    aws,
     sleep_fn = sleep,
     now = Date.now,
     log = console.log,
@@ -197,7 +210,7 @@ const launch_task = (
   plan,
   task_definition,
   overrides,
-  aws = aws_cli
+  aws
 ) => {
   const result = aws([
     'ecs',
@@ -232,7 +245,7 @@ const wait_for_tasks = async (
   plan,
   task_arns,
   {
-    aws = aws_cli,
+    aws,
     sleep_fn = sleep,
     now = Date.now,
     timeout_ms = plan.wait_timeout_ms
@@ -273,7 +286,7 @@ const wait_for_tasks = async (
 const run_plan = async (
   plan,
   {
-    aws = aws_cli,
+    aws,
     sleep_fn = sleep,
     now = Date.now,
     log = console.log,
@@ -366,7 +379,9 @@ const main = async () => {
   if (!outputs) {
     throw new Error(`Stack '${stack_name}' is missing from ${outputs_path}`)
   }
-  await run_plan(plan_load_test(outputs))
+  await run_plan(plan_load_test(outputs), {
+    aws: aws_cli_for_outputs(outputs)
+  })
 }
 
 if (require.main === module) {
@@ -377,6 +392,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+  aws_cli,
+  aws_cli_for_outputs,
   collect_telemetry_evidence,
   launch_task,
   main,

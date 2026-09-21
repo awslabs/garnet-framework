@@ -5,6 +5,7 @@ import * as path from "node:path"
 const { plan_load_test } =
   require("../.github/scripts/load-test-plan.js")
 const {
+  aws_cli_for_outputs,
   collect_telemetry_evidence,
   run_plan
 } =
@@ -43,6 +44,60 @@ const override_environment = (
   )
 
 describe("AWS load-test launcher", () => {
+  it("pins every AWS CLI operation to the deployed stack region", () => {
+    const previous_region = process.env.AWS_REGION
+    const previous_default_region = process.env.AWS_DEFAULT_REGION
+    process.env.AWS_REGION = "us-east-1"
+    process.env.AWS_DEFAULT_REGION = "ap-southeast-2"
+    const exec_file_sync = jest.fn(
+      (_file: string, _args: string[], _options: object) => "{}"
+    )
+
+    try {
+      const aws = aws_cli_for_outputs(OUTPUTS, exec_file_sync)
+
+      aws(["ecs", "run-task", "--cluster", "garnet-cluster"])
+      aws(["s3api", "get-object", "--bucket", "reports", "report.json"])
+
+      expect(exec_file_sync).toHaveBeenCalledTimes(2)
+      for (const call of exec_file_sync.mock.calls) {
+        expect(call[0]).toBe("aws")
+        expect(call[1]).toEqual(expect.arrayContaining([
+          "--region",
+          "eu-west-3",
+          "--output",
+          "json"
+        ]))
+        expect(call[1]).not.toContain("us-east-1")
+        expect(call[1]).not.toContain("ap-southeast-2")
+      }
+    } finally {
+      if (previous_region === undefined) delete process.env.AWS_REGION
+      else process.env.AWS_REGION = previous_region
+      if (previous_default_region === undefined) {
+        delete process.env.AWS_DEFAULT_REGION
+      } else {
+        process.env.AWS_DEFAULT_REGION = previous_default_region
+      }
+    }
+  })
+
+  it("fails before invoking AWS when the deployed region is absent", () => {
+    const exec_file_sync = jest.fn(
+      (_file: string, _args: string[], _options: object) => "{}"
+    )
+    const {
+      GarnetAwsRegion: _region,
+      ...outputs_without_region
+    } = OUTPUTS
+
+    expect(() => aws_cli_for_outputs(
+      outputs_without_region,
+      exec_file_sync
+    )).toThrow("GarnetAwsRegion is missing from the deployed stack outputs")
+    expect(exec_file_sync).not.toHaveBeenCalled()
+  })
+
   it("partitions one shared schedule across unique generator tasks", () => {
     const plan = plan_load_test(
       OUTPUTS,
