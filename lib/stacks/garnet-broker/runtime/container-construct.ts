@@ -7,7 +7,11 @@ import {
 } from "aws-cdk-lib"
 import { CfnScalingPolicy } from
     "aws-cdk-lib/aws-applicationautoscaling"
-import { Alarm, TreatMissingData } from "aws-cdk-lib/aws-cloudwatch"
+import {
+    Alarm,
+    Metric,
+    TreatMissingData
+} from "aws-cdk-lib/aws-cloudwatch"
 import {
     Port,
     SecurityGroup,
@@ -65,6 +69,8 @@ import {
 import { GarnetMigration } from "../migration/migration-construct"
 import { GarnetLoad } from "../load/load-construct"
 import {
+    GARNET_API_ACTIVE_METRIC_PERIOD_SECONDS,
+    GARNET_API_ACTIVE_REQUESTS_PER_WORKER,
     GARNET_API_REQUESTS_PER_TARGET_MINUTE,
     garnet_service_capacity
 } from "./runtime-profile"
@@ -557,7 +563,9 @@ export class GarnetBrokerRuntime extends Construct {
                 APPLICATION_METRICS: "emf",
                 APPLICATION_METRICS_NAMESPACE: "Garnet/Broker",
                 APPLICATION_METRICS_SERVICE: "garnet-api",
-                APPLICATION_METRICS_INTERVAL_MS: "60000",
+                APPLICATION_METRICS_INTERVAL_MS: String(
+                    GARNET_API_ACTIVE_METRIC_PERIOD_SECONDS * 1000
+                ),
                 APPLICATION_METRICS_MAX_SERIES: "256"
             },
             secrets: distributed_secrets,
@@ -920,6 +928,41 @@ export class GarnetBrokerRuntime extends Construct {
         if (api.scaling === undefined) {
             throw new Error("Garnet API requires task-count scaling")
         }
+        api.scaling.scaleOnMetric("ApiAdmissionScaling", {
+            metric: new Metric({
+                namespace: "Garnet/Broker",
+                metricName: "ActiveRequestsMax",
+                dimensionsMap: {
+                    Service: "garnet-api"
+                },
+                period: Duration.seconds(
+                    GARNET_API_ACTIVE_METRIC_PERIOD_SECONDS
+                ),
+                statistic: "Average"
+            }),
+            scalingSteps: [
+                {
+                    upper:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER,
+                    change: 0
+                },
+                {
+                    lower:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER,
+                    upper:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER * 2,
+                    change: 2
+                },
+                {
+                    lower:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER * 2,
+                    change: 4
+                }
+            ],
+            cooldown: Duration.seconds(10),
+            evaluationPeriods: 1
+        })
+        const scaling_target = api.scaling.scalableTargetRef
         if (alternate_target === undefined) {
             api.scaling.scaleOnRequestCount("ApiRequestScaling", {
                 // ALBRequestCountPerTarget is measured over one minute.
@@ -930,7 +973,6 @@ export class GarnetBrokerRuntime extends Construct {
                 scaleOutCooldown: Duration.seconds(30)
             })
         } else {
-            const target = api.scaling.scalableTargetRef
             const policy = new CfnScalingPolicy(
                 this,
                 "ApiBlueGreenRequestScaling",
@@ -939,7 +981,7 @@ export class GarnetBrokerRuntime extends Construct {
                         "api-bluegreen-request-scaling"
                     ),
                     policyType: "TargetTrackingScaling",
-                    scalingTargetId: target.resourceId,
+                    scalingTargetId: scaling_target.resourceId,
                     targetTrackingScalingPolicyConfiguration: {
                         targetValue:
                             GARNET_API_REQUESTS_PER_TARGET_MINUTE,

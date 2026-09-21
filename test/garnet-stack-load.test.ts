@@ -53,7 +53,7 @@ describe("Garnet load deployment outputs", () => {
                 "ALBRequestCountPerTarget",
               ResourceLabel: Match.anyValue()
             },
-            TargetValue: 60000
+            TargetValue: 15000
           })
       }
     )

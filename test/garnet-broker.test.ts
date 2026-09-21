@@ -416,6 +416,8 @@ describe("Garnet Broker AWS runtime", () => {
       DISTRIBUTED_SUBSCRIPTION_RECONCILIATION_MODE: "external",
       SNAPSHOT_WORKERS: "0",
       BROKER_WORKERS: "2",
+      HTTP_MAX_IN_FLIGHT: "512",
+      APPLICATION_METRICS_INTERVAL_MS: "10000",
       DB_POOL_MAX_REQUIRED: "true",
       DBSSL: "require",
       DB_POOL_MAX: "4",
@@ -579,9 +581,40 @@ describe("Garnet Broker AWS runtime", () => {
     )
   })
 
-  it("scales the API on requests per active target per minute", () => {
+  it("scales the API on measured throughput and admission pressure", () => {
     const template = synth_broker()
 
+    template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "StepScaling",
+        StepScalingPolicyConfiguration: {
+          AdjustmentType: "ChangeInCapacity",
+          Cooldown: 10,
+          StepAdjustments: Match.arrayWith([
+            Match.objectLike({
+              ScalingAdjustment: 2
+            }),
+            Match.objectLike({
+              ScalingAdjustment: 4
+            })
+          ])
+        }
+      }
+    )
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      ComparisonOperator: "GreaterThanOrEqualToThreshold",
+      Dimensions: [{
+        Name: "Service",
+        Value: "garnet-api"
+      }],
+      EvaluationPeriods: 1,
+      MetricName: "ActiveRequestsMax",
+      Namespace: "Garnet/Broker",
+      Period: 10,
+      Statistic: "Average",
+      Threshold: 64
+    })
     template.hasResourceProperties(
       "AWS::ApplicationAutoScaling::ScalingPolicy",
       {
@@ -608,7 +641,7 @@ describe("Garnet Broker AWS runtime", () => {
           }),
           ScaleInCooldown: 180,
           ScaleOutCooldown: 30,
-          TargetValue: 60000
+          TargetValue: 15000
         })
       }
     )
@@ -642,7 +675,7 @@ describe("Garnet Broker AWS runtime", () => {
     ).find(
       (resource: any) =>
         resource.Properties.TargetTrackingScalingPolicyConfiguration
-          ?.TargetValue === 60000
+          ?.TargetValue === 15000
     ) as any
     expect(api_policy.Properties).toMatchObject({
       ScalingTargetId: { Ref: api_target_id }

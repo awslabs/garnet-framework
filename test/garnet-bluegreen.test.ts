@@ -219,7 +219,7 @@ describe("Garnet API blue/green deployment", () => {
             },
             ScaleInCooldown: 180,
             ScaleOutCooldown: 30,
-            TargetValue: 60000
+            TargetValue: 15000
           })
       }
     )
@@ -230,7 +230,7 @@ describe("Garnet API blue/green deployment", () => {
     ).find(
       (policy: any) =>
         policy.Properties.TargetTrackingScalingPolicyConfiguration
-          ?.TargetValue === 60000
+          ?.TargetValue === 15000
     ) as any
     const metrics =
       bluegreen_policy.Properties

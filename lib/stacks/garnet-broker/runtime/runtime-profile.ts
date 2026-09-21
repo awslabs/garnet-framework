@@ -7,7 +7,9 @@ export interface GarnetServiceCapacity {
     reader_database_pool?: number
 }
 
-export const GARNET_API_REQUESTS_PER_TARGET_MINUTE = 60_000
+export const GARNET_API_REQUESTS_PER_TARGET_MINUTE = 15_000
+export const GARNET_API_ACTIVE_REQUESTS_PER_WORKER = 64
+export const GARNET_API_ACTIVE_METRIC_PERIOD_SECONDS = 10
 
 interface GarnetServiceProfile extends GarnetServiceCapacity {
     writer_connection_share: number
