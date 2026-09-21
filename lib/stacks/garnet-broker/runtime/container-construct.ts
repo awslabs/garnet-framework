@@ -68,7 +68,7 @@ import { GarnetMigration } from "../migration/migration-construct"
 import { GarnetLoad } from "../load/load-construct"
 import {
     GARNET_API_REQUESTS_PER_TARGET_MINUTE,
-    GARNET_SERVICE_CAPACITY
+    garnet_service_capacity
 } from "./runtime-profile"
 import { scale_on_matcher_partitions } from "./matcher-scaling"
 import { scale_on_worker_utilization } from "./worker-scaling"
@@ -85,6 +85,7 @@ import {
 import {
     create_broker_workload_role
 } from "../../garnet-common/security/broker-workload-role"
+import { pin_arm64_runtime } from "./arm64-task-definition"
 
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
@@ -241,6 +242,9 @@ export class GarnetBrokerRuntime extends Construct {
         }
         const normalized_oidc_issuer =
             oidc_issuer.href.replace(/\/$/, "")
+        const service_capacity = garnet_service_capacity(
+            deployment_params.aurora_max_capacity
+        )
         const bootstrap_principal =
             `${normalized_oidc_issuer}#` +
             encodeURIComponent(props.bootstrap_admin_subject)
@@ -454,6 +458,7 @@ export class GarnetBrokerRuntime extends Construct {
                 memoryMiB: "1024"
             }
         )
+        pin_arm64_runtime(migration_task)
         migration_task.addContainer("MigrationContainer", {
             image,
             entryPoint: ["/garnet-migrate"],
@@ -504,7 +509,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Federation",
             name: "federation",
             entry_point: "/garnet-federation",
-            capacity: GARNET_SERVICE_CAPACITY.federation,
+            capacity: service_capacity.federation,
             environment: {
                 PORT: "8080",
                 FEDERATION_CONTROL_WAKEUP: "listen",
@@ -563,7 +568,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Api",
             name: "api",
             entry_point: "/garnet-broker",
-            capacity: GARNET_SERVICE_CAPACITY.api,
+            capacity: service_capacity.api,
             environment: {
                 ...distributed_environment,
                 ...authorization_executor_environment,
@@ -576,7 +581,7 @@ export class GarnetBrokerRuntime extends Construct {
                                 props.database.clusterReadEndpoint.hostname,
                             READ_CONSISTENCY: "eventual",
                             READ_DB_POOL_MAX: String(
-                                GARNET_SERVICE_CAPACITY.api
+                                service_capacity.api
                                     .reader_database_pool
                             )
                         }
@@ -620,7 +625,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Matcher",
             name: "matcher",
             entry_point: "/garnet-matcher",
-            capacity: GARNET_SERVICE_CAPACITY.matcher,
+            capacity: service_capacity.matcher,
             cpu_autoscaling: false,
             interruption_tolerant: true,
             environment: {
@@ -653,7 +658,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "LakeSink",
             name: "lake-sink",
             entry_point: "/garnet-event-sink",
-            capacity: GARNET_SERVICE_CAPACITY.sink,
+            capacity: service_capacity.sink,
             interruption_tolerant: true,
             environment: {
                 ENTITY_EVENT_SINK_NAME: "garnet-lake",
@@ -681,7 +686,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Delivery",
             name: "delivery",
             entry_point: "/garnet-delivery",
-            capacity: GARNET_SERVICE_CAPACITY.delivery,
+            capacity: service_capacity.delivery,
             interruption_tolerant: true,
             environment: {
                 ...authorization_executor_environment,
@@ -706,7 +711,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Scheduler",
             name: "notification-scheduler",
             entry_point: "/garnet-notification-scheduler",
-            capacity: GARNET_SERVICE_CAPACITY.scheduler,
+            capacity: service_capacity.scheduler,
             interruption_tolerant: true,
             environment: authorization_executor_environment
         }))
@@ -714,7 +719,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Reconciler",
             name: "subscription-reconciler",
             entry_point: "/garnet-subscription-reconciler",
-            capacity: GARNET_SERVICE_CAPACITY.reconciler,
+            capacity: service_capacity.reconciler,
             environment: {
                 ...authorization_executor_environment,
                 ...distributed_environment,
@@ -781,7 +786,8 @@ export class GarnetBrokerRuntime extends Construct {
         const production_listener = this.broker_alb.addListener(
             "ProductionListener",
             {
-            port: 80,
+                port: 80,
+                open: false,
                 defaultAction: ListenerAction.fixedResponse(404, {
                     messageBody: "Not Found"
                 })
@@ -822,6 +828,7 @@ export class GarnetBrokerRuntime extends Construct {
                 {
                     port:
                         deployment_params.deployment_test_listener_port,
+                    open: false,
                     defaultAction: ListenerAction.fixedResponse(404, {
                         messageBody: "Not Found"
                     })
@@ -892,7 +899,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Snapshot",
             name: "snapshot",
             entry_point: "/garnet-snapshot",
-            capacity: GARNET_SERVICE_CAPACITY.snapshot,
+            capacity: service_capacity.snapshot,
             cpu_autoscaling: false,
             interruption_tolerant: true,
             task_role: snapshot_task_role,
@@ -1014,6 +1021,7 @@ export class GarnetBrokerRuntime extends Construct {
                 memoryMiB: "1024"
             }
         )
+        pin_arm64_runtime(maintenance_task)
         maintenance_task.addContainer("MaintenanceContainer", {
             image,
             entryPoint: ["/garnet-maintenance"],

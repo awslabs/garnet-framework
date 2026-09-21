@@ -162,7 +162,10 @@ describe("Garnet Broker AWS runtime", () => {
     const entry_points: string[] = []
     for (const resource of Object.values(task_definitions) as any[]) {
       expect(resource.Properties.RequiresCompatibilities).toEqual(["EC2"])
-      expect(resource.Properties.RuntimePlatform).toBeUndefined()
+      expect(resource.Properties.RuntimePlatform).toEqual({
+        CpuArchitecture: "ARM64",
+        OperatingSystemFamily: "LINUX"
+      })
       const container = resource.Properties.ContainerDefinitions[0]
       const entry_point = container.EntryPoint[0]
       entry_points.push(entry_point)
@@ -413,9 +416,9 @@ describe("Garnet Broker AWS runtime", () => {
       BROKER_WORKERS: "2",
       DB_POOL_MAX_REQUIRED: "true",
       DBSSL: "require",
-      DB_POOL_MAX: "16",
+      DB_POOL_MAX: "4",
       READ_CONSISTENCY: "eventual",
-      READ_DB_POOL_MAX: "8"
+      READ_DB_POOL_MAX: "2"
     })
     expect(environment.READ_DBHOST).toHaveProperty("Fn::GetAtt")
     const authorization_bindings =
@@ -908,6 +911,19 @@ describe("Garnet Broker AWS runtime", () => {
         Protocol: "HTTP"
       }
     )
+
+    const ingress = Object.values(
+      template.findResources("AWS::EC2::SecurityGroupIngress")
+    ) as any[]
+    for (const rule of ingress) {
+      if (
+        rule.Properties.FromPort === 80 ||
+        rule.Properties.FromPort === 8080
+      ) {
+        expect(rule.Properties.CidrIp).not.toBe("0.0.0.0/0")
+        expect(rule.Properties.CidrIpv6).not.toBe("::/0")
+      }
+    }
   })
 
   it("rejects mutable or unpinned images", () => {

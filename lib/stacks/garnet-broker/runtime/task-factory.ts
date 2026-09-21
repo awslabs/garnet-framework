@@ -22,6 +22,7 @@ import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Construct } from "constructs"
 import { garnet_resource_name } from "../../../../constants"
 import { GarnetServiceCapacity } from "./runtime-profile"
+import { pin_arm64_runtime } from "./arm64-task-definition"
 
 export interface GarnetServiceSpec {
     id: string
@@ -87,6 +88,7 @@ export class GarnetTaskFactory extends Construct {
                 taskRole: spec.task_role
             }
         )
+        pin_arm64_runtime(task_definition)
         const environment = {
             ...this.props.common_environment,
             DB_POOL_MAX: String(spec.capacity.database_pool),

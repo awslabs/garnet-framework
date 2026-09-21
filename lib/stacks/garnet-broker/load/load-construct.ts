@@ -36,6 +36,9 @@ import {
     garnet_constant,
     garnet_resource_name
 } from "../../../../constants"
+import {
+    pin_arm64_runtime
+} from "../runtime/arm64-task-definition"
 
 export interface GarnetLoadProps {
     vpc: Vpc
@@ -154,6 +157,7 @@ export class GarnetLoad extends Construct {
                 taskRole: generator_role
             }
         )
+        pin_arm64_runtime(this.generator_task)
         this.generator_task.addContainer("Generator", {
             containerName: GarnetLoad.generator_container,
             image,
@@ -195,6 +199,7 @@ export class GarnetLoad extends Construct {
                 memoryMiB: "2048"
             }
         )
+        pin_arm64_runtime(this.aggregate_task)
         this.aggregate_task.addContainer("Aggregate", {
             containerName: GarnetLoad.aggregate_container,
             image,
