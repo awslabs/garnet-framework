@@ -21,7 +21,7 @@ const GARNET_SERVICE_PROFILE = {
         max_tasks: 64,
         database_pool: 4,
         reader_database_pool: 2,
-        writer_connection_share: 0.55
+        writer_connection_share: 0.47
     },
     federation: {
         cpu: 512,
@@ -69,7 +69,7 @@ const GARNET_SERVICE_PROFILE = {
         min_tasks: 1,
         max_tasks: 8,
         database_pool: 2,
-        writer_connection_share: 0.03
+        writer_connection_share: 0.05
     },
     snapshot: {
         cpu: 1024,
@@ -77,7 +77,7 @@ const GARNET_SERVICE_PROFILE = {
         min_tasks: 1,
         max_tasks: 8,
         database_pool: 4,
-        writer_connection_share: 0.04
+        writer_connection_share: 0.10
     }
 } as const satisfies Record<string, GarnetServiceProfile>
 
