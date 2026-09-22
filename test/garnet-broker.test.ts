@@ -244,6 +244,20 @@ describe("Garnet Broker AWS runtime", () => {
     expect(bindings).toContain("managed-policy/TenantReadOnly")
   })
 
+  it("alarms on nonzero unhealthy blue/green API targets", () => {
+    const template = synth_broker()
+
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      AlarmName:
+        "garnet-framework-api-deployment-unhealthy-targets",
+      ComparisonOperator: "GreaterThanThreshold",
+      EvaluationPeriods: 2,
+      DatapointsToAlarm: 2,
+      Threshold: 0,
+      TreatMissingData: "notBreaching"
+    })
+  })
+
   it("keeps worker floors on demand and uses Spot only for scale-out", () => {
     const template = synth_broker()
     const services = Object.values(

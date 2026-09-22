@@ -177,6 +177,8 @@ export class GarnetApiDeploymentGuard extends Construct {
           label: "Garnet API unhealthy targets"
         }),
         threshold: 0,
+        comparisonOperator:
+          ComparisonOperator.GREATER_THAN_THRESHOLD,
         evaluationPeriods: 2,
         datapointsToAlarm: 2,
         treatMissingData: TreatMissingData.NOT_BREACHING
