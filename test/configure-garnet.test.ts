@@ -34,7 +34,9 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_CONTEXT_ALLOW_HOSTS:
         "URI.ETSI.ORG,contexts.example:8443,uri.etsi.org",
       GARNET_EVENTUAL_ENTITY_READS: "true",
+      GARNET_EVENTUAL_ENTITY_READ_ROUTE: "rds-proxy",
       GARNET_DATABASE_READER_ENABLED: "true",
+      GARNET_DATABASE_READER_COUNT: "4",
       GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: "true",
       GARNET_AURORA_MIN_ACU: "4",
       GARNET_AURORA_MAX_ACU: "96",
@@ -66,7 +68,9 @@ describe("Garnet-only deployment configuration", () => {
         "https://hooks.example,http://private.example:8080",
       context_hosts: "uri.etsi.org,contexts.example:8443",
       eventual_reads: true,
+      eventual_read_route: "rds-proxy",
       database_reader_enabled: true,
+      database_reader_count: 4,
       aws_iot_core_mqtt_connector_enabled: true,
       aurora_min_capacity: 4,
       aurora_max_capacity: 96,
@@ -96,8 +100,12 @@ describe("Garnet-only deployment configuration", () => {
       "garnet_eventual_entity_reads: true"
     )
     expect(result.source).toContain(
+      'garnet_eventual_entity_read_route: "rds-proxy"'
+    )
+    expect(result.source).toContain(
       "database_reader_enabled: true"
     )
+    expect(result.source).toContain("database_reader_count: 4")
     expect(result.source).toContain(
       "aws_iot_core_mqtt_connector_enabled: true"
     )
@@ -160,7 +168,9 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.strategy).toBe("bluegreen")
     expect(result.schema_compatibility).toBe("unchanged")
     expect(result.eventual_reads).toBe(false)
+    expect(result.eventual_read_route).toBe("aurora-reader")
     expect(result.database_reader_enabled).toBe(true)
+    expect(result.database_reader_count).toBe(1)
     expect(result.aws_iot_core_mqtt_connector_enabled).toBe(false)
     expect(result.aurora_min_capacity).toBe(2)
     expect(result.aurora_max_capacity).toBe(128)
@@ -206,6 +216,11 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_EVENTUAL_ENTITY_READS: "true",
       GARNET_DATABASE_READER_ENABLED: "false"
     }))).toThrow(/requires/)
+    for (const value of ["0", "16"]) {
+      expect(() => apply_configuration(source, deploymentEnvironment({
+        GARNET_DATABASE_READER_COUNT: value
+      }))).toThrow(/between 1 and 15/)
+    }
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_AURORA_MIN_ACU: "129",
       GARNET_AURORA_MAX_ACU: "128"

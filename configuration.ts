@@ -4,7 +4,7 @@ export const Parameters = {
      * Immutable Garnet Broker image, for example:
      * public.ecr.aws/example/garnet-broker@sha256:<64 hexadecimal characters>
      */
-    garnet_broker_image: "",
+    garnet_broker_image: "539762775523.dkr.ecr.us-east-1.amazonaws.com/garnet-broker@sha256:1759450e92d111b1e36e743d7db549ce6a73703f56673e05299b83b7adc55d2b",
 
     /**
      * Required release declaration. "unchanged" verifies that the target image
@@ -19,7 +19,7 @@ export const Parameters = {
      * When set, the stack creates idle on-demand ECS task definitions and an
      * S3 evidence bucket; no load tasks run during deployment.
      */
-    garnet_load_image: "",
+    garnet_load_image: "539762775523.dkr.ecr.us-east-1.amazonaws.com/garnet-load@sha256:196a2a086580fbac8234ece20296ccd0e8e95b1c25f3c8abe37c7b876c63a6e0",
 
     /**
      * Public broker origin used for absolute EntityMap and distributed Subscription callback
@@ -50,7 +50,14 @@ export const Parameters = {
      * Route eligible current and temporal Entity reads to Aurora's reader endpoint.
      * This explicitly accepts replica lag; keep false for conformance and read-after-write users.
      */
-    garnet_eventual_entity_reads: false,
+    garnet_eventual_entity_reads: true,
+
+    /**
+     * Provision the read-only proxy with eventual reads, but move API traffic
+     * only after the deployed /garnet-reader-probe validates the exact endpoint.
+     */
+    garnet_eventual_entity_read_route: "rds-proxy" as
+        "aurora-reader" | "rds-proxy",
 
     /**
      * Keep a warm Aurora reader as a failover target. Eventual reads may also use
@@ -59,12 +66,12 @@ export const Parameters = {
      * instance from the baseline cost.
      */
     database_reader_enabled: true,
+    database_reader_count: 1,
 
     /**
-     * Aurora Serverless v2 starts at a modest production floor and can grow
-     * without pre-provisioning peak capacity. Standard storage is cheaper for
-     * low-to-moderate I/O; switch to I/O-Optimized only after measured I/O
-     * charges justify it.
+     * Start at a cost-safe production floor and retain measured burst capacity.
+     * Performance qualification may temporarily pre-warm this range, but the
+     * committed profile must not leave that temporary floor active.
      */
     aurora_min_capacity: 2,
     aurora_max_capacity: 128,
@@ -78,10 +85,10 @@ export const Parameters = {
     ecs_instance_type: "c9g.2xlarge",
 
     /**
-     * Keep every durable worker's minimum on On-Demand EC2 and use a separate
-     * Spot capacity provider only for interruption-safe scale-out.
+     * Keep the final low-cost profile entirely on On-Demand EC2. Re-enable
+     * Spot only when measured worker scale-out justifies a warm provider.
      */
-    worker_spot_scale_out: true,
+    worker_spot_scale_out: false,
 
     /**
      * See regions in which you can deploy Garnet: 
@@ -133,16 +140,16 @@ export const Parameters = {
     deployment_test_listener_port: 8080,
 
     /** Exact external OpenID Connect issuer accepted end-to-end. */
-    garnet_oidc_issuer: "https://identity.example.invalid",
+    garnet_oidc_issuer: "https://cognito-idp.eu-west-1.amazonaws.com/eu-west-1_AqETShPTz",
 
     /** Comma-separated OAuth audience values accepted by API Gateway and Broker. */
-    garnet_oidc_audiences: "garnet-api",
+    garnet_oidc_audiences: "bft0on5hj7tp0benss55ars6n",
 
     /** Claim containing one tenant or a tenant array when the IdP supplies it. */
     garnet_oidc_tenant_claim: "garnet_tenants",
 
     /** Stable `sub` of the initial tenant administrator in the external IdP. */
-    garnet_bootstrap_admin_subject: "bootstrap-admin",
+    garnet_bootstrap_admin_subject: "82b50474-8021-706f-627f-cdc5632dc664",
 
     /**
      * Optional JSON arrays of custom policy documents and additional exact

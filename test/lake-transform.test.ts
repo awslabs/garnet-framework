@@ -1,4 +1,7 @@
+import { brotliCompressSync, constants } from "node:zlib"
+
 const {
+  decodeEntityEvent,
   toIcebergRow,
   transformRecord
 } = require(
@@ -24,6 +27,29 @@ const envelope = {
     changed: ["temperature"],
     occurredAt: "2026-09-08T12:34:56.789Z"
   }
+}
+
+const compactWire = (event: typeof envelope, version = 1) => {
+  const compact = Buffer.from(JSON.stringify([
+    event.eventId,
+    event.tenant,
+    event.entityId,
+    event.committedAt,
+    event.aggregateVersion,
+    event.controlCursor,
+    event.operation,
+    event.payload
+  ]), "utf8")
+  const compressed = brotliCompressSync(compact, {
+    params: {
+      [constants.BROTLI_PARAM_QUALITY]: 5,
+      [constants.BROTLI_PARAM_SIZE_HINT]: compact.length
+    }
+  })
+  return Buffer.concat([
+    Buffer.from([0x47, 0x4c, 0x42, version]),
+    compressed
+  ]).toString("base64")
 }
 
 describe("Garnet Lake Entity-event transform", () => {
@@ -65,6 +91,38 @@ describe("Garnet Lake Entity-event transform", () => {
       tenant: "acme",
       entity_type: "https://example.org/Device"
     })
+  })
+
+  it("decodes compact Brotli v1 records into the stable envelope", () => {
+    expect(decodeEntityEvent(compactWire(envelope))).toEqual(envelope)
+    const record = transformRecord({
+      recordId: "record-compact",
+      data: compactWire(envelope)
+    }, "garnet_framework", "entity_events")
+
+    expect(record.result).toBe("Ok")
+    expect(JSON.parse(
+      Buffer.from(record.data, "base64").toString("utf8")
+    )).toMatchObject({
+      event_id: envelope.eventId,
+      tenant: envelope.tenant
+    })
+  })
+
+  it("rejects unknown or malformed compact wire records", () => {
+    for (const data of [
+      compactWire(envelope, 2),
+      Buffer.from([0x47, 0x4c, 0x42, 0x01, 0xff]).toString("base64")
+    ]) {
+      expect(transformRecord({
+        recordId: "record-compact-bad",
+        data
+      }, "garnet_framework", "entity_events")).toEqual({
+        recordId: "record-compact-bad",
+        result: "ProcessingFailed",
+        data
+      })
+    }
   })
 
   it("fails malformed records instead of silently dropping them", () => {

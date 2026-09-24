@@ -21,8 +21,8 @@ const GARNET_SERVICE_PROFILE = {
         memory_mib: 4096,
         min_tasks: 2,
         max_tasks: 64,
-        database_pool: 4,
-        reader_database_pool: 2,
+        database_pool: 8,
+        reader_database_pool: 12,
         writer_connection_share: 0.47
     },
     federation: {
@@ -42,9 +42,9 @@ const GARNET_SERVICE_PROFILE = {
         writer_connection_share: 0.10
     },
     sink: {
-        cpu: 512,
-        memory_mib: 1024,
-        min_tasks: 1,
+        cpu: 1024,
+        memory_mib: 4096,
+        min_tasks: 4,
         max_tasks: 8,
         database_pool: 2,
         writer_connection_share: 0.05

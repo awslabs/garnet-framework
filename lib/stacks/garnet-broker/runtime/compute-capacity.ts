@@ -15,6 +15,7 @@ import {
 import {
     AmiHardwareType,
     AsgCapacityProvider,
+    CfnCapacityProvider,
     Cluster,
     EcsOptimizedImage
 } from "aws-cdk-lib/aws-ecs"
@@ -38,7 +39,8 @@ const capacity_provider = (
     id: string,
     instance_type: string,
     security_group: SecurityGroup,
-    spot: boolean
+    spot: boolean,
+    managed_scaling: boolean
 ): AsgCapacityProvider => {
     const role = new Role(scope, `${id}InstanceRole`, {
         assumedBy: new ServicePrincipal("ec2.amazonaws.com"),
@@ -89,7 +91,7 @@ const capacity_provider = (
             },
             minCapacity: spot ? 0 : 2,
             maxCapacity: spot ? 64 : 32,
-            newInstancesProtectedFromScaleIn: true,
+            newInstancesProtectedFromScaleIn: !spot,
             capacityRebalance: spot,
             defaultInstanceWarmup: Duration.minutes(3)
         }
@@ -100,12 +102,21 @@ const capacity_provider = (
                 spot ? "broker-graviton-spot" : "broker-graviton"
             ),
         autoScalingGroup: auto_scaling_group,
-        enableManagedScaling: true,
-        enableManagedTerminationProtection: true,
+        enableManagedScaling: managed_scaling,
+        enableManagedTerminationProtection: !spot,
         enableManagedDraining: true,
         targetCapacityPercent: 85,
         instanceWarmupPeriod: 180
     })
+    if (!managed_scaling) {
+        const resource = provider.node.findChild(
+            `${id}Provider`
+        ) as CfnCapacityProvider
+        resource.addPropertyOverride(
+            "AutoScalingGroupProvider.ManagedScaling",
+            { Status: "DISABLED" }
+        )
+    }
     cluster.addAsgCapacityProvider(provider)
     return provider
 }
@@ -114,7 +125,8 @@ export const add_garnet_compute_capacity = (
     scope: Construct,
     cluster: Cluster,
     vpc: Vpc,
-    instance_type: string
+    instance_type: string,
+    spot_scale_out: boolean
 ): GarnetComputeCapacity => {
     const host_security_group = new SecurityGroup(
         scope,
@@ -133,7 +145,8 @@ export const add_garnet_compute_capacity = (
         "OnDemand",
         instance_type,
         host_security_group,
-        false
+        false,
+        true
     )
     const spot = capacity_provider(
         scope,
@@ -142,7 +155,8 @@ export const add_garnet_compute_capacity = (
         "Spot",
         instance_type,
         host_security_group,
-        true
+        true,
+        spot_scale_out
     )
     cluster.addDefaultCapacityProviderStrategy([{
         capacityProvider: on_demand.capacityProviderName,

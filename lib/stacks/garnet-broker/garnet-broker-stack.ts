@@ -26,6 +26,7 @@ export interface GarnetBrokerProps extends NestedStackProps {
     authorization_policies: string
     authorization_bindings: string
     eventual_entity_reads: boolean
+    eventual_entity_read_route: "aurora-reader" | "rds-proxy"
     temporal_history_retention_days: number
     temporal_history_retention_max_gib: number
     temporal_history_retention_max_partitions: number
@@ -50,9 +51,18 @@ export class GarnetBroker extends NestedStack {
                 "Eventual Entity reads require an Aurora reader"
             )
         }
+        if (
+            !props.eventual_entity_reads &&
+            props.eventual_entity_read_route !== "aurora-reader"
+        ) {
+            throw new Error(
+                "RDS Proxy routing requires eventual Entity reads"
+            )
+        }
 
         const database = new GarnetBrokerDatabase(this, "Database", {
-            vpc: props.vpc
+            vpc: props.vpc,
+            eventual_entity_reads: props.eventual_entity_reads
         })
         const federation_state = new GarnetFederationState(
             this,
@@ -64,12 +74,16 @@ export class GarnetBroker extends NestedStack {
         const runtime = new GarnetBrokerRuntime(this, "Runtime", {
             vpc: props.vpc,
             database: database.cluster,
-            database_writer: database.writer,
+            database_instances: database.instances,
             database_secret: database.secret,
+            reader_proxy: database.reader_proxy,
+            reader_proxy_endpoint: database.reader_proxy_endpoint,
             federation_state_host: federation_state.endpoint,
             federation_state_port: federation_state.port,
             federation_state_secret: federation_state.auth_token,
             eventual_entity_reads: props.eventual_entity_reads,
+            eventual_entity_read_route:
+                props.eventual_entity_read_route,
             delivery_stream: props.delivery_stream,
             image: props.image,
             load_image: props.load_image,

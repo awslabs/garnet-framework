@@ -23,6 +23,7 @@ import {
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
 import {
+    PolicyStatement,
     Role,
     ServicePrincipal
 } from "aws-cdk-lib/aws-iam"
@@ -170,7 +171,7 @@ export class GarnetLoad extends Construct {
                 compatibility: Compatibility.EC2,
                 networkMode: NetworkMode.AWS_VPC,
                 cpu: "4096",
-                memoryMiB: "8192",
+                memoryMiB: "12288",
                 taskRole: generator_role
             }
         )
@@ -203,6 +204,14 @@ export class GarnetLoad extends Construct {
         this.report_bucket.grantPut(
             this.generator_task.taskRole,
             "garnet-load/*"
+        )
+        this.generator_task.taskRole.addToPrincipalPolicy(
+            new PolicyStatement({
+                actions: ["s3:GetObject"],
+                resources: [
+                    this.report_bucket.arnForObjects("garnet-load/*")
+                ]
+            })
         )
 
         this.aggregate_task = new TaskDefinition(

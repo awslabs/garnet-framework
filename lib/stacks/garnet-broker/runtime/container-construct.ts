@@ -51,7 +51,9 @@ import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import {
     CfnDBInstance,
-    DatabaseCluster
+    DatabaseCluster,
+    DatabaseProxy,
+    IDatabaseProxyEndpoint
 } from "aws-cdk-lib/aws-rds"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
@@ -95,12 +97,15 @@ import { private_ecr_image } from "./private-ecr-image"
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
     database: DatabaseCluster
-    database_writer: CfnDBInstance
+    database_instances: readonly CfnDBInstance[]
     database_secret: ISecret
+    reader_proxy?: DatabaseProxy
+    reader_proxy_endpoint?: IDatabaseProxyEndpoint
     federation_state_host: string
     federation_state_port: number
     federation_state_secret: Secret
     eventual_entity_reads: boolean
+    eventual_entity_read_route: "aurora-reader" | "rds-proxy"
     delivery_stream: CfnDeliveryStream
     image: string
     load_image: string
@@ -211,6 +216,21 @@ export class GarnetBrokerRuntime extends Construct {
         const service_capacity = garnet_service_capacity(
             deployment_params.aurora_max_capacity
         )
+        if (
+            props.eventual_entity_reads &&
+            (
+                props.reader_proxy === undefined ||
+                props.reader_proxy_endpoint === undefined
+            )
+        ) {
+            throw new Error(
+                "Eventual Entity reads require a read-only RDS Proxy endpoint"
+            )
+        }
+        const eventual_reader_endpoint =
+            props.eventual_entity_read_route === "rds-proxy"
+                ? props.reader_proxy_endpoint?.endpoint
+                : props.database.clusterReadEndpoint.hostname
         const bootstrap_principal =
             `${normalized_oidc_issuer}#` +
             encodeURIComponent(props.bootstrap_admin_subject)
@@ -349,6 +369,11 @@ export class GarnetBrokerRuntime extends Construct {
             this.sg_broker,
             "Direct Garnet Broker PostgreSQL pools"
         )
+        props.reader_proxy?.connections.allowFrom(
+            this.sg_broker,
+            Port.tcp(5432),
+            "Garnet eventual Entity reader pool"
+        )
         this.sg_broker.addIngressRule(
             this.sg_broker,
             Port.tcp(8080),
@@ -367,7 +392,8 @@ export class GarnetBrokerRuntime extends Construct {
             this,
             this.cluster,
             props.vpc,
-            deployment_params.ecs_instance_type
+            deployment_params.ecs_instance_type,
+            deployment_params.worker_spot_scale_out
         )
 
         const federation_token = new Secret(this, "FederationRouterToken", {
@@ -453,7 +479,9 @@ export class GarnetBrokerRuntime extends Construct {
             schema_compatibility:
                 deployment_params.schema_compatibility
         })
-        migration.resource.node.addDependency(props.database_writer)
+        for (const instance of props.database_instances) {
+            migration.resource.node.addDependency(instance)
+        }
 
         const factory = new GarnetTaskFactory(this, "Services", {
             cluster: this.cluster,
@@ -548,11 +576,20 @@ export class GarnetBrokerRuntime extends Construct {
                     props.eventual_entity_reads
                         ? {
                             READ_DBHOST:
-                                props.database.clusterReadEndpoint.hostname,
+                                eventual_reader_endpoint!,
                             READ_CONSISTENCY: "eventual",
                             READ_DB_POOL_MAX: String(
                                 service_capacity.api
                                     .reader_database_pool
+                            ),
+                            ...(
+                                props.eventual_entity_read_route ===
+                                    "rds-proxy"
+                                    ? {
+                                        READ_DB_CONNECTION_PROFILE:
+                                            "rds-proxy"
+                                    }
+                                    : {}
                             )
                         }
                         : {}
@@ -575,6 +612,7 @@ export class GarnetBrokerRuntime extends Construct {
             },
             service_connect_client: true,
             cpu_autoscaling: blue_green,
+            max_healthy_percent: 125,
             deployment_strategy: blue_green
                 ? DeploymentStrategy.BLUE_GREEN
                 : undefined,
@@ -631,12 +669,15 @@ export class GarnetBrokerRuntime extends Construct {
             name: "lake-sink",
             entry_point: "/garnet-event-sink",
             capacity: service_capacity.sink,
+            memory_autoscaling: true,
             interruption_tolerant: true,
             environment: {
                 ENTITY_EVENT_SINK_NAME: "garnet-lake",
                 ENTITY_EVENT_SINK_TRANSPORT: "firehose",
                 ENTITY_EVENT_FIREHOSE_STREAM_NAME:
-                    props.delivery_stream.deliveryStreamName!
+                    props.delivery_stream.deliveryStreamName!,
+                ENTITY_EVENT_SINK_GC_RSS_MIB: "512",
+                ENTITY_EVENT_SINK_GC_MIN_INTERVAL_MS: "5000"
             }
         }))
         sink.service.node.addDependency(matcher.service)

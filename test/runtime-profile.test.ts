@@ -16,12 +16,12 @@ describe("Garnet runtime database capacity", () => {
     expect(worst_case_connections).toBeLessThanOrEqual(
       garnet_writer_connection_budget(4)
     )
-    expect(worst_case_connections).toBe(120)
+    expect(worst_case_connections).toBe(118)
     expect(capacity.api).toMatchObject({
       min_tasks: 2,
-      max_tasks: 15,
-      database_pool: 4,
-      reader_database_pool: 2
+      max_tasks: 7,
+      database_pool: 8,
+      reader_database_pool: 12
     })
   })
 
@@ -54,6 +54,12 @@ describe("Garnet runtime database capacity", () => {
     expect(capacity.api.max_tasks).toBe(64)
     expect(capacity.delivery.max_tasks).toBe(32)
     expect(capacity.matcher.max_tasks).toBe(16)
+    expect(capacity.sink).toMatchObject({
+      cpu: 1024,
+      memory_mib: 4096,
+      min_tasks: 4,
+      max_tasks: 8
+    })
   })
 
   it("rejects non-positive Aurora capacity", () => {
