@@ -128,7 +128,11 @@ describe("Garnet multi-tenant Iceberg lake", () => {
           ProcessingConfiguration: {
             Enabled: true,
             Processors: [Match.objectLike({
-              Type: "Lambda"
+              Type: "Lambda",
+              Parameters: Match.arrayWith([{
+                ParameterName: "BufferSizeInMBs",
+                ParameterValue: "0.5"
+              }])
             })]
           }
         })

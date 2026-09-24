@@ -155,7 +155,7 @@ export class GarnetDataLakeStream extends Construct {
               },
               {
                 parameterName: "BufferSizeInMBs",
-                parameterValue: "3"
+                parameterValue: "0.5"
               },
               {
                 parameterName: "BufferIntervalInSeconds",

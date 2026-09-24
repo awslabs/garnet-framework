@@ -69,9 +69,9 @@ export class GarnetMatcherObservability extends Construct {
             alarmName:
                 garnet_resource_name("matcher-worker-quorum"),
             alarmDescription:
-                "Fewer than two live matchers removes warm-peer recovery",
+                "No live matcher can process committed Entity events",
             metric: matcher_workers,
-            threshold: 2,
+            threshold: 1,
             comparisonOperator:
                 ComparisonOperator.LESS_THAN_THRESHOLD,
             evaluationPeriods: 3,

@@ -51,7 +51,9 @@ import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import {
     CfnDBInstance,
-    DatabaseCluster
+    DatabaseCluster,
+    DatabaseProxy,
+    IDatabaseProxyEndpoint
 } from "aws-cdk-lib/aws-rds"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
@@ -95,12 +97,15 @@ import { private_ecr_image } from "./private-ecr-image"
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
     database: DatabaseCluster
-    database_writer: CfnDBInstance
+    database_instances: readonly CfnDBInstance[]
     database_secret: ISecret
+    reader_proxy?: DatabaseProxy
+    reader_proxy_endpoint?: IDatabaseProxyEndpoint
     federation_state_host: string
     federation_state_port: number
     federation_state_secret: Secret
     eventual_entity_reads: boolean
+    eventual_entity_read_route: "aurora-reader" | "rds-proxy"
     delivery_stream: CfnDeliveryStream
     image: string
     load_image: string
@@ -211,6 +216,59 @@ export class GarnetBrokerRuntime extends Construct {
         const service_capacity = garnet_service_capacity(
             deployment_params.aurora_max_capacity
         )
+        const api_processes = 2
+        const api_http_max_in_flight = 512
+        const mutation_batch_max =
+            deployment_params.entity_mutation_batch_max
+        const mutation_batch_workers =
+            deployment_params.entity_mutation_batch_workers_per_process
+        const mutation_batch_window_ms =
+            deployment_params.entity_mutation_batch_window_ms
+        const mutation_batch_queue_max =
+            deployment_params.entity_mutation_batch_queue_max_per_process
+        const per_process_database_pool =
+            service_capacity.api.database_pool / api_processes
+        const per_process_http_admission =
+            api_http_max_in_flight / api_processes
+        if (
+            !Number.isInteger(mutation_batch_max) ||
+            mutation_batch_max < 2 ||
+            mutation_batch_max > 64 ||
+            !Number.isInteger(mutation_batch_workers) ||
+            mutation_batch_workers < 1 ||
+            mutation_batch_workers > 32 ||
+            !Number.isInteger(mutation_batch_window_ms) ||
+            mutation_batch_window_ms < 0 ||
+            mutation_batch_window_ms > 50 ||
+            !Number.isInteger(mutation_batch_queue_max) ||
+            mutation_batch_queue_max < per_process_http_admission ||
+            mutation_batch_queue_max > 65_536 ||
+            !Number.isInteger(per_process_database_pool) ||
+            mutation_batch_workers > per_process_database_pool ||
+            !Number.isInteger(per_process_http_admission) ||
+            mutation_batch_max * mutation_batch_workers >
+                per_process_http_admission
+        ) {
+            throw new Error(
+                "Garnet Entity mutation batch settings must fit each " +
+                "Broker process database and HTTP admission budget"
+            )
+        }
+        if (
+            props.eventual_entity_reads &&
+            (
+                props.reader_proxy === undefined ||
+                props.reader_proxy_endpoint === undefined
+            )
+        ) {
+            throw new Error(
+                "Eventual Entity reads require a read-only RDS Proxy endpoint"
+            )
+        }
+        const eventual_reader_endpoint =
+            props.eventual_entity_read_route === "rds-proxy"
+                ? props.reader_proxy_endpoint?.endpoint
+                : props.database.clusterReadEndpoint.hostname
         const bootstrap_principal =
             `${normalized_oidc_issuer}#` +
             encodeURIComponent(props.bootstrap_admin_subject)
@@ -349,6 +407,11 @@ export class GarnetBrokerRuntime extends Construct {
             this.sg_broker,
             "Direct Garnet Broker PostgreSQL pools"
         )
+        props.reader_proxy?.connections.allowFrom(
+            this.sg_broker,
+            Port.tcp(5432),
+            "Garnet eventual Entity reader pool"
+        )
         this.sg_broker.addIngressRule(
             this.sg_broker,
             Port.tcp(8080),
@@ -367,7 +430,8 @@ export class GarnetBrokerRuntime extends Construct {
             this,
             this.cluster,
             props.vpc,
-            deployment_params.ecs_instance_type
+            deployment_params.ecs_instance_type,
+            deployment_params.worker_spot_scale_out
         )
 
         const federation_token = new Secret(this, "FederationRouterToken", {
@@ -453,7 +517,9 @@ export class GarnetBrokerRuntime extends Construct {
             schema_compatibility:
                 deployment_params.schema_compatibility
         })
-        migration.resource.node.addDependency(props.database_writer)
+        for (const instance of props.database_instances) {
+            migration.resource.node.addDependency(instance)
+        }
 
         const factory = new GarnetTaskFactory(this, "Services", {
             cluster: this.cluster,
@@ -543,22 +609,43 @@ export class GarnetBrokerRuntime extends Construct {
                 ...distributed_environment,
                 ...authorization_executor_environment,
                 PORT: "8080",
-                BROKER_WORKERS: "2",
+                BROKER_WORKERS: String(api_processes),
                 ...(
                     props.eventual_entity_reads
                         ? {
                             READ_DBHOST:
-                                props.database.clusterReadEndpoint.hostname,
+                                eventual_reader_endpoint!,
                             READ_CONSISTENCY: "eventual",
                             READ_DB_POOL_MAX: String(
                                 service_capacity.api
                                     .reader_database_pool
+                            ),
+                            ...(
+                                props.eventual_entity_read_route ===
+                                    "rds-proxy"
+                                    ? {
+                                        READ_DB_CONNECTION_PROFILE:
+                                            "rds-proxy"
+                                    }
+                                    : {}
                             )
                         }
                         : {}
                 ),
-                HTTP_MAX_IN_FLIGHT: "512",
+                HTTP_MAX_IN_FLIGHT: String(api_http_max_in_flight),
                 HTTP_MAX_REQUEST_BODY_BYTES: "134217728",
+                ENTITY_MUTATION_BATCH_MAX:
+                    String(mutation_batch_max),
+                ENTITY_MUTATION_BATCH_WORKERS:
+                    String(mutation_batch_workers),
+                ENTITY_MUTATION_BATCH_WINDOW_MS:
+                    String(mutation_batch_window_ms),
+                ENTITY_MUTATION_BATCH_QUEUE_MAX:
+                    String(mutation_batch_queue_max),
+                ENTITY_MUTATION_BATCH_DIAGNOSTICS:
+                    deployment_params.entity_mutation_batch_diagnostics
+                        ? "1"
+                        : "0",
                 SNAPSHOT_WORKERS: "0",
                 APPLICATION_METRICS: "emf",
                 APPLICATION_METRICS_NAMESPACE: "Garnet/Broker",
@@ -575,6 +662,7 @@ export class GarnetBrokerRuntime extends Construct {
             },
             service_connect_client: true,
             cpu_autoscaling: blue_green,
+            max_healthy_percent: 125,
             deployment_strategy: blue_green
                 ? DeploymentStrategy.BLUE_GREEN
                 : undefined,
@@ -631,12 +719,15 @@ export class GarnetBrokerRuntime extends Construct {
             name: "lake-sink",
             entry_point: "/garnet-event-sink",
             capacity: service_capacity.sink,
+            memory_autoscaling: true,
             interruption_tolerant: true,
             environment: {
                 ENTITY_EVENT_SINK_NAME: "garnet-lake",
                 ENTITY_EVENT_SINK_TRANSPORT: "firehose",
                 ENTITY_EVENT_FIREHOSE_STREAM_NAME:
-                    props.delivery_stream.deliveryStreamName!
+                    props.delivery_stream.deliveryStreamName!,
+                ENTITY_EVENT_SINK_GC_RSS_MIB: "512",
+                ENTITY_EVENT_SINK_GC_MIN_INTERVAL_MS: "5000"
             }
         }))
         sink.service.node.addDependency(matcher.service)

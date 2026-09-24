@@ -4,6 +4,7 @@ import {
     AppProtocol,
     AvailabilityZoneRebalancing,
     BaseService,
+    BuiltInAttributes,
     Cluster,
     Compatibility,
     ContainerDefinition,
@@ -12,6 +13,7 @@ import {
     Ec2Service,
     LogDrivers,
     NetworkMode,
+    PlacementStrategy,
     PropagatedTagSource,
     ScalableTaskCount,
     Secret as EcsSecret,
@@ -38,9 +40,11 @@ export interface GarnetServiceSpec {
     }
     service_connect_client?: boolean
     cpu_autoscaling?: boolean
+    memory_autoscaling?: boolean
     interruption_tolerant?: boolean
     deployment_strategy?: DeploymentStrategy
     bake_time?: Duration
+    max_healthy_percent?: number
     task_role?: IRole
 }
 
@@ -139,6 +143,12 @@ export class GarnetTaskFactory extends Construct {
             assignPublicIp: false,
             availabilityZoneRebalancing:
                 AvailabilityZoneRebalancing.ENABLED,
+            placementStrategies: [
+                PlacementStrategy.spreadAcross(
+                    BuiltInAttributes.AVAILABILITY_ZONE
+                ),
+                PlacementStrategy.packedByCpu()
+            ],
             capacityProviderStrategies:
                 spec.interruption_tolerant === true &&
                 this.props.worker_spot_scale_out
@@ -173,7 +183,7 @@ export class GarnetTaskFactory extends Construct {
                 }
                 : {}),
             minHealthyPercent: 100,
-            maxHealthyPercent: 200,
+            maxHealthyPercent: spec.max_healthy_percent ?? 200,
             healthCheckGracePeriod:
                 spec.port === undefined ? undefined : Duration.seconds(90),
             enableECSManagedTags: true,
@@ -214,6 +224,13 @@ export class GarnetTaskFactory extends Construct {
             })
             if (spec.cpu_autoscaling !== false) {
                 scaling.scaleOnCpuUtilization(`${spec.id}CpuScaling`, {
+                    targetUtilizationPercent: 60,
+                    scaleInCooldown: Duration.seconds(120),
+                    scaleOutCooldown: Duration.seconds(30)
+                })
+            }
+            if (spec.memory_autoscaling === true) {
+                scaling.scaleOnMemoryUtilization(`${spec.id}MemoryScaling`, {
                     targetUtilizationPercent: 60,
                     scaleInCooldown: Duration.seconds(120),
                     scaleOutCooldown: Duration.seconds(30)

@@ -35,6 +35,7 @@ type DeploymentParams = {
     lambda_broker_concurent_sqs: number,
     nat_gateway_count: 1 | 2,
     database_reader_enabled: boolean,
+    database_reader_count: number,
     aws_iot_core_mqtt_connector_enabled: boolean,
     ecs_instance_type: string,
     worker_spot_scale_out: boolean,
@@ -45,7 +46,12 @@ type DeploymentParams = {
     temporal_history_retention_max_partitions: number,
     aurora_storage_type: DBClusterStorageType,
     aurora_min_capacity: number, 
-    aurora_max_capacity: number
+    aurora_max_capacity: number,
+    entity_mutation_batch_max: number,
+    entity_mutation_batch_workers_per_process: number,
+    entity_mutation_batch_window_ms: number,
+    entity_mutation_batch_queue_max_per_process: number,
+    entity_mutation_batch_diagnostics: boolean
 }
 
 
@@ -54,12 +60,23 @@ export const deployment_params: DeploymentParams = {
         architecture: ARCHITECTURE.Distributed,
         aurora_min_capacity: Parameters.aurora_min_capacity,
         aurora_max_capacity: Parameters.aurora_max_capacity,
+        entity_mutation_batch_max:
+            Parameters.entity_mutation_batch_max,
+        entity_mutation_batch_workers_per_process:
+            Parameters.entity_mutation_batch_workers_per_process,
+        entity_mutation_batch_window_ms:
+            Parameters.entity_mutation_batch_window_ms,
+        entity_mutation_batch_queue_max_per_process:
+            Parameters.entity_mutation_batch_queue_max_per_process,
+        entity_mutation_batch_diagnostics:
+            Parameters.entity_mutation_batch_diagnostics,
         aurora_storage_type:
             Parameters.aurora_storage === "io-optimized"
                 ? DBClusterStorageType.AURORA_IOPT1
                 : DBClusterStorageType.AURORA,
         nat_gateway_count: Parameters.nat_gateway_count,
         database_reader_enabled: Parameters.database_reader_enabled,
+        database_reader_count: Parameters.database_reader_count,
         aws_iot_core_mqtt_connector_enabled:
             Parameters.aws_iot_core_mqtt_connector_enabled,
         ecs_instance_type: Parameters.ecs_instance_type,

@@ -8,6 +8,7 @@ const { URL } = require('node:url')
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'configuration.ts')
 const DIGEST_IMAGE = /^[^@\s]+@sha256:[0-9a-f]{64}$/
 const STRATEGIES = new Set(['rolling', 'bluegreen'])
+const EVENTUAL_READ_ROUTES = new Set(['aurora-reader', 'rds-proxy'])
 const AURORA_STORAGE_TYPES = new Set(['standard', 'io-optimized'])
 const SCHEMA_COMPATIBILITIES = new Set([
   'unchanged',
@@ -213,10 +214,25 @@ const apply_configuration = (source, env) => {
     'GARNET_EVENTUAL_ENTITY_READS',
     false
   )
+  const eventual_read_route =
+    (optional(env, 'GARNET_EVENTUAL_ENTITY_READ_ROUTE') ||
+      'aurora-reader').toLowerCase()
+  if (!EVENTUAL_READ_ROUTES.has(eventual_read_route)) {
+    throw new Error(
+      'GARNET_EVENTUAL_ENTITY_READ_ROUTE must be aurora-reader or rds-proxy'
+    )
+  }
   const database_reader_enabled = boolean_setting(
     env,
     'GARNET_DATABASE_READER_ENABLED',
     true
+  )
+  const database_reader_count = integer_setting(
+    env,
+    'GARNET_DATABASE_READER_COUNT',
+    1,
+    1,
+    15
   )
   const aws_iot_core_mqtt_connector_enabled = boolean_setting(
     env,
@@ -227,6 +243,12 @@ const apply_configuration = (source, env) => {
     throw new Error(
       'GARNET_EVENTUAL_ENTITY_READS requires ' +
         'GARNET_DATABASE_READER_ENABLED=true'
+    )
+  }
+  if (!eventual_reads && eventual_read_route !== 'aurora-reader') {
+    throw new Error(
+      'GARNET_EVENTUAL_ENTITY_READ_ROUTE=rds-proxy requires ' +
+        'GARNET_EVENTUAL_ENTITY_READS=true'
     )
   }
   const aurora_min_capacity = integer_setting(
@@ -388,9 +410,21 @@ const apply_configuration = (source, env) => {
   )
   out = replace_setting(
     out,
+    /garnet_eventual_entity_read_route: "(?:aurora-reader|rds-proxy)"/,
+    `garnet_eventual_entity_read_route: "${eventual_read_route}"`,
+    'garnet_eventual_entity_read_route'
+  )
+  out = replace_setting(
+    out,
     /database_reader_enabled: (?:true|false)/,
     `database_reader_enabled: ${database_reader_enabled}`,
     'database_reader_enabled'
+  )
+  out = replace_setting(
+    out,
+    /database_reader_count: \d+/,
+    `database_reader_count: ${database_reader_count}`,
+    'database_reader_count'
   )
   out = replace_setting(
     out,
@@ -502,7 +536,9 @@ const apply_configuration = (source, env) => {
     notification_origins,
     context_hosts,
     eventual_reads,
+    eventual_read_route,
     database_reader_enabled,
+    database_reader_count,
     aws_iot_core_mqtt_connector_enabled,
     aurora_min_capacity,
     aurora_max_capacity,
@@ -535,7 +571,9 @@ const main = () => {
     `Configured Garnet: strategy=${result.strategy}` +
     ` schema=${result.schema_compatibility}` +
     ` eventual-reads=${result.eventual_reads}` +
+    ` eventual-read-route=${result.eventual_read_route}` +
     ` database-reader=${result.database_reader_enabled}` +
+    ` database-readers=${result.database_reader_count}` +
     ` aurora-acu=${result.aurora_min_capacity}-${
       result.aurora_max_capacity
     }` +

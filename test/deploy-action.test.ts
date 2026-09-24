@@ -33,6 +33,9 @@ describe("deployment action", () => {
       /database-reader-enabled:[\s\S]*?default: 'true'/
     )
     expect(action).toMatch(
+      /database-reader-count:[\s\S]*?default: '1'/
+    )
+    expect(action).toMatch(
       /aws-iot-core-mqtt-connector-enabled:[\s\S]*?default: 'false'/
     )
     expect(action).toMatch(

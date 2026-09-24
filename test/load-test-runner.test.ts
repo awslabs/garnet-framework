@@ -106,6 +106,7 @@ describe("AWS load-test launcher", () => {
         LOAD_GENERATOR_COUNT: "3",
         LOAD_RATE: "5000",
         LOAD_FIXTURE_ENTITIES: "50000",
+        LOAD_RECONCILIATION_REQUEST_TIMEOUT_MS: "60000",
         LOAD_START_DELAY_SECONDS: "600"
       },
       new Date("2026-09-07T12:00:00Z")
@@ -125,6 +126,7 @@ describe("AWS load-test launcher", () => {
       LOAD_FIXTURE_ENTITIES: "50000",
       LOAD_DURATION_SECONDS: "10",
       LOAD_WARMUP_SECONDS: "2",
+      LOAD_RECONCILIATION_REQUEST_TIMEOUT_MS: "60000",
       LOAD_GENERATOR_COUNT: "3",
       LOAD_URL: "http://internal.example",
       LOAD_ENVIRONMENT: "aws-ecs-internal"

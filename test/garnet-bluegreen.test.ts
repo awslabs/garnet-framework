@@ -64,7 +64,8 @@ const synth_bluegreen = (): Template => {
     bootstrap_tenant: "default",
     authorization_policies: "[]",
     authorization_bindings: "[]",
-    eventual_entity_reads: false
+    eventual_entity_reads: false,
+    eventual_entity_read_route: "aurora-reader"
   })
   return Template.fromStack(broker)
 }
@@ -90,7 +91,7 @@ describe("Garnet API blue/green deployment", () => {
       Strategy: "BLUE_GREEN",
       BakeTimeInMinutes: 10,
       MinimumHealthyPercent: 100,
-      MaximumPercent: 200
+      MaximumPercent: 125
     })
     expect(
       bluegreen[0].Properties.DeploymentConfiguration
@@ -103,6 +104,14 @@ describe("Garnet API blue/green deployment", () => {
       bluegreen[0].Properties.DeploymentConfiguration
         .Alarms.AlarmNames
     ).toHaveLength(2)
+    expect(
+      bluegreen[0].Properties.DeploymentConfiguration
+        .MinimumHealthyPercent
+    ).toBe(100)
+    expect(
+      bluegreen[0].Properties.DeploymentConfiguration
+        .MaximumPercent
+    ).toBe(125)
 
     for (const service of Object.values(services) as any[]) {
       const circuitBreaker =

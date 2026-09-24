@@ -73,6 +73,8 @@ export class GarnetFrameworkStack extends Stack {
         Parameters.garnet_authorization_bindings,
       eventual_entity_reads:
         Parameters.garnet_eventual_entity_reads,
+      eventual_entity_read_route:
+        Parameters.garnet_eventual_entity_read_route,
       temporal_history_retention_days:
         Parameters.temporal_history_retention_days,
       temporal_history_retention_max_gib:
