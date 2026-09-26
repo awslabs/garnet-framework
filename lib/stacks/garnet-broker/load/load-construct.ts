@@ -5,6 +5,8 @@ import {
     Token
 } from "aws-cdk-lib"
 import {
+    ISecurityGroup,
+    Port,
     SecurityGroup,
     SubnetType,
     Vpc
@@ -21,6 +23,7 @@ import {
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
 import {
+    PolicyStatement,
     Role,
     ServicePrincipal
 } from "aws-cdk-lib/aws-iam"
@@ -36,6 +39,12 @@ import {
     garnet_constant,
     garnet_resource_name
 } from "../../../../constants"
+import {
+    pin_arm64_runtime
+} from "../runtime/arm64-task-definition"
+import {
+    private_ecr_image
+} from "../runtime/private-ecr-image"
 
 export interface GarnetLoadProps {
     vpc: Vpc
@@ -43,10 +52,14 @@ export interface GarnetLoadProps {
     database: DatabaseCluster
     database_secret: ISecret
     broker_origin: string
+    broker_security_group: ISecurityGroup
     broker_image: string
     load_image: string
     capacity_provider: string
     tenant: string
+    oidc_secret?: ISecret
+    oidc_endpoint: string
+    oidc_client_id: string
     sigv4_server_id: string
     sts_endpoint: string
 }
@@ -94,6 +107,11 @@ export class GarnetLoad extends Construct {
             description: "On-demand Garnet load generators",
             allowAllOutbound: true
         })
+        props.broker_security_group.addIngressRule(
+            this.security_group,
+            Port.tcp(80),
+            "Load generators to the production API listener"
+        )
         props.database.connections.allowDefaultPortFrom(
             this.security_group,
             "Durable load-test reconciliation"
@@ -113,7 +131,13 @@ export class GarnetLoad extends Construct {
             retention: RetentionDays.ONE_MONTH,
             removalPolicy: RemovalPolicy.DESTROY
         })
-        const image = ContainerImage.fromRegistry(props.load_image)
+        const image =
+            private_ecr_image(
+                this,
+                "LoadImageRepository",
+                props.load_image
+            ) ??
+            ContainerImage.fromRegistry(props.load_image)
         const generator_role = new Role(this, "GeneratorRole", {
             roleName: GarnetLoad.generator_role_name,
             assumedBy: new ServicePrincipal("ecs-tasks.amazonaws.com")
@@ -141,6 +165,30 @@ export class GarnetLoad extends Construct {
             LOAD_REPORT_S3_BUCKET: this.report_bucket.bucketName,
             LOAD_REPORT_S3_PREFIX: "garnet-load"
         }
+        const auth_environment: Record<string, string> = {}
+        const auth_secrets: Record<string, EcsSecret> = {}
+        if (props.oidc_secret === undefined) {
+            auth_environment.LOAD_BROKER_AUTH_MODE = "sigv4"
+            auth_environment.LOAD_BROKER_SIGV4_SERVER_ID =
+                props.sigv4_server_id
+            auth_environment.LOAD_STS_ENDPOINT = props.sts_endpoint
+        } else {
+            auth_environment.LOAD_BROKER_AUTH_MODE = "cognito-oidc"
+            auth_environment.LOAD_BROKER_OIDC_ENDPOINT =
+                props.oidc_endpoint
+            auth_environment.LOAD_BROKER_OIDC_CLIENT_ID =
+                props.oidc_client_id
+            auth_secrets.LOAD_BROKER_OIDC_USERNAME =
+                EcsSecret.fromSecretsManager(
+                    props.oidc_secret,
+                    "username"
+                )
+            auth_secrets.LOAD_BROKER_OIDC_PASSWORD =
+                EcsSecret.fromSecretsManager(
+                    props.oidc_secret,
+                    "password"
+                )
+        }
 
         this.generator_task = new TaskDefinition(
             this,
@@ -150,10 +198,11 @@ export class GarnetLoad extends Construct {
                 compatibility: Compatibility.EC2,
                 networkMode: NetworkMode.AWS_VPC,
                 cpu: "4096",
-                memoryMiB: "8192",
+                memoryMiB: "12288",
                 taskRole: generator_role
             }
         )
+        pin_arm64_runtime(this.generator_task)
         this.generator_task.addContainer("Generator", {
             containerName: GarnetLoad.generator_container,
             image,
@@ -161,18 +210,16 @@ export class GarnetLoad extends Construct {
             environment: {
                 ...database_environment,
                 ...report_environment,
+                ...auth_environment,
                 LOAD_URL: this.broker_url,
                 LOAD_TENANT: props.tenant,
-                LOAD_BROKER_AUTH_MODE: "sigv4",
-                LOAD_BROKER_SIGV4_SERVER_ID:
-                    props.sigv4_server_id,
-                LOAD_STS_ENDPOINT: props.sts_endpoint,
                 LOAD_ENVIRONMENT: "aws-ecs-internal",
                 LOAD_GENERATOR_VCPUS: "4",
                 GARNET_IMAGE: props.broker_image
             },
             secrets: {
-                ...database_secrets
+                ...database_secrets,
+                ...auth_secrets
             },
             logging: LogDrivers.awsLogs({
                 streamPrefix: "garnet/load-generator",
@@ -182,6 +229,14 @@ export class GarnetLoad extends Construct {
         this.report_bucket.grantPut(
             this.generator_task.taskRole,
             "garnet-load/*"
+        )
+        this.generator_task.taskRole.addToPrincipalPolicy(
+            new PolicyStatement({
+                actions: ["s3:GetObject"],
+                resources: [
+                    this.report_bucket.arnForObjects("garnet-load/*")
+                ]
+            })
         )
 
         this.aggregate_task = new TaskDefinition(
@@ -195,6 +250,7 @@ export class GarnetLoad extends Construct {
                 memoryMiB: "2048"
             }
         )
+        pin_arm64_runtime(this.aggregate_task)
         this.aggregate_task.addContainer("Aggregate", {
             containerName: GarnetLoad.aggregate_container,
             image,

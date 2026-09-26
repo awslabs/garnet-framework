@@ -48,7 +48,7 @@ export class Utils extends Construct {
     const resolver = new Function(this, "AvailabilityZoneResolver", {
       functionName: garnet_nomenclature.garnet_utils_az_lambda,
       description:
-        "Select availability zones supported by API Gateway and IoT endpoints",
+        "Select availability zones supported by Garnet networking",
       runtime: Runtime.NODEJS_24_X,
       architecture: Architecture.ARM_64,
       code: Code.fromAsset(`${__dirname}/lambda/getAzs`),
@@ -60,10 +60,7 @@ export class Utils extends Construct {
       }
     })
     resolver.addToRolePolicy(new PolicyStatement({
-      actions: [
-        "ec2:DescribeAvailabilityZones",
-        "ec2:DescribeVpcEndpointServices"
-      ],
+      actions: ["ec2:DescribeAvailabilityZones"],
       resources: ["*"]
     }))
 

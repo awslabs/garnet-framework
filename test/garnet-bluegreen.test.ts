@@ -64,7 +64,8 @@ const synth_bluegreen = (): Template => {
     bootstrap_tenant: "default",
     authorization_policies: "[]",
     authorization_bindings: "[]",
-    eventual_entity_reads: false
+    eventual_entity_reads: false,
+    eventual_entity_read_route: "aurora-reader"
   })
   return Template.fromStack(broker)
 }
@@ -90,7 +91,7 @@ describe("Garnet API blue/green deployment", () => {
       Strategy: "BLUE_GREEN",
       BakeTimeInMinutes: 10,
       MinimumHealthyPercent: 100,
-      MaximumPercent: 200
+      MaximumPercent: 125
     })
     expect(
       bluegreen[0].Properties.DeploymentConfiguration
@@ -103,6 +104,14 @@ describe("Garnet API blue/green deployment", () => {
       bluegreen[0].Properties.DeploymentConfiguration
         .Alarms.AlarmNames
     ).toHaveLength(2)
+    expect(
+      bluegreen[0].Properties.DeploymentConfiguration
+        .MinimumHealthyPercent
+    ).toBe(100)
+    expect(
+      bluegreen[0].Properties.DeploymentConfiguration
+        .MaximumPercent
+    ).toBe(125)
 
     for (const service of Object.values(services) as any[]) {
       const circuitBreaker =
@@ -219,7 +228,7 @@ describe("Garnet API blue/green deployment", () => {
             },
             ScaleInCooldown: 180,
             ScaleOutCooldown: 30,
-            TargetValue: 60000
+            TargetValue: 15000
           })
       }
     )
@@ -230,7 +239,7 @@ describe("Garnet API blue/green deployment", () => {
     ).find(
       (policy: any) =>
         policy.Properties.TargetTrackingScalingPolicyConfiguration
-          ?.TargetValue === 60000
+          ?.TargetValue === 15000
     ) as any
     const metrics =
       bluegreen_policy.Properties
@@ -250,6 +259,18 @@ describe("Garnet API blue/green deployment", () => {
           "RunningTaskCount"
       )
     ).toBe(false)
+    const [api_target_id] = Object.entries(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalableTarget"
+      )
+    ).filter(([, resource]: [string, any]) =>
+      resource.Properties.MinCapacity === 2 &&
+      resource.Properties.MaxCapacity === 64
+    ).map(([logical_id]) => logical_id)
+    expect(api_target_id).toBeDefined()
+    expect(bluegreen_policy.DependsOn).toEqual(
+      expect.arrayContaining([api_target_id])
+    )
     const scaling_policies = Object.values(
       template.findResources(
         "AWS::ApplicationAutoScaling::ScalingPolicy"

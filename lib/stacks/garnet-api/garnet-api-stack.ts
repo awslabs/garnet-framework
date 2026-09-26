@@ -37,6 +37,7 @@ export class GarnetApi extends NestedStack {
       const api_common_construct = new GarnetApiCommon(this, 'GarnetApiCommon', {
             api_ref: api_gateway_construct.api_ref, 
             vpc: props.vpc,
+            broker_alb: props.broker_alb,
             dns_context_broker: props.dns_context_broker
       })
 

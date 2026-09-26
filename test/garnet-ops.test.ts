@@ -56,7 +56,7 @@ describe("Garnet operations observability", () => {
       ComparisonOperator: "LessThanThreshold",
       MetricName: "EntityEventMatcherWorkers",
       Namespace: "Garnet/Broker",
-      Threshold: 2,
+      Threshold: 1,
       TreatMissingData: "breaching"
     })
     for (const metricName of [

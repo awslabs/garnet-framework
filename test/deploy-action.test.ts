@@ -33,6 +33,12 @@ describe("deployment action", () => {
       /database-reader-enabled:[\s\S]*?default: 'true'/
     )
     expect(action).toMatch(
+      /database-reader-count:[\s\S]*?default: '1'/
+    )
+    expect(action).toMatch(
+      /aws-iot-core-mqtt-connector-enabled:[\s\S]*?default: 'false'/
+    )
+    expect(action).toMatch(
       /aurora-min-acu:[\s\S]*?default: '2'/
     )
     expect(action).toMatch(
@@ -50,6 +56,7 @@ describe("deployment action", () => {
     expect(action).toContain("c9g.2xlarge c8g.2xlarge c7g.2xlarge c6g.2xlarge")
     for (const setting of [
       "GARNET_DATABASE_READER_ENABLED",
+      "GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED",
       "GARNET_AURORA_MIN_ACU",
       "GARNET_AURORA_MAX_ACU",
       "GARNET_AURORA_STORAGE",
@@ -104,6 +111,28 @@ describe("deployment action", () => {
       "cdk.out/GarnetFramework.template.json"
     )
     expect(action).toContain("GarnetFramework")
+  })
+
+  it("passes the optional authenticated load identity as one triple", () => {
+    for (const input of [
+      "load-oidc-secret-arn",
+      "load-oidc-subject",
+      "load-oidc-client-id"
+    ]) {
+      expect(action).toMatch(
+        new RegExp(`${input}:[\\s\\S]*?default: ''`)
+      )
+    }
+    expect(action).toContain(
+      "GARNET_LOAD_OIDC_SECRET_ARN: " +
+      "${{ inputs.load-oidc-secret-arn }}"
+    )
+    expect(action).toContain(
+      "GARNET_LOAD_OIDC_SUBJECT: ${{ inputs.load-oidc-subject }}"
+    )
+    expect(action).toContain(
+      "GARNET_LOAD_OIDC_CLIENT_ID: ${{ inputs.load-oidc-client-id }}"
+    )
   })
 
   it("does not hide diff failures", () => {

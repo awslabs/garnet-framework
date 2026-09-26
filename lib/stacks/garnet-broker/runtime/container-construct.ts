@@ -1,6 +1,5 @@
 import {
     Annotations,
-    Arn,
     Aws,
     Duration,
     RemovalPolicy,
@@ -8,7 +7,11 @@ import {
 } from "aws-cdk-lib"
 import { CfnScalingPolicy } from
     "aws-cdk-lib/aws-applicationautoscaling"
-import { Alarm, TreatMissingData } from "aws-cdk-lib/aws-cloudwatch"
+import {
+    Alarm,
+    Metric,
+    TreatMissingData
+} from "aws-cdk-lib/aws-cloudwatch"
 import {
     Port,
     SecurityGroup,
@@ -44,10 +47,14 @@ import {
     Role,
     ServicePrincipal
 } from "aws-cdk-lib/aws-iam"
-import { Repository } from "aws-cdk-lib/aws-ecr"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
 import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
-import { DatabaseCluster } from "aws-cdk-lib/aws-rds"
+import {
+    CfnDBInstance,
+    DatabaseCluster,
+    DatabaseProxy,
+    IDatabaseProxyEndpoint
+} from "aws-cdk-lib/aws-rds"
 import { ISecret, Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import {
@@ -64,8 +71,10 @@ import {
 import { GarnetMigration } from "../migration/migration-construct"
 import { GarnetLoad } from "../load/load-construct"
 import {
+    GARNET_API_ACTIVE_METRIC_PERIOD_SECONDS,
+    GARNET_API_ACTIVE_REQUESTS_PER_WORKER,
     GARNET_API_REQUESTS_PER_TARGET_MINUTE,
-    GARNET_SERVICE_CAPACITY
+    garnet_service_capacity
 } from "./runtime-profile"
 import { scale_on_matcher_partitions } from "./matcher-scaling"
 import { scale_on_worker_utilization } from "./worker-scaling"
@@ -82,15 +91,21 @@ import {
 import {
     create_broker_workload_role
 } from "../../garnet-common/security/broker-workload-role"
+import { pin_arm64_runtime } from "./arm64-task-definition"
+import { private_ecr_image } from "./private-ecr-image"
 
 export interface GarnetBrokerRuntimeProps {
     vpc: Vpc
     database: DatabaseCluster
+    database_instances: readonly CfnDBInstance[]
     database_secret: ISecret
+    reader_proxy?: DatabaseProxy
+    reader_proxy_endpoint?: IDatabaseProxyEndpoint
     federation_state_host: string
     federation_state_port: number
     federation_state_secret: Secret
     eventual_entity_reads: boolean
+    eventual_entity_read_route: "aurora-reader" | "rds-proxy"
     delivery_stream: CfnDeliveryStream
     image: string
     load_image: string
@@ -102,51 +117,16 @@ export interface GarnetBrokerRuntimeProps {
     oidc_audiences: string
     oidc_tenant_claim: string
     bootstrap_admin_subject: string
+    load_oidc_secret?: ISecret
+    load_oidc_subject: string
+    load_oidc_client_id: string
+    authorization_cutover_stopped: boolean
     bootstrap_tenant: string
     authorization_policies: string
     authorization_bindings: string
     temporal_history_retention_days: number
     temporal_history_retention_max_gib: number
     temporal_history_retention_max_partitions: number
-}
-
-const private_ecr_image = (
-    scope: Construct,
-    reference: string
-): ContainerImage | undefined => {
-    const match = /^(\d{12})\.dkr\.ecr\.([a-z0-9-]+)\.(?:amazonaws\.com(?:\.cn)?)\/([^@]+)@sha256:([0-9a-f]{64})$/
-        .exec(reference)
-    if (match === null) return undefined
-
-    const [, account, region, repository_name, digest] = match
-    const partition = region!.startsWith("cn-")
-        ? "aws-cn"
-        : region!.startsWith("us-gov-")
-            ? "aws-us-gov"
-            : region!.startsWith("us-iso-")
-                ? "aws-iso"
-                : region!.startsWith("us-isob-")
-                    ? "aws-iso-b"
-                    : "aws"
-    const repository = Repository.fromRepositoryAttributes(
-        scope,
-        "BrokerImageRepository",
-        {
-            repositoryName: repository_name!,
-            repositoryArn: Arn.format({
-                partition,
-                service: "ecr",
-                region,
-                account,
-                resource: "repository",
-                resourceName: repository_name
-            })
-        }
-    )
-    return ContainerImage.fromEcrRepository(
-        repository,
-        `sha256:${digest}`
-    )
 }
 
 const request_count_per_target_metric = (
@@ -237,6 +217,74 @@ export class GarnetBrokerRuntime extends Construct {
         }
         const normalized_oidc_issuer =
             oidc_issuer.href.replace(/\/$/, "")
+        const load_oidc_subject = props.load_oidc_subject.trim()
+        if (
+            (props.load_oidc_secret === undefined) !==
+                (load_oidc_subject === "") ||
+            (props.load_oidc_secret === undefined) !==
+                (props.load_oidc_client_id.trim() === "")
+        ) {
+            throw new Error(
+                "Garnet load OIDC secret, subject, and client must be " +
+                "configured together"
+            )
+        }
+        const service_capacity = garnet_service_capacity(
+            deployment_params.aurora_max_capacity
+        )
+        const api_processes = 2
+        const api_http_max_in_flight = 512
+        const mutation_batch_max =
+            deployment_params.entity_mutation_batch_max
+        const mutation_batch_workers =
+            deployment_params.entity_mutation_batch_workers_per_process
+        const mutation_batch_window_ms =
+            deployment_params.entity_mutation_batch_window_ms
+        const mutation_batch_queue_max =
+            deployment_params.entity_mutation_batch_queue_max_per_process
+        const per_process_database_pool =
+            service_capacity.api.database_pool / api_processes
+        const per_process_http_admission =
+            api_http_max_in_flight / api_processes
+        if (
+            !Number.isInteger(mutation_batch_max) ||
+            mutation_batch_max < 2 ||
+            mutation_batch_max > 64 ||
+            !Number.isInteger(mutation_batch_workers) ||
+            mutation_batch_workers < 1 ||
+            mutation_batch_workers > 32 ||
+            !Number.isInteger(mutation_batch_window_ms) ||
+            mutation_batch_window_ms < 0 ||
+            mutation_batch_window_ms > 50 ||
+            !Number.isInteger(mutation_batch_queue_max) ||
+            mutation_batch_queue_max < per_process_http_admission ||
+            mutation_batch_queue_max > 65_536 ||
+            !Number.isInteger(per_process_database_pool) ||
+            mutation_batch_workers > per_process_database_pool ||
+            !Number.isInteger(per_process_http_admission) ||
+            mutation_batch_max * mutation_batch_workers >
+                per_process_http_admission
+        ) {
+            throw new Error(
+                "Garnet Entity mutation batch settings must fit each " +
+                "Broker process database and HTTP admission budget"
+            )
+        }
+        if (
+            props.eventual_entity_reads &&
+            (
+                props.reader_proxy === undefined ||
+                props.reader_proxy_endpoint === undefined
+            )
+        ) {
+            throw new Error(
+                "Eventual Entity reads require a read-only RDS Proxy endpoint"
+            )
+        }
+        const eventual_reader_endpoint =
+            props.eventual_entity_read_route === "rds-proxy"
+                ? props.reader_proxy_endpoint?.endpoint
+                : props.database.clusterReadEndpoint.hostname
         const bootstrap_principal =
             `${normalized_oidc_issuer}#` +
             encodeURIComponent(props.bootstrap_admin_subject)
@@ -272,6 +320,19 @@ export class GarnetBrokerRuntime extends Construct {
             tenant: props.bootstrap_tenant,
             policies: [managed_policy("TenantAdministrator")]
         }
+        const load_oidc_binding = load_oidc_subject === ""
+            ? undefined
+            : {
+                principalKind: "oidc",
+                principalId:
+                    `${normalized_oidc_issuer}#` +
+                    encodeURIComponent(load_oidc_subject),
+                tenant: props.bootstrap_tenant,
+                policies: [
+                    managed_policy("TenantReadOnly"),
+                    managed_policy("TenantEntityEditor")
+                ]
+            }
         const generated_bindings = workload_bindings.map((binding) => ({
             principalKind: "sigv4",
             principalId: assumed_role_principal(binding.role_name),
@@ -288,14 +349,32 @@ export class GarnetBrokerRuntime extends Construct {
             }))
         const authorization_bindings = [
             bootstrap_binding,
+            ...(load_oidc_binding === undefined
+                ? []
+                : [load_oidc_binding]),
             ...generated_bindings,
             ...configured_bindings
         ]
         const canonical_authorization_bindings = [
             bootstrap_binding,
+            ...(load_oidc_binding === undefined
+                ? []
+                : [load_oidc_binding]),
             ...canonical_generated_bindings,
             ...configured_bindings
         ]
+        const oidc_tenant_grants = {
+            [props.bootstrap_admin_subject]: [
+                props.bootstrap_tenant
+            ],
+            ...(load_oidc_subject === ""
+                ? {}
+                : {
+                    [load_oidc_subject]: [
+                        props.bootstrap_tenant
+                    ]
+                })
+        }
         const sigv4_tenant_grants = Object.fromEntries(
             workload_bindings.map((binding) => [
                 assumed_role_principal(binding.role_name),
@@ -317,11 +396,7 @@ export class GarnetBrokerRuntime extends Construct {
                     issuers: [normalized_oidc_issuer],
                     audiences: oidc_audiences,
                     tenantClaim: props.oidc_tenant_claim,
-                    tenantGrants: {
-                        [props.bootstrap_admin_subject]: [
-                            props.bootstrap_tenant
-                        ]
-                    }
+                    tenantGrants: oidc_tenant_grants
                 },
                 sigv4: {
                     serverId:
@@ -338,11 +413,8 @@ export class GarnetBrokerRuntime extends Construct {
             AUTH_OIDC_ISSUERS: normalized_oidc_issuer,
             AUTH_OIDC_AUDIENCES: oidc_audiences.join(","),
             AUTH_OIDC_TENANT_CLAIM: props.oidc_tenant_claim,
-            AUTH_OIDC_TENANT_GRANTS: canonical_json({
-                [props.bootstrap_admin_subject]: [
-                    props.bootstrap_tenant
-                ]
-            }),
+            AUTH_OIDC_TENANT_GRANTS:
+                canonical_json(oidc_tenant_grants),
             AUTH_SIGV4_SERVER_ID: garnet_sigv4_server_id,
             AUTH_SIGV4_STS_ENDPOINT: garnet_sts_endpoint,
             AUTH_SIGV4_TENANT_GRANTS:
@@ -360,7 +432,11 @@ export class GarnetBrokerRuntime extends Construct {
         )
 
         const image =
-            private_ecr_image(this, props.image) ??
+            private_ecr_image(
+                this,
+                "BrokerImageRepository",
+                props.image
+            ) ??
             ContainerImage.fromRegistry(props.image)
         this.sg_broker = new SecurityGroup(this, "SecurityGroup", {
             vpc: props.vpc,
@@ -370,6 +446,11 @@ export class GarnetBrokerRuntime extends Construct {
         props.database.connections.allowDefaultPortFrom(
             this.sg_broker,
             "Direct Garnet Broker PostgreSQL pools"
+        )
+        props.reader_proxy?.connections.allowFrom(
+            this.sg_broker,
+            Port.tcp(5432),
+            "Garnet eventual Entity reader pool"
         )
         this.sg_broker.addIngressRule(
             this.sg_broker,
@@ -389,7 +470,8 @@ export class GarnetBrokerRuntime extends Construct {
             this,
             this.cluster,
             props.vpc,
-            deployment_params.ecs_instance_type
+            deployment_params.ecs_instance_type,
+            deployment_params.worker_spot_scale_out
         )
 
         const federation_token = new Secret(this, "FederationRouterToken", {
@@ -450,6 +532,7 @@ export class GarnetBrokerRuntime extends Construct {
                 memoryMiB: "1024"
             }
         )
+        pin_arm64_runtime(migration_task)
         migration_task.addContainer("MigrationContainer", {
             image,
             entryPoint: ["/garnet-migrate"],
@@ -474,6 +557,9 @@ export class GarnetBrokerRuntime extends Construct {
             schema_compatibility:
                 deployment_params.schema_compatibility
         })
+        for (const instance of props.database_instances) {
+            migration.resource.node.addDependency(instance)
+        }
 
         const factory = new GarnetTaskFactory(this, "Services", {
             cluster: this.cluster,
@@ -499,7 +585,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Federation",
             name: "federation",
             entry_point: "/garnet-federation",
-            capacity: GARNET_SERVICE_CAPACITY.federation,
+            capacity: service_capacity.federation,
             environment: {
                 PORT: "8080",
                 FEDERATION_CONTROL_WAKEUP: "listen",
@@ -552,38 +638,63 @@ export class GarnetBrokerRuntime extends Construct {
         const blue_green =
             deployment_params.deployment_strategy ===
                 DEPLOYMENT_STRATEGY.BlueGreen
+        const api_blue_green =
+            blue_green && !props.authorization_cutover_stopped
         const sigv4_server_id = garnet_sigv4_server_id
         const sts_endpoint = garnet_sts_endpoint
         const api = add(factory.create_service({
             id: "Api",
             name: "api",
             entry_point: "/garnet-broker",
-            capacity: GARNET_SERVICE_CAPACITY.api,
+            capacity: service_capacity.api,
             environment: {
                 ...distributed_environment,
                 ...authorization_executor_environment,
                 PORT: "8080",
-                BROKER_WORKERS: "2",
+                BROKER_WORKERS: String(api_processes),
                 ...(
                     props.eventual_entity_reads
                         ? {
                             READ_DBHOST:
-                                props.database.clusterReadEndpoint.hostname,
+                                eventual_reader_endpoint!,
                             READ_CONSISTENCY: "eventual",
                             READ_DB_POOL_MAX: String(
-                                GARNET_SERVICE_CAPACITY.api
+                                service_capacity.api
                                     .reader_database_pool
+                            ),
+                            ...(
+                                props.eventual_entity_read_route ===
+                                    "rds-proxy"
+                                    ? {
+                                        READ_DB_CONNECTION_PROFILE:
+                                            "rds-proxy"
+                                    }
+                                    : {}
                             )
                         }
                         : {}
                 ),
-                HTTP_MAX_IN_FLIGHT: "512",
+                HTTP_MAX_IN_FLIGHT: String(api_http_max_in_flight),
                 HTTP_MAX_REQUEST_BODY_BYTES: "134217728",
+                ENTITY_MUTATION_BATCH_MAX:
+                    String(mutation_batch_max),
+                ENTITY_MUTATION_BATCH_WORKERS:
+                    String(mutation_batch_workers),
+                ENTITY_MUTATION_BATCH_WINDOW_MS:
+                    String(mutation_batch_window_ms),
+                ENTITY_MUTATION_BATCH_QUEUE_MAX:
+                    String(mutation_batch_queue_max),
+                ENTITY_MUTATION_BATCH_DIAGNOSTICS:
+                    deployment_params.entity_mutation_batch_diagnostics
+                        ? "1"
+                        : "0",
                 SNAPSHOT_WORKERS: "0",
                 APPLICATION_METRICS: "emf",
                 APPLICATION_METRICS_NAMESPACE: "Garnet/Broker",
                 APPLICATION_METRICS_SERVICE: "garnet-api",
-                APPLICATION_METRICS_INTERVAL_MS: "60000",
+                APPLICATION_METRICS_INTERVAL_MS: String(
+                    GARNET_API_ACTIVE_METRIC_PERIOD_SECONDS * 1000
+                ),
                 APPLICATION_METRICS_MAX_SERIES: "256"
             },
             secrets: distributed_secrets,
@@ -592,18 +703,20 @@ export class GarnetBrokerRuntime extends Construct {
                 number: 8080
             },
             service_connect_client: true,
-            cpu_autoscaling: blue_green,
-            deployment_strategy: blue_green
+            cpu_autoscaling: api_blue_green,
+            max_healthy_percent: 125,
+            stopped: props.authorization_cutover_stopped,
+            deployment_strategy: api_blue_green
                 ? DeploymentStrategy.BLUE_GREEN
                 : undefined,
-            bake_time: blue_green
+            bake_time: api_blue_green
                 ? Duration.minutes(
                     deployment_params.deployment_bake_time_minutes
                 )
                 : undefined
         }))
         api.service.node.addDependency(federation.service)
-        if (blue_green) {
+        if (api_blue_green) {
             Annotations.of(api.service).acknowledgeWarning(
                 "@aws-cdk/aws-ecs:shouldUseCircuitBreaker",
                 "ECS blue/green uses deployment alarms with rollback; " +
@@ -615,8 +728,9 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Matcher",
             name: "matcher",
             entry_point: "/garnet-matcher",
-            capacity: GARNET_SERVICE_CAPACITY.matcher,
+            capacity: service_capacity.matcher,
             cpu_autoscaling: false,
+            stopped: props.authorization_cutover_stopped,
             interruption_tolerant: true,
             environment: {
                 ...authorization_executor_environment,
@@ -648,13 +762,16 @@ export class GarnetBrokerRuntime extends Construct {
             id: "LakeSink",
             name: "lake-sink",
             entry_point: "/garnet-event-sink",
-            capacity: GARNET_SERVICE_CAPACITY.sink,
+            capacity: service_capacity.sink,
+            memory_autoscaling: true,
             interruption_tolerant: true,
             environment: {
                 ENTITY_EVENT_SINK_NAME: "garnet-lake",
                 ENTITY_EVENT_SINK_TRANSPORT: "firehose",
                 ENTITY_EVENT_FIREHOSE_STREAM_NAME:
-                    props.delivery_stream.deliveryStreamName!
+                    props.delivery_stream.deliveryStreamName!,
+                ENTITY_EVENT_SINK_GC_RSS_MIB: "512",
+                ENTITY_EVENT_SINK_GC_MIN_INTERVAL_MS: "5000"
             }
         }))
         sink.service.node.addDependency(matcher.service)
@@ -671,13 +788,15 @@ export class GarnetBrokerRuntime extends Construct {
                 .map((origin) => origin.trim())
                 .filter((origin) => origin !== ""),
             props.private_notification_origin
-        ]
+        ].map((origin) => origin.trim())
+            .filter((origin) => origin !== "")
         const delivery = add(factory.create_service({
             id: "Delivery",
             name: "delivery",
             entry_point: "/garnet-delivery",
-            capacity: GARNET_SERVICE_CAPACITY.delivery,
+            capacity: service_capacity.delivery,
             interruption_tolerant: true,
+            stopped: props.authorization_cutover_stopped,
             environment: {
                 ...authorization_executor_environment,
                 NOTIFICATION_DELIVERY_ALLOW_ORIGINS:
@@ -701,15 +820,16 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Scheduler",
             name: "notification-scheduler",
             entry_point: "/garnet-notification-scheduler",
-            capacity: GARNET_SERVICE_CAPACITY.scheduler,
+            capacity: service_capacity.scheduler,
             interruption_tolerant: true,
+            stopped: props.authorization_cutover_stopped,
             environment: authorization_executor_environment
         }))
         const reconciler = add(factory.create_service({
             id: "Reconciler",
             name: "subscription-reconciler",
             entry_point: "/garnet-subscription-reconciler",
-            capacity: GARNET_SERVICE_CAPACITY.reconciler,
+            capacity: service_capacity.reconciler,
             environment: {
                 ...authorization_executor_environment,
                 ...distributed_environment,
@@ -721,6 +841,7 @@ export class GarnetBrokerRuntime extends Construct {
             },
             secrets: distributed_secrets,
             cpu_autoscaling: false,
+            stopped: props.authorization_cutover_stopped,
             interruption_tolerant: true
         }))
         if (reconciler.scaling === undefined) {
@@ -776,7 +897,8 @@ export class GarnetBrokerRuntime extends Construct {
         const production_listener = this.broker_alb.addListener(
             "ProductionListener",
             {
-            port: 80,
+                port: 80,
+                open: false,
                 defaultAction: ListenerAction.fixedResponse(404, {
                     messageBody: "Not Found"
                 })
@@ -793,7 +915,7 @@ export class GarnetBrokerRuntime extends Construct {
             }
         )
         let alternate_target: ApplicationTargetGroup | undefined
-        if (blue_green) {
+        if (api_blue_green) {
             alternate_target = new ApplicationTargetGroup(
                 this,
                 "ApiTestTarget",
@@ -817,6 +939,7 @@ export class GarnetBrokerRuntime extends Construct {
                 {
                     port:
                         deployment_params.deployment_test_listener_port,
+                    open: false,
                     defaultAction: ListenerAction.fixedResponse(404, {
                         messageBody: "Not Found"
                     })
@@ -866,7 +989,8 @@ export class GarnetBrokerRuntime extends Construct {
                     production_target,
                     test_target: alternate_target,
                     validation_role,
-                    tenant: props.bootstrap_tenant
+                    tenant: props.bootstrap_tenant,
+                    enabled: true
                 }
             )
         } else {
@@ -887,7 +1011,7 @@ export class GarnetBrokerRuntime extends Construct {
             id: "Snapshot",
             name: "snapshot",
             entry_point: "/garnet-snapshot",
-            capacity: GARNET_SERVICE_CAPACITY.snapshot,
+            capacity: service_capacity.snapshot,
             cpu_autoscaling: false,
             interruption_tolerant: true,
             task_role: snapshot_task_role,
@@ -929,9 +1053,13 @@ export class GarnetBrokerRuntime extends Construct {
                 database: props.database,
                 database_secret: props.database_secret,
                 broker_origin: this.broker_alb.loadBalancerDnsName,
+                broker_security_group: sg_alb,
                 broker_image: props.image,
                 load_image: props.load_image,
                 tenant: props.bootstrap_tenant,
+                oidc_secret: props.load_oidc_secret,
+                oidc_endpoint: oidc_issuer.origin,
+                oidc_client_id: props.load_oidc_client_id.trim(),
                 sigv4_server_id,
                 sts_endpoint,
                 capacity_provider:
@@ -942,6 +1070,41 @@ export class GarnetBrokerRuntime extends Construct {
         if (api.scaling === undefined) {
             throw new Error("Garnet API requires task-count scaling")
         }
+        api.scaling.scaleOnMetric("ApiAdmissionScaling", {
+            metric: new Metric({
+                namespace: "Garnet/Broker",
+                metricName: "ActiveRequestsMax",
+                dimensionsMap: {
+                    Service: "garnet-api"
+                },
+                period: Duration.seconds(
+                    GARNET_API_ACTIVE_METRIC_PERIOD_SECONDS
+                ),
+                statistic: "Average"
+            }),
+            scalingSteps: [
+                {
+                    upper:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER,
+                    change: 0
+                },
+                {
+                    lower:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER,
+                    upper:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER * 2,
+                    change: 2
+                },
+                {
+                    lower:
+                        GARNET_API_ACTIVE_REQUESTS_PER_WORKER * 2,
+                    change: 4
+                }
+            ],
+            cooldown: Duration.seconds(10),
+            evaluationPeriods: 1
+        })
+        const scaling_target = api.scaling.scalableTargetRef
         if (alternate_target === undefined) {
             api.scaling.scaleOnRequestCount("ApiRequestScaling", {
                 // ALBRequestCountPerTarget is measured over one minute.
@@ -952,8 +1115,7 @@ export class GarnetBrokerRuntime extends Construct {
                 scaleOutCooldown: Duration.seconds(30)
             })
         } else {
-            const target = api.scaling.scalableTargetRef
-            new CfnScalingPolicy(
+            const policy = new CfnScalingPolicy(
                 this,
                 "ApiBlueGreenRequestScaling",
                 {
@@ -961,9 +1123,7 @@ export class GarnetBrokerRuntime extends Construct {
                         "api-bluegreen-request-scaling"
                     ),
                     policyType: "TargetTrackingScaling",
-                    resourceId: target.resourceId,
-                    scalableDimension: target.scalableDimension,
-                    serviceNamespace: target.serviceNamespace,
+                    scalingTargetId: scaling_target.resourceId,
                     targetTrackingScalingPolicyConfiguration: {
                         targetValue:
                             GARNET_API_REQUESTS_PER_TARGET_MINUTE,
@@ -993,6 +1153,7 @@ export class GarnetBrokerRuntime extends Construct {
                     }
                 }
             )
+            policy.node.addDependency(api.scaling)
         }
 
         const maintenance_log = new LogGroup(this, "MaintenanceLogs", {
@@ -1010,6 +1171,7 @@ export class GarnetBrokerRuntime extends Construct {
                 memoryMiB: "1024"
             }
         )
+        pin_arm64_runtime(maintenance_task)
         maintenance_task.addContainer("MaintenanceContainer", {
             image,
             entryPoint: ["/garnet-maintenance"],

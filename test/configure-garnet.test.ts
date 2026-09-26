@@ -34,17 +34,25 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_CONTEXT_ALLOW_HOSTS:
         "URI.ETSI.ORG,contexts.example:8443,uri.etsi.org",
       GARNET_EVENTUAL_ENTITY_READS: "true",
+      GARNET_EVENTUAL_ENTITY_READ_ROUTE: "rds-proxy",
       GARNET_DATABASE_READER_ENABLED: "true",
+      GARNET_DATABASE_READER_COUNT: "4",
+      GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: "true",
       GARNET_AURORA_MIN_ACU: "4",
       GARNET_AURORA_MAX_ACU: "96",
       GARNET_AURORA_STORAGE: "io-optimized",
       GARNET_ECS_INSTANCE_TYPE: "c9g.2xlarge",
       GARNET_WORKER_SPOT_SCALE_OUT: "false",
+      GARNET_AUTHORIZATION_CUTOVER_STOPPED: "true",
       GARNET_BOOTSTRAP_TENANT: "factory-a",
       GARNET_OIDC_ISSUER: "https://login.example/tenant",
       GARNET_OIDC_AUDIENCES: "garnet-api,garnet-cli",
       GARNET_OIDC_TENANT_CLAIM: "tenants",
       GARNET_BOOTSTRAP_ADMIN_SUBJECT: "admin/factory-a",
+      GARNET_LOAD_OIDC_SECRET_ARN:
+        "arn:aws:secretsmanager:eu-west-3:111111111111:secret:garnet/load-AbCdEf",
+      GARNET_LOAD_OIDC_SUBJECT: "load/factory-a",
+      GARNET_LOAD_OIDC_CLIENT_ID: "load-client",
       GARNET_AUTHORIZATION_POLICIES: "[]",
       GARNET_AUTHORIZATION_BINDINGS: "[]",
       GARNET_NAT_GATEWAY_COUNT: "1",
@@ -65,16 +73,24 @@ describe("Garnet-only deployment configuration", () => {
         "https://hooks.example,http://private.example:8080",
       context_hosts: "uri.etsi.org,contexts.example:8443",
       eventual_reads: true,
+      eventual_read_route: "rds-proxy",
       database_reader_enabled: true,
+      database_reader_count: 4,
+      aws_iot_core_mqtt_connector_enabled: true,
       aurora_min_capacity: 4,
       aurora_max_capacity: 96,
       aurora_storage: "io-optimized",
       ecs_instance_type: "c9g.2xlarge",
       worker_spot_scale_out: false,
+      authorization_cutover_stopped: true,
       oidc_issuer: "https://login.example/tenant",
       oidc_audiences: "garnet-api,garnet-cli",
       oidc_tenant_claim: "tenants",
       bootstrap_admin_subject: "admin/factory-a",
+      load_oidc_secret_arn:
+        "arn:aws:secretsmanager:eu-west-3:111111111111:secret:garnet/load-AbCdEf",
+      load_oidc_subject: "load/factory-a",
+      load_oidc_client_id: "load-client",
       bootstrap_tenant: "factory-a",
       nat_gateway_count: 1,
       database_deletion_protection: false,
@@ -94,7 +110,14 @@ describe("Garnet-only deployment configuration", () => {
       "garnet_eventual_entity_reads: true"
     )
     expect(result.source).toContain(
+      'garnet_eventual_entity_read_route: "rds-proxy"'
+    )
+    expect(result.source).toContain(
       "database_reader_enabled: true"
+    )
+    expect(result.source).toContain("database_reader_count: 4")
+    expect(result.source).toContain(
+      "aws_iot_core_mqtt_connector_enabled: true"
     )
     expect(result.source).toContain("aurora_min_capacity: 4")
     expect(result.source).toContain("aurora_max_capacity: 96")
@@ -155,7 +178,10 @@ describe("Garnet-only deployment configuration", () => {
     expect(result.strategy).toBe("bluegreen")
     expect(result.schema_compatibility).toBe("unchanged")
     expect(result.eventual_reads).toBe(false)
+    expect(result.eventual_read_route).toBe("aurora-reader")
     expect(result.database_reader_enabled).toBe(true)
+    expect(result.database_reader_count).toBe(1)
+    expect(result.aws_iot_core_mqtt_connector_enabled).toBe(false)
     expect(result.aurora_min_capacity).toBe(2)
     expect(result.aurora_max_capacity).toBe(128)
     expect(result.aurora_storage).toBe("standard")
@@ -194,9 +220,17 @@ describe("Garnet-only deployment configuration", () => {
       GARNET_EVENTUAL_ENTITY_READS: "sometimes"
     }))).toThrow(/true or false/)
     expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: "sometimes"
+    }))).toThrow(/true or false/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_EVENTUAL_ENTITY_READS: "true",
       GARNET_DATABASE_READER_ENABLED: "false"
     }))).toThrow(/requires/)
+    for (const value of ["0", "16"]) {
+      expect(() => apply_configuration(source, deploymentEnvironment({
+        GARNET_DATABASE_READER_COUNT: value
+      }))).toThrow(/between 1 and 15/)
+    }
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_AURORA_MIN_ACU: "129",
       GARNET_AURORA_MAX_ACU: "128"
@@ -249,6 +283,14 @@ describe("Garnet-only deployment configuration", () => {
     expect(() => apply_configuration(source, deploymentEnvironment({
       GARNET_AUTHORIZATION_BINDINGS: "{}"
     }))).toThrow(/JSON array/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_LOAD_OIDC_SUBJECT: "load-user"
+    }))).toThrow(/configured together/)
+    expect(() => apply_configuration(source, deploymentEnvironment({
+      GARNET_LOAD_OIDC_SECRET_ARN: "not-an-arn",
+      GARNET_LOAD_OIDC_SUBJECT: "load-user",
+      GARNET_LOAD_OIDC_CLIENT_ID: "load-client"
+    }))).toThrow(/complete Secrets Manager ARN/)
   })
 
   it("fails loudly when the configuration contract changes", () => {

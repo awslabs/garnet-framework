@@ -26,47 +26,22 @@ export const garnet_constant = {
 }
 
 export const garnet_nomenclature = {
-    aws_iot_thing: "AwsIotThing",
-    aws_iot_thing_group: "AwsIotThingGroup",
-    
     garnet_ingestion_update_broker_lambda:
         garnet_resource_name("ingestion-update-broker"),
     garnet_ingestion_update_broker_role:
         garnet_resource_name("ingestion-update-broker-role"),
     garnet_lake_transform_lambda:
         garnet_resource_name("lake-transform"),
-    garnet_iot_lifecycle_lambda:
-        garnet_resource_name("iot-thing-lifecycle"),
-    garnet_iot_lifecycle_role:
-        garnet_resource_name("iot-thing-lifecycle-role"),
-    garnet_iot_presence_lambda:
-        garnet_resource_name("iot-presence"),
-    garnet_iot_presence_role:
-        garnet_resource_name("iot-presence-role"),
-    garnet_iot_group_membership_lambda:
-        garnet_resource_name("iot-group-membership"),
-    garnet_iot_group_membership_role:
-        garnet_resource_name("iot-group-membership-role"),
-    garnet_iot_group_lifecycle_lambda:
-        garnet_resource_name("iot-group-lifecycle"),
-    garnet_iot_group_lifecycle_role:
-        garnet_resource_name("iot-group-lifecycle-role"),
-    garnet_private_sub_lambda:
-        garnet_resource_name("private-subscription"),
-    garnet_subscriptions_rule: "garnet_framework_subscriptions",
-    garnet_iot_presence_rule: "garnet_framework_iot_presence",
+    garnet_iot_core_mqtt_connector_lambda:
+        garnet_resource_name("connector-iot-core-mqtt"),
     
     garnet_ingestion_queue:
         `${garnet_resource_prefix}-ingestion-${Aws.REGION}`,
     garnet_ingestion_dlq:
         `${garnet_resource_prefix}-ingestion-dlq-${Aws.REGION}`,
-    garnet_iot_presence_queue:
-        `${garnet_resource_prefix}-iot-presence-${Aws.REGION}`,
 
     garnet_lake_firehose_stream:
         garnet_resource_name("datalake"),
-    garnet_sub_firehose_stream:
-        garnet_resource_name("subscriptions"),
     garnet_lake_firehose_interval: 60, // seconds
     garnet_lake_buffer_size: 64, // MB
 
@@ -78,11 +53,7 @@ export const garnet_nomenclature = {
 }
 
 export const garnet_broker_connector_role_names = Object.freeze([
-    garnet_nomenclature.garnet_ingestion_update_broker_role,
-    garnet_nomenclature.garnet_iot_lifecycle_role,
-    garnet_nomenclature.garnet_iot_presence_role,
-    garnet_nomenclature.garnet_iot_group_membership_role,
-    garnet_nomenclature.garnet_iot_group_lifecycle_role
+    garnet_nomenclature.garnet_ingestion_update_broker_role
 ])
 
 

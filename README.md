@@ -16,6 +16,11 @@ It is designed to be easily deployable on the AWS infrastructure using the [AWS 
 
 Through its knowledge graph capabilities, Garnet transforms fragmented data into interconnected knowledge that evolves in near real-time with your operations—providing the essential context your applications and AI systems need.
 
+External integration belongs to explicit Garnet Framework connectors. The core
+architecture does not synchronize AWS IoT registry, Thing, Thing Group,
+presence, or shadow state. An optional, disabled-by-default built-in connector
+can publish NGSI-LD Subscription notifications to AWS IoT Core MQTT.
+
 This branch deploys Garnet Broker through the separate `GarnetFramework`
 CloudFormation stack. It does not modify or reuse the maintenance stack's
 database. The runtime is distributed and ARM64, supports rolling or API

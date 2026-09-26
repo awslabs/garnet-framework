@@ -73,6 +73,45 @@ describe("Garnet multi-tenant Iceberg lake", () => {
         }
       })
     })
+    const optimizers = template.findResources(
+      "AWS::Glue::TableOptimizer"
+    )
+    const optimizer = Object.values(optimizers)[0]
+    expect(optimizer.DependsOn).toEqual(expect.arrayContaining([
+      expect.stringMatching(/CatalogEntityEvents/),
+      expect.stringMatching(/TableCompactionPolicy/)
+    ]))
+    const policies = template.findResources("AWS::IAM::Policy")
+    const policy = Object.entries(policies).find(([logical_id]) =>
+      logical_id.includes("TableCompactionPolicy")
+    )?.[1]
+    expect(policy).toBeDefined()
+    const statements =
+      policy!.Properties.PolicyDocument.Statement
+    expect(statements).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        Action: ["glue:GetTable", "glue:UpdateTable"],
+        Effect: "Allow"
+      }),
+      expect.objectContaining({
+        Action: [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ],
+        Effect: "Allow"
+      }),
+      expect.objectContaining({
+        Action: [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        Effect: "Allow"
+      })
+    ]))
+    expect(JSON.stringify(policy))
+      .toContain("iceberg-compaction/logs:*")
     template.hasResourceProperties(
       "AWS::KinesisFirehose::DeliveryStream",
       {
@@ -88,19 +127,29 @@ describe("Garnet multi-tenant Iceberg lake", () => {
           }],
           ProcessingConfiguration: {
             Enabled: true,
-            Processors: Match.arrayWith([
-              Match.objectLike({
-                Type: "RecordDeAggregation"
-              }),
-              Match.objectLike({
-                Type: "Lambda"
-              })
-            ])
-          },
-          S3BackupMode: "FailedDataOnly"
+            Processors: [Match.objectLike({
+              Type: "Lambda",
+              Parameters: Match.arrayWith([{
+                ParameterName: "BufferSizeInMBs",
+                ParameterValue: "0.5"
+              }])
+            })]
+          }
         })
       }
     )
+    const streams = template.findResources(
+      "AWS::KinesisFirehose::DeliveryStream"
+    )
+    const stream = Object.values(streams)[0]
+    expect(stream.DependsOn).toEqual(expect.arrayContaining([
+      expect.stringMatching(/CatalogEntityEvents/),
+      expect.stringMatching(/StreamFirehoseRoleDefaultPolicy/)
+    ]))
+    expect(JSON.stringify(template.toJSON()))
+      .not.toContain("S3BackupMode")
+    expect(JSON.stringify(template.toJSON()))
+      .not.toContain("RecordDeAggregation")
     template.hasResourceProperties("AWS::Lambda::Function", {
       FunctionName: "garnet-framework-lake-transform",
       Architectures: ["arm64"],

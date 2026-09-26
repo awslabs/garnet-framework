@@ -24,14 +24,12 @@ export const scale_on_matcher_partitions = (
     props: MatcherScalingProps
 ): void => {
     const target = props.scaling.scalableTargetRef
-    new CfnScalingPolicy(props.scope, props.id, {
+    const policy = new CfnScalingPolicy(props.scope, props.id, {
         policyName: garnet_resource_name(
             "matcher-partition-scaling"
         ),
         policyType: "TargetTrackingScaling",
-        resourceId: target.resourceId,
-        scalableDimension: target.scalableDimension,
-        serviceNamespace: target.serviceNamespace,
+        scalingTargetId: target.resourceId,
         targetTrackingScalingPolicyConfiguration: {
             targetValue:
                 props.target_pending_partitions_per_worker,
@@ -83,4 +81,5 @@ export const scale_on_matcher_partitions = (
             }
         }
     })
+    policy.node.addDependency(props.scaling)
 }

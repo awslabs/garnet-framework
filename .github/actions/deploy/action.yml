@@ -18,6 +18,18 @@ inputs:
     description: Optional immutable Garnet load-runner image
     required: false
     default: ''
+  load-oidc-secret-arn:
+    description: Optional Secrets Manager ARN containing load username and password
+    required: false
+    default: ''
+  load-oidc-subject:
+    description: Optional exact OIDC subject granted load-only Broker access
+    required: false
+    default: ''
+  load-oidc-client-id:
+    description: Optional Cognito app client used by the load generator
+    required: false
+    default: ''
   public-origin:
     description: Public broker origin for distributed callbacks
     required: false
@@ -38,6 +50,14 @@ inputs:
     description: Keep an Aurora reader as a warm failover target
     required: false
     default: 'true'
+  database-reader-count:
+    description: Number of Aurora readers when the reader topology is enabled
+    required: false
+    default: '1'
+  aws-iot-core-mqtt-connector-enabled:
+    description: Enable the tenant-bound Subscription to IoT Core MQTT connector
+    required: false
+    default: 'false'
   aurora-min-acu:
     description: Aurora Serverless v2 minimum capacity
     required: false
@@ -189,11 +209,16 @@ runs:
       env:
         GARNET_BROKER_IMAGE: ${{ inputs.broker-image }}
         GARNET_LOAD_IMAGE: ${{ inputs.load-image }}
+        GARNET_LOAD_OIDC_SECRET_ARN: ${{ inputs.load-oidc-secret-arn }}
+        GARNET_LOAD_OIDC_SUBJECT: ${{ inputs.load-oidc-subject }}
+        GARNET_LOAD_OIDC_CLIENT_ID: ${{ inputs.load-oidc-client-id }}
         GARNET_BROKER_PUBLIC_ORIGIN: ${{ inputs.public-origin }}
         GARNET_NOTIFICATION_DELIVERY_ALLOW_ORIGINS: ${{ inputs.notification-origins }}
         GARNET_CONTEXT_ALLOW_HOSTS: ${{ inputs.context-hosts }}
         GARNET_EVENTUAL_ENTITY_READS: ${{ inputs.eventual-entity-reads }}
         GARNET_DATABASE_READER_ENABLED: ${{ inputs.database-reader-enabled }}
+        GARNET_DATABASE_READER_COUNT: ${{ inputs.database-reader-count }}
+        GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED: ${{ inputs.aws-iot-core-mqtt-connector-enabled }}
         GARNET_AURORA_MIN_ACU: ${{ inputs.aurora-min-acu }}
         GARNET_AURORA_MAX_ACU: ${{ inputs.aurora-max-acu }}
         GARNET_AURORA_STORAGE: ${{ inputs.aurora-storage }}

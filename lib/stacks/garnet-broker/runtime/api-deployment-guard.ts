@@ -53,6 +53,7 @@ export interface GarnetApiDeploymentGuardProps {
   test_target: ApplicationTargetGroup
   validation_role: IRole
   tenant: string
+  enabled: boolean
 }
 
 export class GarnetApiDeploymentGuard extends Construct {
@@ -115,17 +116,19 @@ export class GarnetApiDeploymentGuard extends Construct {
         ...broker_workload_environment(props.tenant)
       }
     })
-    props.service.addLifecycleHook(
-      new DeploymentLifecycleLambdaTarget(
-        validation,
-        "ValidateTestTraffic",
-        {
-          lifecycleStages: [
-            DeploymentLifecycleStage.POST_TEST_TRAFFIC_SHIFT
-          ]
-        }
+    if (props.enabled) {
+      props.service.addLifecycleHook(
+        new DeploymentLifecycleLambdaTarget(
+          validation,
+          "ValidateTestTraffic",
+          {
+            lifecycleStages: [
+              DeploymentLifecycleStage.POST_TEST_TRAFFIC_SHIFT
+            ]
+          }
+        )
       )
-    )
+    }
 
     const target_5xx_rate_name =
       garnet_resource_name("api-deployment-target-5xx-rate")
@@ -177,16 +180,20 @@ export class GarnetApiDeploymentGuard extends Construct {
           label: "Garnet API unhealthy targets"
         }),
         threshold: 0,
+        comparisonOperator:
+          ComparisonOperator.GREATER_THAN_THRESHOLD,
         evaluationPeriods: 2,
         datapointsToAlarm: 2,
         treatMissingData: TreatMissingData.NOT_BREACHING
       }
     )
-    props.service.enableDeploymentAlarms(
-      [target_5xx_rate_name, unhealthy_targets_name],
-      {
-        behavior: AlarmBehavior.ROLLBACK_ON_ALARM
-      }
-    )
+    if (props.enabled) {
+      props.service.enableDeploymentAlarms(
+        [target_5xx_rate_name, unhealthy_targets_name],
+        {
+          behavior: AlarmBehavior.ROLLBACK_ON_ALARM
+        }
+      )
+    }
   }
 }

@@ -8,6 +8,7 @@ const { URL } = require('node:url')
 const CONFIG_PATH = path.join(__dirname, '..', '..', 'configuration.ts')
 const DIGEST_IMAGE = /^[^@\s]+@sha256:[0-9a-f]{64}$/
 const STRATEGIES = new Set(['rolling', 'bluegreen'])
+const EVENTUAL_READ_ROUTES = new Set(['aurora-reader', 'rds-proxy'])
 const AURORA_STORAGE_TYPES = new Set(['standard', 'io-optimized'])
 const SCHEMA_COMPATIBILITIES = new Set([
   'unchanged',
@@ -165,6 +166,28 @@ const identity_value = (env, name, fallback) => {
   return value
 }
 
+const optional_identity_value = (env, name) => {
+  const value = optional(env, name)
+  if (
+    value.length > 1024 ||
+    /[\0\r\n]/.test(value)
+  ) {
+    throw new Error(`${name} must be a safe identity value`)
+  }
+  return value
+}
+
+const optional_secret_arn = (env, name) => {
+  const value = optional(env, name)
+  if (
+    value !== '' &&
+    !/^arn:[^:\s]+:secretsmanager:[^:\s]+:\d{12}:secret:[^\s]+$/.test(value)
+  ) {
+    throw new Error(`${name} must be a complete Secrets Manager ARN`)
+  }
+  return value
+}
+
 const json_array = (env, name) => {
   const raw = optional(env, name) || '[]'
   if (Buffer.byteLength(raw) > 1048576) {
@@ -213,15 +236,41 @@ const apply_configuration = (source, env) => {
     'GARNET_EVENTUAL_ENTITY_READS',
     false
   )
+  const eventual_read_route =
+    (optional(env, 'GARNET_EVENTUAL_ENTITY_READ_ROUTE') ||
+      'aurora-reader').toLowerCase()
+  if (!EVENTUAL_READ_ROUTES.has(eventual_read_route)) {
+    throw new Error(
+      'GARNET_EVENTUAL_ENTITY_READ_ROUTE must be aurora-reader or rds-proxy'
+    )
+  }
   const database_reader_enabled = boolean_setting(
     env,
     'GARNET_DATABASE_READER_ENABLED',
     true
   )
+  const database_reader_count = integer_setting(
+    env,
+    'GARNET_DATABASE_READER_COUNT',
+    1,
+    1,
+    15
+  )
+  const aws_iot_core_mqtt_connector_enabled = boolean_setting(
+    env,
+    'GARNET_AWS_IOT_CORE_MQTT_CONNECTOR_ENABLED',
+    false
+  )
   if (eventual_reads && !database_reader_enabled) {
     throw new Error(
       'GARNET_EVENTUAL_ENTITY_READS requires ' +
         'GARNET_DATABASE_READER_ENABLED=true'
+    )
+  }
+  if (!eventual_reads && eventual_read_route !== 'aurora-reader') {
+    throw new Error(
+      'GARNET_EVENTUAL_ENTITY_READ_ROUTE=rds-proxy requires ' +
+        'GARNET_EVENTUAL_ENTITY_READS=true'
     )
   }
   const aurora_min_capacity = integer_setting(
@@ -255,6 +304,11 @@ const apply_configuration = (source, env) => {
     env,
     'GARNET_WORKER_SPOT_SCALE_OUT',
     true
+  )
+  const authorization_cutover_stopped = boolean_setting(
+    env,
+    'GARNET_AUTHORIZATION_CUTOVER_STOPPED',
+    false
   )
   const ecs_instance_type =
     optional(env, 'GARNET_ECS_INSTANCE_TYPE') || 'c9g.2xlarge'
@@ -320,6 +374,29 @@ const apply_configuration = (source, env) => {
     'GARNET_BOOTSTRAP_ADMIN_SUBJECT',
     ''
   )
+  const load_oidc_secret_arn = optional_secret_arn(
+    env,
+    'GARNET_LOAD_OIDC_SECRET_ARN'
+  )
+  const load_oidc_subject = optional_identity_value(
+    env,
+    'GARNET_LOAD_OIDC_SUBJECT'
+  )
+  const load_oidc_client_id = optional_identity_value(
+    env,
+    'GARNET_LOAD_OIDC_CLIENT_ID'
+  )
+  const load_oidc_values = [
+    load_oidc_secret_arn,
+    load_oidc_subject,
+    load_oidc_client_id
+  ].filter(value => value !== '')
+  if (load_oidc_values.length !== 0 && load_oidc_values.length !== 3) {
+    throw new Error(
+      'GARNET_LOAD_OIDC_SECRET_ARN, GARNET_LOAD_OIDC_SUBJECT, and ' +
+      'GARNET_LOAD_OIDC_CLIENT_ID must be configured together'
+    )
+  }
   const authorization_policies = json_array(
     env,
     'GARNET_AUTHORIZATION_POLICIES'
@@ -357,6 +434,9 @@ const apply_configuration = (source, env) => {
     ['garnet_oidc_audiences', oidc_audiences],
     ['garnet_oidc_tenant_claim', oidc_tenant_claim],
     ['garnet_bootstrap_admin_subject', bootstrap_admin_subject],
+    ['garnet_load_oidc_secret_arn', load_oidc_secret_arn],
+    ['garnet_load_oidc_subject', load_oidc_subject],
+    ['garnet_load_oidc_client_id', load_oidc_client_id],
     ['garnet_authorization_policies', authorization_policies],
     ['garnet_authorization_bindings', authorization_bindings],
     ['garnet_bootstrap_tenant', bootstrap_tenant]
@@ -383,9 +463,29 @@ const apply_configuration = (source, env) => {
   )
   out = replace_setting(
     out,
+    /garnet_eventual_entity_read_route: "(?:aurora-reader|rds-proxy)"/,
+    `garnet_eventual_entity_read_route: "${eventual_read_route}"`,
+    'garnet_eventual_entity_read_route'
+  )
+  out = replace_setting(
+    out,
     /database_reader_enabled: (?:true|false)/,
     `database_reader_enabled: ${database_reader_enabled}`,
     'database_reader_enabled'
+  )
+  out = replace_setting(
+    out,
+    /database_reader_count: \d+/,
+    `database_reader_count: ${database_reader_count}`,
+    'database_reader_count'
+  )
+  out = replace_setting(
+    out,
+    /aws_iot_core_mqtt_connector_enabled: (?:true|false)/,
+    `aws_iot_core_mqtt_connector_enabled: ${
+      aws_iot_core_mqtt_connector_enabled
+    }`,
+    'aws_iot_core_mqtt_connector_enabled'
   )
   out = replace_setting(
     out,
@@ -410,6 +510,14 @@ const apply_configuration = (source, env) => {
     /worker_spot_scale_out: (?:true|false)/,
     `worker_spot_scale_out: ${worker_spot_scale_out}`,
     'worker_spot_scale_out'
+  )
+  out = replace_setting(
+    out,
+    /garnet_authorization_cutover_stopped: (?:true|false)/,
+    `garnet_authorization_cutover_stopped: ${
+      authorization_cutover_stopped
+    }`,
+    'garnet_authorization_cutover_stopped'
   )
   out = replace_setting(
     out,
@@ -489,16 +597,23 @@ const apply_configuration = (source, env) => {
     notification_origins,
     context_hosts,
     eventual_reads,
+    eventual_read_route,
     database_reader_enabled,
+    database_reader_count,
+    aws_iot_core_mqtt_connector_enabled,
     aurora_min_capacity,
     aurora_max_capacity,
     aurora_storage,
     ecs_instance_type,
     worker_spot_scale_out,
+    authorization_cutover_stopped,
     oidc_issuer,
     oidc_audiences,
     oidc_tenant_claim,
     bootstrap_admin_subject,
+    load_oidc_secret_arn,
+    load_oidc_subject,
+    load_oidc_client_id,
     authorization_policies,
     authorization_bindings,
     bootstrap_tenant,
@@ -521,15 +636,21 @@ const main = () => {
     `Configured Garnet: strategy=${result.strategy}` +
     ` schema=${result.schema_compatibility}` +
     ` eventual-reads=${result.eventual_reads}` +
+    ` eventual-read-route=${result.eventual_read_route}` +
     ` database-reader=${result.database_reader_enabled}` +
+    ` database-readers=${result.database_reader_count}` +
     ` aurora-acu=${result.aurora_min_capacity}-${
       result.aurora_max_capacity
     }` +
     ` aurora-storage=${result.aurora_storage}` +
     ` ecs-instance-type=${result.ecs_instance_type}` +
     ` worker-spot-scale-out=${result.worker_spot_scale_out}` +
+    ` authorization-cutover-stopped=${
+      result.authorization_cutover_stopped
+    }` +
     ` oidc-issuer=${result.oidc_issuer}` +
     ` oidc-audiences=${result.oidc_audiences.split(',').length}` +
+    ` load-oidc=${result.load_oidc_subject === '' ? 'disabled' : 'configured'}` +
     ` tenant=${result.bootstrap_tenant}` +
     ` nat-gateways=${result.nat_gateway_count}` +
     ` deletion-protection=${result.database_deletion_protection}` +

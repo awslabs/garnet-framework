@@ -2,6 +2,7 @@ import { CfnOutput, NestedStack, NestedStackProps } from "aws-cdk-lib"
 import { Vpc } from "aws-cdk-lib/aws-ec2"
 import { ApplicationLoadBalancer } from "aws-cdk-lib/aws-elasticloadbalancingv2"
 import { CfnDeliveryStream } from "aws-cdk-lib/aws-kinesisfirehose"
+import { Secret } from "aws-cdk-lib/aws-secretsmanager"
 import { Construct } from "constructs"
 import { deployment_params } from "../../../architecture"
 import { GarnetBrokerDatabase } from "./database/database-construct"
@@ -22,10 +23,15 @@ export interface GarnetBrokerProps extends NestedStackProps {
     oidc_audiences: string
     oidc_tenant_claim: string
     bootstrap_admin_subject: string
+    load_oidc_secret_arn?: string
+    load_oidc_subject?: string
+    load_oidc_client_id?: string
+    authorization_cutover_stopped?: boolean
     bootstrap_tenant: string
     authorization_policies: string
     authorization_bindings: string
     eventual_entity_reads: boolean
+    eventual_entity_read_route: "aurora-reader" | "rds-proxy"
     temporal_history_retention_days: number
     temporal_history_retention_max_gib: number
     temporal_history_retention_max_partitions: number
@@ -50,9 +56,43 @@ export class GarnetBroker extends NestedStack {
                 "Eventual Entity reads require an Aurora reader"
             )
         }
+        if (
+            !props.eventual_entity_reads &&
+            props.eventual_entity_read_route !== "aurora-reader"
+        ) {
+            throw new Error(
+                "RDS Proxy routing requires eventual Entity reads"
+            )
+        }
+        const load_oidc_secret_arn =
+            props.load_oidc_secret_arn?.trim() ?? ""
+        const load_oidc_subject =
+            props.load_oidc_subject?.trim() ?? ""
+        const load_oidc_client_id =
+            props.load_oidc_client_id?.trim() ?? ""
+        const load_oidc_values = [
+            load_oidc_secret_arn,
+            load_oidc_subject,
+            load_oidc_client_id
+        ].filter((value) => value !== "")
+        if (load_oidc_values.length !== 0 && load_oidc_values.length !== 3) {
+            throw new Error(
+                "Garnet load OIDC secret, subject, and client must be " +
+                "configured together"
+            )
+        }
+        const load_oidc_secret =
+            load_oidc_secret_arn === ""
+                ? undefined
+                : Secret.fromSecretCompleteArn(
+                    this,
+                    "LoadOidcSecret",
+                    load_oidc_secret_arn
+                )
 
         const database = new GarnetBrokerDatabase(this, "Database", {
-            vpc: props.vpc
+            vpc: props.vpc,
+            eventual_entity_reads: props.eventual_entity_reads
         })
         const federation_state = new GarnetFederationState(
             this,
@@ -64,11 +104,16 @@ export class GarnetBroker extends NestedStack {
         const runtime = new GarnetBrokerRuntime(this, "Runtime", {
             vpc: props.vpc,
             database: database.cluster,
+            database_instances: database.instances,
             database_secret: database.secret,
+            reader_proxy: database.reader_proxy,
+            reader_proxy_endpoint: database.reader_proxy_endpoint,
             federation_state_host: federation_state.endpoint,
             federation_state_port: federation_state.port,
             federation_state_secret: federation_state.auth_token,
             eventual_entity_reads: props.eventual_entity_reads,
+            eventual_entity_read_route:
+                props.eventual_entity_read_route,
             delivery_stream: props.delivery_stream,
             image: props.image,
             load_image: props.load_image,
@@ -82,6 +127,11 @@ export class GarnetBroker extends NestedStack {
             oidc_audiences: props.oidc_audiences,
             oidc_tenant_claim: props.oidc_tenant_claim,
             bootstrap_admin_subject: props.bootstrap_admin_subject,
+            load_oidc_secret,
+            load_oidc_subject,
+            load_oidc_client_id,
+            authorization_cutover_stopped:
+                props.authorization_cutover_stopped ?? false,
             bootstrap_tenant: props.bootstrap_tenant,
             authorization_policies: props.authorization_policies,
             authorization_bindings: props.authorization_bindings,

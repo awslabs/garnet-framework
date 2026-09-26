@@ -55,7 +55,18 @@ const create_vpc = (stack: Stack): Vpc =>
 
 const synth_broker = (
   eventual_entity_reads = true,
-  image = IMAGE
+  image = IMAGE,
+  private_notification_origin =
+    "https://private.example.execute-api.eu-west-3.amazonaws.com",
+  load_image = LOAD_IMAGE,
+  eventual_entity_read_route:
+    "aurora-reader" | "rds-proxy" | undefined = undefined,
+  load_oidc?: {
+    secret_arn: string
+    subject: string
+    client_id: string
+  },
+  authorization_cutover_stopped = false
 ): Template => {
   const app = new App()
   const stack = new Stack(app, "TestStack", {
@@ -72,14 +83,20 @@ const synth_broker = (
     vpc,
     delivery_stream: stream,
     image,
-    load_image: LOAD_IMAGE,
+    load_image,
     public_origin: "https://broker.example",
     notification_delivery_allow_origins: "https://callbacks.example",
-    private_notification_origin:
-      "https://private.example.execute-api.eu-west-3.amazonaws.com",
+    private_notification_origin,
     context_allow_hosts: "uri.etsi.org",
     ...AUTHORIZATION,
+    load_oidc_secret_arn: load_oidc?.secret_arn,
+    load_oidc_subject: load_oidc?.subject,
+    load_oidc_client_id: load_oidc?.client_id,
+    authorization_cutover_stopped,
     eventual_entity_reads,
+    eventual_entity_read_route:
+      eventual_entity_read_route ??
+      (eventual_entity_reads ? "rds-proxy" : "aurora-reader"),
     temporal_history_retention_days: 365,
     temporal_history_retention_max_gib: 500,
     temporal_history_retention_max_partitions: 12
@@ -87,13 +104,40 @@ const synth_broker = (
   return Template.fromStack(broker)
 }
 
+const synth_broker_with_spot_scale_out = (): Template => {
+  const previous_worker_spot_scale_out =
+    deployment_params.worker_spot_scale_out
+  deployment_params.worker_spot_scale_out = true
+  try {
+    return synth_broker()
+  } finally {
+    deployment_params.worker_spot_scale_out =
+      previous_worker_spot_scale_out
+  }
+}
+
 describe("Garnet Broker AWS runtime", () => {
-  it("uses direct Aurora PostgreSQL without RDS Proxy", () => {
+  it("keeps writer pools direct and isolates eventual reads behind a read-only proxy", () => {
     const template = synth_broker()
 
     template.resourceCountIs("AWS::RDS::DBCluster", 1)
-    template.resourceCountIs("AWS::RDS::DBInstance", 2)
-    template.resourceCountIs("AWS::RDS::DBProxy", 0)
+    template.resourceCountIs(
+      "AWS::RDS::DBInstance",
+      deployment_params.database_reader_count + 1
+    )
+    template.resourceCountIs("AWS::RDS::DBProxy", 1)
+    template.resourceCountIs("AWS::RDS::DBProxyEndpoint", 1)
+    template.hasResourceProperties("AWS::RDS::DBProxy", {
+      DBProxyName: "garnet-framework-broker-reader-proxy",
+      EngineFamily: "POSTGRESQL",
+      IdleClientTimeout: 28800,
+      RequireTLS: true
+    })
+    template.hasResourceProperties("AWS::RDS::DBProxyEndpoint", {
+      DBProxyEndpointName:
+        "garnet-framework-broker-reader-proxy-read-only",
+      TargetRole: "READ_ONLY"
+    })
     template.hasResourceProperties("AWS::RDS::DBCluster", {
       Engine: "aurora-postgresql",
       EngineVersion: "18.4",
@@ -103,15 +147,51 @@ describe("Garnet Broker AWS runtime", () => {
       DeletionProtection: true,
       StorageType: "aurora",
       ServerlessV2ScalingConfiguration: {
-        MinCapacity: 2,
-        MaxCapacity: 128
+        MinCapacity: deployment_params.aurora_min_capacity,
+        MaxCapacity: deployment_params.aurora_max_capacity
       }
     })
     template.hasResourceProperties("AWS::RDS::DBClusterParameterGroup", {
       Parameters: {
-        "rds.force_ssl": "1"
+        "rds.force_ssl": "1",
+        max_wal_senders: "20",
+        max_parallel_workers_per_gather: "0",
+        plan_cache_mode: "force_custom_plan",
+        statement_timeout: "10000"
       }
     })
+  })
+
+  it("provisions the proxy before routing eventual API reads through it", () => {
+    const template = synth_broker(
+      true,
+      IMAGE,
+      "https://private.example.execute-api.eu-west-3.amazonaws.com",
+      LOAD_IMAGE,
+      "aurora-reader"
+    )
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const api = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name === "garnet-api"
+      )
+    const environment = Object.fromEntries(
+      api.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+
+    template.resourceCountIs("AWS::RDS::DBProxy", 1)
+    template.resourceCountIs("AWS::RDS::DBProxyEndpoint", 1)
+    expect(environment.READ_DBHOST).toEqual({
+      "Fn::GetAtt": [
+        expect.stringContaining("DatabaseCluster"),
+        "ReadEndpoint.Address"
+      ]
+    })
+    expect(environment).not.toHaveProperty(
+      "READ_DB_CONNECTION_PROFILE"
+    )
   })
 
   it("can remove the warm reader for a disposable writer-only deployment", () => {
@@ -132,13 +212,40 @@ describe("Garnet Broker AWS runtime", () => {
     const task_definitions =
       template.findResources("AWS::ECS::TaskDefinition")
 
+    const host_security_groups = template.findResources(
+      "AWS::EC2::SecurityGroup",
+      {
+        Properties: {
+          GroupDescription:
+            "Egress-only security group for Garnet ECS hosts"
+        }
+      }
+    )
+    expect(Object.keys(host_security_groups)).toHaveLength(1)
+    const host_security_group_id =
+      Object.keys(host_security_groups)[0]
+    const launch_templates = template.findResources(
+      "AWS::EC2::LaunchTemplate"
+    )
+    expect(Object.values(launch_templates)).toHaveLength(2)
+    for (const launch_template of Object.values(launch_templates) as any[]) {
+      expect(
+        launch_template.Properties.LaunchTemplateData.SecurityGroupIds
+      ).toEqual([{
+        "Fn::GetAtt": [host_security_group_id, "GroupId"]
+      }])
+    }
+
     expect(Object.keys(task_definitions)).toHaveLength(12)
     template.resourceCountIs("AWS::ECS::Service", 8)
     template.resourceCountIs("AWS::AutoScaling::AutoScalingGroup", 2)
     const entry_points: string[] = []
     for (const resource of Object.values(task_definitions) as any[]) {
       expect(resource.Properties.RequiresCompatibilities).toEqual(["EC2"])
-      expect(resource.Properties.RuntimePlatform).toBeUndefined()
+      expect(resource.Properties.RuntimePlatform).toEqual({
+        CpuArchitecture: "ARM64",
+        OperatingSystemFamily: "LINUX"
+      })
       const container = resource.Properties.ContainerDefinitions[0]
       const entry_point = container.EntryPoint[0]
       entry_points.push(entry_point)
@@ -215,21 +322,63 @@ describe("Garnet Broker AWS runtime", () => {
     expect(bindings).toContain("managed-policy/TenantReadOnly")
   })
 
-  it("keeps worker floors on demand and uses Spot only for scale-out", () => {
+  it("alarms on nonzero unhealthy blue/green API targets", () => {
     const template = synth_broker()
+
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      AlarmName:
+        "garnet-framework-api-deployment-unhealthy-targets",
+      ComparisonOperator: "GreaterThanThreshold",
+      EvaluationPeriods: 2,
+      DatapointsToAlarm: 2,
+      Threshold: 0,
+      TreatMissingData: "notBreaching"
+    })
+  })
+
+  it("keeps worker floors on demand and uses Spot only for scale-out", () => {
+    const template = synth_broker_with_spot_scale_out()
     const services = Object.values(
       template.findResources("AWS::ECS::Service")
+    ) as any[]
+    const auto_scaling_groups = Object.values(
+      template.findResources("AWS::AutoScaling::AutoScalingGroup")
+    ) as any[]
+    const capacity_providers = Object.values(
+      template.findResources("AWS::ECS::CapacityProvider")
     ) as any[]
     const spot_services = services.filter(
       (service) =>
         service.Properties.CapacityProviderStrategy?.length === 2
     )
+    const spot_auto_scaling_group = auto_scaling_groups.find(
+      (group) =>
+        group.Properties.MixedInstancesPolicy.InstancesDistribution
+          .OnDemandPercentageAboveBaseCapacity === 0
+    )
+    const on_demand_auto_scaling_group = auto_scaling_groups.find(
+      (group) =>
+        group.Properties.MixedInstancesPolicy.InstancesDistribution
+          .OnDemandPercentageAboveBaseCapacity === 100
+    )
+    const spot_capacity_provider = capacity_providers.find(
+      (provider) =>
+        provider.Properties.Name ===
+          "garnet-framework-broker-graviton-spot"
+    )
+    const on_demand_capacity_provider = capacity_providers.find(
+      (provider) =>
+        provider.Properties.Name ===
+          "garnet-framework-broker-graviton"
+    )
 
     expect(spot_services).toHaveLength(6)
     for (const service of spot_services) {
-      expect(service.Properties.DesiredCount).toBe(1)
+      const minimum_tasks =
+        service.Properties.ServiceName === "garnet-lake-sink" ? 4 : 1
+      expect(service.Properties.DesiredCount).toBe(minimum_tasks)
       expect(service.Properties.CapacityProviderStrategy[0])
-        .toMatchObject({ Base: 1, Weight: 1 })
+        .toMatchObject({ Base: minimum_tasks, Weight: 1 })
       expect(service.Properties.CapacityProviderStrategy[1])
         .toMatchObject({ Weight: 4 })
       expect(service.Properties.AvailabilityZoneRebalancing)
@@ -238,6 +387,16 @@ describe("Garnet Broker AWS runtime", () => {
     for (const service of services) {
       expect(service.Properties.AvailabilityZoneRebalancing)
         .toBe("ENABLED")
+      expect(service.Properties.PlacementStrategies).toEqual([
+        {
+          Field: "attribute:ecs.availability-zone",
+          Type: "spread"
+        },
+        {
+          Field: "CPU",
+          Type: "binpack"
+        }
+      ])
     }
     const api = services.find(
       (service) => service.Properties.ServiceName === "garnet-api"
@@ -248,6 +407,63 @@ describe("Garnet Broker AWS runtime", () => {
     )
     expect(api.Properties.CapacityProviderStrategy).toHaveLength(1)
     expect(federation.Properties.CapacityProviderStrategy).toHaveLength(1)
+    expect(
+      spot_auto_scaling_group.Properties.NewInstancesProtectedFromScaleIn
+    ).toBe(false)
+    expect(
+      on_demand_auto_scaling_group.Properties
+        .NewInstancesProtectedFromScaleIn
+    ).toBe(true)
+    expect(
+      spot_capacity_provider.Properties.AutoScalingGroupProvider
+        .ManagedTerminationProtection
+    ).toBe("DISABLED")
+    expect(
+      spot_capacity_provider.Properties.AutoScalingGroupProvider
+        .ManagedScaling.Status
+    ).toBe("ENABLED")
+    expect(
+      spot_capacity_provider.Properties.AutoScalingGroupProvider
+        .ManagedDraining
+    ).toBe("ENABLED")
+    expect(
+      on_demand_capacity_provider.Properties.AutoScalingGroupProvider
+        .ManagedTerminationProtection
+    ).toBe("ENABLED")
+  })
+
+  it("keeps the disabled Spot provider inert", () => {
+    const template = synth_broker()
+    const services = Object.values(
+      template.findResources("AWS::ECS::Service")
+    ) as any[]
+    const capacity_providers = Object.values(
+      template.findResources("AWS::ECS::CapacityProvider")
+    ) as any[]
+    const spot_capacity_provider = capacity_providers.find(
+      (provider) =>
+        provider.Properties.Name ===
+          "garnet-framework-broker-graviton-spot"
+    )
+
+    expect(
+      services.filter(
+        (service) =>
+          service.Properties.CapacityProviderStrategy?.length === 2
+      )
+    ).toHaveLength(0)
+    expect(
+      spot_capacity_provider.Properties.AutoScalingGroupProvider
+        .ManagedScaling.Status
+    ).toBe("DISABLED")
+    expect(
+      spot_capacity_provider.Properties.AutoScalingGroupProvider
+        .ManagedTerminationProtection
+    ).toBe("DISABLED")
+    expect(
+      spot_capacity_provider.Properties.AutoScalingGroupProvider
+        .ManagedDraining
+    ).toBe("ENABLED")
   })
 
   it("bounds Aurora Temporal history through scheduled maintenance", () => {
@@ -292,7 +508,7 @@ describe("Garnet Broker AWS runtime", () => {
 
     expect(generator.Properties).toMatchObject({
       Cpu: "4096",
-      Memory: "8192"
+      Memory: "12288"
     })
     expect(aggregate.Properties).toMatchObject({
       Cpu: "1024",
@@ -359,6 +575,128 @@ describe("Garnet Broker AWS runtime", () => {
     template.resourceCountIs("AWS::ECS::Service", 8)
   })
 
+  it("uses a least-privilege Cognito identity for public load", () => {
+    const subject = "load-qualification"
+    const secret_arn =
+      "arn:aws:secretsmanager:eu-west-3:111111111111:" +
+      "secret:garnet-load-qualification-AbCdEf"
+    const template = synth_broker(
+      true,
+      IMAGE,
+      "https://private.example.execute-api.eu-west-3.amazonaws.com",
+      LOAD_IMAGE,
+      undefined,
+      {
+        secret_arn,
+        subject,
+        client_id: "load-client"
+      }
+    )
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const generator = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-load-generator"
+      )
+    const container = generator.Properties.ContainerDefinitions[0]
+    const environment = Object.fromEntries(
+      container.Environment.map((entry: any) => [
+        entry.Name,
+        entry.Value
+      ])
+    )
+    const secrets = Object.fromEntries(
+      container.Secrets.map((entry: any) => [
+        entry.Name,
+        entry.ValueFrom
+      ])
+    )
+    expect(environment).toMatchObject({
+      LOAD_BROKER_AUTH_MODE: "cognito-oidc",
+      LOAD_BROKER_OIDC_ENDPOINT: "https://identity.example",
+      LOAD_BROKER_OIDC_CLIENT_ID: "load-client"
+    })
+    expect(environment).not.toHaveProperty(
+      "LOAD_BROKER_SIGV4_SERVER_ID"
+    )
+    expect(secrets.LOAD_BROKER_OIDC_USERNAME)
+      .toContain(`${secret_arn}:username::`)
+    expect(secrets.LOAD_BROKER_OIDC_PASSWORD)
+      .toContain(`${secret_arn}:password::`)
+
+    const api = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-api"
+      )
+    const api_environment = Object.fromEntries(
+      api.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+    const bindings = JSON.stringify(
+      api_environment.AUTHORIZATION_BINDINGS
+    )
+    expect(bindings).toContain(subject)
+    expect(bindings).toContain(
+      "managed-policy/TenantReadOnly"
+    )
+    expect(bindings).toContain(
+      "managed-policy/TenantEntityEditor"
+    )
+  })
+
+  it("synthesizes an explicit stopped authorization cutover", () => {
+    const template = synth_broker(
+      true,
+      IMAGE,
+      "https://private.example.execute-api.eu-west-3.amazonaws.com",
+      LOAD_IMAGE,
+      undefined,
+      undefined,
+      true
+    )
+    const services = template.findResources("AWS::ECS::Service")
+    const stopped = Object.entries(services)
+      .filter(([id]) =>
+        /(?:Api|Matcher|Delivery|Scheduler|Reconciler)Service/
+          .test(id)
+      )
+      .map(([, service]: any) => service.Properties.DesiredCount)
+    expect(stopped).toHaveLength(5)
+    expect(stopped).toEqual([0, 0, 0, 0, 0])
+
+    const running = Object.entries(services)
+      .filter(([id]) =>
+        /(?:Federation|LakeSink|Snapshot)Service/.test(id)
+      )
+      .map(([, service]: any) => service.Properties.DesiredCount)
+      .sort((left, right) => left - right)
+    expect(running).toEqual([1, 2, 4])
+    const api = Object.entries(services)
+      .find(([id]) => /ApiService/.test(id))![1] as any
+    expect(api.Properties.DeploymentConfiguration)
+      .not.toHaveProperty("LifecycleHooks")
+    expect(api.Properties.DeploymentConfiguration)
+      .toMatchObject({
+        Alarms: {
+          AlarmNames: [],
+          Enable: false,
+          Rollback: false
+        }
+      })
+
+    const scalable = template.findResources(
+      "AWS::ApplicationAutoScaling::ScalableTarget"
+    )
+    expect(
+      Object.values(scalable)
+        .filter((target: any) =>
+          target.Properties.MinCapacity === 0
+        )
+    ).toHaveLength(5)
+  })
+
   it("keeps local traffic local and externalizes every scalable background role", () => {
     const template = synth_broker()
     const task_definitions =
@@ -387,27 +725,40 @@ describe("Garnet Broker AWS runtime", () => {
       DISTRIBUTED_SUBSCRIPTION_RECONCILIATION_MODE: "external",
       SNAPSHOT_WORKERS: "0",
       BROKER_WORKERS: "2",
+      HTTP_MAX_IN_FLIGHT: "512",
+      ENTITY_MUTATION_BATCH_MAX: "64",
+      ENTITY_MUTATION_BATCH_WORKERS: "4",
+      ENTITY_MUTATION_BATCH_WINDOW_MS: "5",
+      ENTITY_MUTATION_BATCH_QUEUE_MAX: "1024",
+      ENTITY_MUTATION_BATCH_DIAGNOSTICS: "1",
+      APPLICATION_METRICS_INTERVAL_MS: "10000",
       DB_POOL_MAX_REQUIRED: "true",
       DBSSL: "require",
-      DB_POOL_MAX: "16",
+      DB_POOL_MAX: "8",
       READ_CONSISTENCY: "eventual",
-      READ_DB_POOL_MAX: "8"
+      READ_DB_POOL_MAX: "12",
+      READ_DB_CONNECTION_PROFILE: "rds-proxy"
     })
-    expect(environment.READ_DBHOST).toHaveProperty("Fn::GetAtt")
+    expect(environment.READ_DBHOST).toEqual({
+      "Fn::GetAtt": [
+        expect.stringContaining("ReadOnlyEndpoint"),
+        "Endpoint"
+      ]
+    })
     const authorization_bindings =
       JSON.stringify(environment.AUTHORIZATION_BINDINGS)
     const sigv4_grants =
       JSON.stringify(environment.AUTH_SIGV4_TENANT_GRANTS)
     for (const role of [
-      "garnet-framework-ingestion-update-broker-role",
-      "garnet-framework-iot-thing-lifecycle-role",
-      "garnet-framework-iot-presence-role",
-      "garnet-framework-iot-group-membership-role",
-      "garnet-framework-iot-group-lifecycle-role"
+      "garnet-framework-ingestion-update-broker-role"
     ]) {
       expect(authorization_bindings).toContain(role)
       expect(sigv4_grants).toContain(role)
     }
+    expect(authorization_bindings).not.toContain(
+      "garnet-framework-iot-"
+    )
+    expect(sigv4_grants).not.toContain("garnet-framework-iot-")
     expect(authorization_bindings).toContain(
       "managed-policy/TenantEntityEditor"
     )
@@ -498,6 +849,44 @@ describe("Garnet Broker AWS runtime", () => {
       WORKER_METRICS_SERVICE: "garnet-matcher",
       WORKER_METRICS_INTERVAL_MS: "60000"
     })
+
+    const sink = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-lake-sink"
+      )
+    const sink_environment = Object.fromEntries(
+      sink.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+    expect(sink.Properties).toMatchObject({
+      Cpu: "1024",
+      Memory: "4096"
+    })
+    expect(sink_environment).toMatchObject({
+      ENTITY_EVENT_SINK_NAME: "garnet-lake",
+      ENTITY_EVENT_SINK_TRANSPORT: "firehose",
+      ENTITY_EVENT_SINK_GC_RSS_MIB: "512",
+      ENTITY_EVENT_SINK_GC_MIN_INTERVAL_MS: "5000"
+    })
+    template.hasResourceProperties("AWS::ECS::Service", {
+      ServiceName: "garnet-lake-sink",
+      DesiredCount: 4
+    })
+    template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "TargetTrackingScaling",
+        TargetTrackingScalingPolicyConfiguration: {
+          PredefinedMetricSpecification: {
+            PredefinedMetricType: "ECSServiceAverageMemoryUtilization"
+          },
+          ScaleInCooldown: 120,
+          ScaleOutCooldown: 30,
+          TargetValue: 60
+        }
+      }
+    )
   })
 
   it("scales delivery from bounded worker saturation rather than CPU alone", () => {
@@ -550,9 +939,40 @@ describe("Garnet Broker AWS runtime", () => {
     )
   })
 
-  it("scales the API on requests per active target per minute", () => {
+  it("scales the API on measured throughput and admission pressure", () => {
     const template = synth_broker()
 
+    template.hasResourceProperties(
+      "AWS::ApplicationAutoScaling::ScalingPolicy",
+      {
+        PolicyType: "StepScaling",
+        StepScalingPolicyConfiguration: {
+          AdjustmentType: "ChangeInCapacity",
+          Cooldown: 10,
+          StepAdjustments: Match.arrayWith([
+            Match.objectLike({
+              ScalingAdjustment: 2
+            }),
+            Match.objectLike({
+              ScalingAdjustment: 4
+            })
+          ])
+        }
+      }
+    )
+    template.hasResourceProperties("AWS::CloudWatch::Alarm", {
+      ComparisonOperator: "GreaterThanOrEqualToThreshold",
+      Dimensions: [{
+        Name: "Service",
+        Value: "garnet-api"
+      }],
+      EvaluationPeriods: 1,
+      MetricName: "ActiveRequestsMax",
+      Namespace: "Garnet/Broker",
+      Period: 10,
+      Statistic: "Average",
+      Threshold: 64
+    })
     template.hasResourceProperties(
       "AWS::ApplicationAutoScaling::ScalingPolicy",
       {
@@ -579,7 +999,7 @@ describe("Garnet Broker AWS runtime", () => {
           }),
           ScaleInCooldown: 180,
           ScaleOutCooldown: 30,
-          TargetValue: 60000
+          TargetValue: 15000
         })
       }
     )
@@ -596,6 +1016,38 @@ describe("Garnet Broker AWS runtime", () => {
       MinCapacity: 2,
       MaxCapacity: 64
     })
+    const [api_target_id] = Object.entries(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalableTarget"
+      )
+    )
+      .filter(([, resource]: [string, any]) =>
+        resource.Properties.MinCapacity === 2 &&
+        resource.Properties.MaxCapacity === 64
+      )
+      .map(([logical_id]) => logical_id)
+    const api_policy = Object.values(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalingPolicy"
+      )
+    ).find(
+      (resource: any) =>
+        resource.Properties.TargetTrackingScalingPolicyConfiguration
+          ?.TargetValue === 15000
+    ) as any
+    expect(api_policy.Properties).toMatchObject({
+      ScalingTargetId: { Ref: api_target_id }
+    })
+    expect(api_policy.Properties).not.toHaveProperty("ResourceId")
+    expect(api_policy.Properties).not.toHaveProperty(
+      "ScalableDimension"
+    )
+    expect(api_policy.Properties).not.toHaveProperty(
+      "ServiceNamespace"
+    )
+    expect(api_policy.DependsOn).toEqual(
+      expect.arrayContaining([api_target_id])
+    )
   })
 
   it("keeps eventual Entity reads opt-in", () => {
@@ -614,6 +1066,26 @@ describe("Garnet Broker AWS runtime", () => {
     expect(environment).not.toHaveProperty("READ_DBHOST")
     expect(environment).not.toHaveProperty("READ_CONSISTENCY")
     expect(environment).not.toHaveProperty("READ_DB_POOL_MAX")
+    template.resourceCountIs("AWS::RDS::DBProxy", 0)
+    template.resourceCountIs("AWS::RDS::DBProxyEndpoint", 0)
+  })
+
+  it("does not add an empty connector origin to delivery policy", () => {
+    const template = synth_broker(false, IMAGE, "")
+    const task_definitions =
+      template.findResources("AWS::ECS::TaskDefinition")
+    const delivery = (Object.values(task_definitions) as any[])
+      .find((resource) =>
+        resource.Properties.ContainerDefinitions[0].Name ===
+          "garnet-delivery"
+      )
+    const environment = Object.fromEntries(
+      delivery.Properties.ContainerDefinitions[0].Environment
+        .map((entry: any) => [entry.Name, entry.Value])
+    )
+
+    expect(environment.NOTIFICATION_DELIVERY_ALLOW_ORIGINS)
+      .toBe("https://callbacks.example")
   })
 
   it("scales direct matchers by independent PostgreSQL partitions", () => {
@@ -664,17 +1136,38 @@ describe("Garnet Broker AWS runtime", () => {
         }
       }
     )
-    const scalable_targets = Object.values(
-      template.findResources(
-        "AWS::ApplicationAutoScaling::ScalableTarget"
-      )
-    ) as any[]
-    expect(
-      scalable_targets.some((resource) =>
+    const scalable_targets = template.findResources(
+      "AWS::ApplicationAutoScaling::ScalableTarget"
+    )
+    const [matcher_target_id] = Object.entries(scalable_targets)
+      .filter(([, resource]: [string, any]) =>
         resource.Properties.MinCapacity === 1 &&
         resource.Properties.MaxCapacity === 16
       )
-    ).toBe(true)
+      .map(([logical_id]) => logical_id)
+    expect(matcher_target_id).toBeDefined()
+    const matcher_policy = Object.values(
+      template.findResources(
+        "AWS::ApplicationAutoScaling::ScalingPolicy"
+      )
+    ).find(
+      (resource: any) =>
+        resource.Properties.TargetTrackingScalingPolicyConfiguration
+          ?.TargetValue === 4
+    ) as any
+    expect(matcher_policy.Properties).toMatchObject({
+      ScalingTargetId: { Ref: matcher_target_id }
+    })
+    expect(matcher_policy.Properties).not.toHaveProperty("ResourceId")
+    expect(matcher_policy.Properties).not.toHaveProperty(
+      "ScalableDimension"
+    )
+    expect(matcher_policy.Properties).not.toHaveProperty(
+      "ServiceNamespace"
+    )
+    expect(matcher_policy.DependsOn).toEqual(
+      expect.arrayContaining([matcher_target_id])
+    )
   })
 
   it("uses one TLS single-shard Valkey group for replica-safe federation state", () => {
@@ -749,8 +1242,16 @@ describe("Garnet Broker AWS runtime", () => {
     expect(
       custom_resources[migration_resource_id!].Properties
     ).toMatchObject({
-      SchemaCompatibility: "unchanged"
+      SchemaCompatibility: deployment_params.schema_compatibility
     })
+    const database_instance_ids = Object.keys(
+      template.findResources("AWS::RDS::DBInstance")
+    )
+    expect(database_instance_ids).toHaveLength(
+      deployment_params.database_reader_count + 1
+    )
+    expect(custom_resources[migration_resource_id!].DependsOn)
+      .toEqual(expect.arrayContaining(database_instance_ids))
 
     const services = template.findResources("AWS::ECS::Service")
     for (const service of Object.values(services) as any[]) {
@@ -762,6 +1263,8 @@ describe("Garnet Broker AWS runtime", () => {
       if (service.Properties.ServiceName === "garnet-api") {
         expect(deployment.Strategy).toBe("BLUE_GREEN")
         expect(deployment.DeploymentCircuitBreaker).toBeUndefined()
+        expect(deployment.MinimumHealthyPercent).toBe(100)
+        expect(deployment.MaximumPercent).toBe(125)
       } else {
         expect(deployment.DeploymentCircuitBreaker)
           .toEqual({ Enable: true, Rollback: true })
@@ -823,6 +1326,19 @@ describe("Garnet Broker AWS runtime", () => {
         Protocol: "HTTP"
       }
     )
+
+    const ingress = Object.values(
+      template.findResources("AWS::EC2::SecurityGroupIngress")
+    ) as any[]
+    for (const rule of ingress) {
+      if (
+        rule.Properties.FromPort === 80 ||
+        rule.Properties.FromPort === 8080
+      ) {
+        expect(rule.Properties.CidrIp).not.toBe("0.0.0.0/0")
+        expect(rule.Properties.CidrIpv6).not.toBe("::/0")
+      }
+    }
   })
 
   it("rejects mutable or unpinned images", () => {
@@ -845,6 +1361,7 @@ describe("Garnet Broker AWS runtime", () => {
       context_allow_hosts: "",
       ...AUTHORIZATION,
       eventual_entity_reads: false,
+      eventual_entity_read_route: "aurora-reader",
       temporal_history_retention_days: 365,
       temporal_history_retention_max_gib: 500,
       temporal_history_retention_max_partitions: 12
@@ -868,6 +1385,32 @@ describe("Garnet Broker AWS runtime", () => {
     expect(rendered).toContain("ecr:GetDownloadUrlForLayer")
   })
 
+  it("grants both load execution roles private ECR pull access", () => {
+    const private_load_image =
+      `111111111111.dkr.ecr.us-east-1.amazonaws.com/garnet-load@sha256:${
+        "d".repeat(64)
+      }`
+    const template = synth_broker(
+      false,
+      IMAGE,
+      "https://private.example.execute-api.eu-west-3.amazonaws.com",
+      private_load_image
+    )
+    const rendered = JSON.stringify(template.toJSON())
+
+    expect(rendered).toContain("garnet-load")
+    expect(rendered).toContain("d".repeat(64))
+    expect(rendered).toContain(
+      "arn:aws:ecr:us-east-1:111111111111:repository/garnet-load"
+    )
+    expect(
+      rendered.match(/ecr:BatchGetImage/g)
+    ).toHaveLength(2)
+    expect(
+      rendered.match(/ecr:GetDownloadUrlForLayer/g)
+    ).toHaveLength(2)
+  })
+
   it("rejects a mutable load image without affecting normal deployments", () => {
     const app = new App()
     const stack = new Stack(app, "InvalidLoadImageStack")
@@ -888,6 +1431,7 @@ describe("Garnet Broker AWS runtime", () => {
       context_allow_hosts: "",
       ...AUTHORIZATION,
       eventual_entity_reads: false,
+      eventual_entity_read_route: "aurora-reader",
       temporal_history_retention_days: 365,
       temporal_history_retention_max_gib: 500,
       temporal_history_retention_max_partitions: 12

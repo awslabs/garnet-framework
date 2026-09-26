@@ -20,7 +20,8 @@ describe("Garnet load deployment outputs", () => {
         garnet_load_image:
           `public.ecr.aws/garnet/load@sha256:${"b".repeat(64)}`,
         garnet_broker_public_origin: "https://broker.example",
-        garnet_eventual_entity_reads: true
+        garnet_eventual_entity_reads: true,
+        garnet_eventual_entity_read_route: "aurora-reader"
       }
     }))
 
@@ -53,7 +54,7 @@ describe("Garnet load deployment outputs", () => {
                 "ALBRequestCountPerTarget",
               ResourceLabel: Match.anyValue()
             },
-            TargetValue: 60000
+            TargetValue: 15000
           })
       }
     )
@@ -68,6 +69,43 @@ describe("Garnet load deployment outputs", () => {
           resource.Properties.MaxCapacity === 64
       )?.Properties.MinCapacity
     ).toBe(2)
+    broker_template.hasResourceProperties(
+      "AWS::EC2::SecurityGroupIngress",
+      {
+        Description:
+          "Load generators to the production API listener",
+        FromPort: 80,
+        IpProtocol: "tcp",
+        ToPort: 80,
+        SourceSecurityGroupId: Match.anyValue()
+      }
+    )
+    const iam_policies = Object.values(
+      broker_template.findResources("AWS::IAM::Policy")
+    ) as any[]
+    const generator_policy = iam_policies.find((policy) =>
+      policy.Properties.PolicyDocument.Statement.some((statement: any) => {
+        const actions = Array.isArray(statement.Action)
+          ? statement.Action
+          : [statement.Action]
+        return actions.includes("s3:PutObject") &&
+          !actions.some((action: string) =>
+            action.startsWith("s3:DeleteObject")
+          )
+      })
+    )
+    expect(generator_policy).toBeDefined()
+    const generator_actions =
+      generator_policy.Properties.PolicyDocument.Statement.flatMap(
+        (statement: any) =>
+          Array.isArray(statement.Action)
+            ? statement.Action
+            : [statement.Action]
+      )
+    expect(generator_actions).toContain("s3:GetObject")
+    expect(generator_actions).not.toContain("s3:GetObject*")
+    expect(generator_actions).not.toContain("s3:List*")
+    expect(JSON.stringify(generator_policy)).toContain("/garnet-load/*")
 
     for (const output of [
       "GarnetLoadCluster",

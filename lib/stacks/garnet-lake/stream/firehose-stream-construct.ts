@@ -4,6 +4,7 @@ import {
   RemovalPolicy
 } from "aws-cdk-lib"
 import {
+  Policy,
   PolicyStatement,
   Role,
   ServicePrincipal
@@ -107,6 +108,10 @@ export class GarnetDataLakeStream extends Construct {
       actions: ["lambda:GetFunctionConfiguration"],
       resources: [transform.functionArn]
     }))
+    const role_policy = role.node.tryFindChild("DefaultPolicy")
+    if (!(role_policy instanceof Policy)) {
+      throw new Error("Firehose role policy was not synthesized")
+    }
 
     const stream = new CfnDeliveryStream(this, "Firehose", {
       deliveryStreamName:
@@ -137,36 +142,27 @@ export class GarnetDataLakeStream extends Construct {
         }],
         processingConfiguration: {
           enabled: true,
-          processors: [
-            {
-              type: "RecordDeAggregation",
-              parameters: [{
-                parameterName: "SubRecordType",
-                parameterValue: "JSON"
-              }]
-            },
-            {
-              type: "Lambda",
-              parameters: [
-                {
-                  parameterName: "LambdaArn",
-                  parameterValue: transform.functionArn
-                },
-                {
-                  parameterName: "NumberOfRetries",
-                  parameterValue: "3"
-                },
-                {
-                  parameterName: "BufferSizeInMBs",
-                  parameterValue: "3"
-                },
-                {
-                  parameterName: "BufferIntervalInSeconds",
-                  parameterValue: "60"
-                }
-              ]
-            }
-          ]
+          processors: [{
+            type: "Lambda",
+            parameters: [
+              {
+                parameterName: "LambdaArn",
+                parameterValue: transform.functionArn
+              },
+              {
+                parameterName: "NumberOfRetries",
+                parameterValue: "3"
+              },
+              {
+                parameterName: "BufferSizeInMBs",
+                parameterValue: "0.5"
+              },
+              {
+                parameterName: "BufferIntervalInSeconds",
+                parameterValue: "60"
+              }
+            ]
+          }]
         },
         retryOptions: {
           durationInSeconds: 300
@@ -188,10 +184,7 @@ export class GarnetDataLakeStream extends Construct {
         }
       }
     })
-    stream.addOverride(
-      "Properties.IcebergDestinationConfiguration.S3BackupMode",
-      "FailedDataOnly"
-    )
+    stream.node.addDependency(role_policy)
     stream.node.addDependency(transform)
     stream.node.addDependency(delivery_log_stream)
 

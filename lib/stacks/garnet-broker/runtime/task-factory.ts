@@ -4,6 +4,7 @@ import {
     AppProtocol,
     AvailabilityZoneRebalancing,
     BaseService,
+    BuiltInAttributes,
     Cluster,
     Compatibility,
     ContainerDefinition,
@@ -12,6 +13,7 @@ import {
     Ec2Service,
     LogDrivers,
     NetworkMode,
+    PlacementStrategy,
     PropagatedTagSource,
     ScalableTaskCount,
     Secret as EcsSecret,
@@ -22,6 +24,7 @@ import { LogGroup, RetentionDays } from "aws-cdk-lib/aws-logs"
 import { Construct } from "constructs"
 import { garnet_resource_name } from "../../../../constants"
 import { GarnetServiceCapacity } from "./runtime-profile"
+import { pin_arm64_runtime } from "./arm64-task-definition"
 
 export interface GarnetServiceSpec {
     id: string
@@ -37,10 +40,13 @@ export interface GarnetServiceSpec {
     }
     service_connect_client?: boolean
     cpu_autoscaling?: boolean
+    memory_autoscaling?: boolean
     interruption_tolerant?: boolean
     deployment_strategy?: DeploymentStrategy
     bake_time?: Duration
+    max_healthy_percent?: number
     task_role?: IRole
+    stopped?: boolean
 }
 
 export interface GarnetServiceResult {
@@ -71,6 +77,9 @@ export class GarnetTaskFactory extends Construct {
     }
 
     create_service(spec: GarnetServiceSpec): GarnetServiceResult {
+        const min_tasks = spec.stopped === true
+            ? 0
+            : spec.capacity.min_tasks
         const log_group = new LogGroup(this, `${spec.id}Logs`, {
             retention: RetentionDays.ONE_MONTH,
             removalPolicy: RemovalPolicy.DESTROY
@@ -87,6 +96,7 @@ export class GarnetTaskFactory extends Construct {
                 taskRole: spec.task_role
             }
         )
+        pin_arm64_runtime(task_definition)
         const environment = {
             ...this.props.common_environment,
             DB_POOL_MAX: String(spec.capacity.database_pool),
@@ -133,10 +143,16 @@ export class GarnetTaskFactory extends Construct {
             cluster: this.props.cluster,
             taskDefinition: task_definition,
             serviceName: `garnet-${spec.name}`,
-            desiredCount: spec.capacity.min_tasks,
+            desiredCount: min_tasks,
             assignPublicIp: false,
             availabilityZoneRebalancing:
                 AvailabilityZoneRebalancing.ENABLED,
+            placementStrategies: [
+                PlacementStrategy.spreadAcross(
+                    BuiltInAttributes.AVAILABILITY_ZONE
+                ),
+                PlacementStrategy.packedByCpu()
+            ],
             capacityProviderStrategies:
                 spec.interruption_tolerant === true &&
                 this.props.worker_spot_scale_out
@@ -171,7 +187,7 @@ export class GarnetTaskFactory extends Construct {
                 }
                 : {}),
             minHealthyPercent: 100,
-            maxHealthyPercent: 200,
+            maxHealthyPercent: spec.max_healthy_percent ?? 200,
             healthCheckGracePeriod:
                 spec.port === undefined ? undefined : Duration.seconds(90),
             enableECSManagedTags: true,
@@ -205,13 +221,20 @@ export class GarnetTaskFactory extends Construct {
         })
 
         let scaling: ScalableTaskCount | undefined
-        if (spec.capacity.max_tasks > spec.capacity.min_tasks) {
+        if (spec.capacity.max_tasks > min_tasks) {
             scaling = service.autoScaleTaskCount({
-                minCapacity: spec.capacity.min_tasks,
+                minCapacity: min_tasks,
                 maxCapacity: spec.capacity.max_tasks
             })
             if (spec.cpu_autoscaling !== false) {
                 scaling.scaleOnCpuUtilization(`${spec.id}CpuScaling`, {
+                    targetUtilizationPercent: 60,
+                    scaleInCooldown: Duration.seconds(120),
+                    scaleOutCooldown: Duration.seconds(30)
+                })
+            }
+            if (spec.memory_autoscaling === true) {
+                scaling.scaleOnMemoryUtilization(`${spec.id}MemoryScaling`, {
                     targetUtilizationPercent: 60,
                     scaleInCooldown: Duration.seconds(120),
                     scaleOutCooldown: Duration.seconds(30)

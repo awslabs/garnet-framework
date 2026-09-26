@@ -14,8 +14,9 @@ import {
   deployment_params
 } from '../architecture'
 import { GarnetLake } from './stacks/garnet-lake/garnet-lake-stack'
-import { GarnetIot } from './stacks/garnet-iot/garnet-iot-stack'
-import { GarnetPrivateSub } from './stacks/garnet-privatesub/private-notification-stack'
+import {
+  AwsIotCoreMqttConnector
+} from './connectors/aws-iot-core-mqtt/aws-iot-core-mqtt-connector'
 import { GarnetApi } from './stacks/garnet-api/garnet-api-stack'
 import { Parameters } from '../configuration'
 import { GarnetBroker } from './stacks/garnet-broker/garnet-broker-stack'
@@ -37,10 +38,17 @@ export class GarnetFrameworkStack extends Stack {
 
     const garnet_common = new GarnetCommon(this, 'CommonContructs', {})
 
-    const garnet_privatesub = new GarnetPrivateSub(this, 'GarnetPrivateSub', {
-      vpc: garnet_common.vpc,
-      bucket_name: garnet_datalake.bucket_name
-    })
+    const iot_core_mqtt_connector =
+      deployment_params.aws_iot_core_mqtt_connector_enabled
+        ? new AwsIotCoreMqttConnector(
+            this,
+            'AwsIotCoreMqttConnector',
+            {
+              vpc: garnet_common.vpc,
+              tenant: Parameters.garnet_bootstrap_tenant
+            }
+          )
+        : undefined
 
     const garnet_broker_stack = new GarnetBroker(this, 'GarnetBroker', {
       vpc: garnet_common.vpc,
@@ -51,13 +59,21 @@ export class GarnetFrameworkStack extends Stack {
       notification_delivery_allow_origins:
         Parameters.garnet_notification_delivery_allow_origins,
       private_notification_origin:
-        garnet_privatesub.notification_origin,
+        iot_core_mqtt_connector?.notification_origin ?? '',
       context_allow_hosts: Parameters.garnet_context_allow_hosts,
       oidc_issuer: Parameters.garnet_oidc_issuer,
       oidc_audiences: Parameters.garnet_oidc_audiences,
       oidc_tenant_claim: Parameters.garnet_oidc_tenant_claim,
       bootstrap_admin_subject:
         Parameters.garnet_bootstrap_admin_subject,
+      load_oidc_secret_arn:
+        Parameters.garnet_load_oidc_secret_arn,
+      load_oidc_subject:
+        Parameters.garnet_load_oidc_subject,
+      load_oidc_client_id:
+        Parameters.garnet_load_oidc_client_id,
+      authorization_cutover_stopped:
+        Parameters.garnet_authorization_cutover_stopped,
       bootstrap_tenant: Parameters.garnet_bootstrap_tenant,
       authorization_policies:
         Parameters.garnet_authorization_policies,
@@ -65,6 +81,8 @@ export class GarnetFrameworkStack extends Stack {
         Parameters.garnet_authorization_bindings,
       eventual_entity_reads:
         Parameters.garnet_eventual_entity_reads,
+      eventual_entity_read_route:
+        Parameters.garnet_eventual_entity_read_route,
       temporal_history_retention_days:
         Parameters.temporal_history_retention_days,
       temporal_history_retention_max_gib:
@@ -79,12 +97,6 @@ export class GarnetFrameworkStack extends Stack {
       tenant: Parameters.garnet_bootstrap_tenant
     })
     
-    new GarnetIot(this, 'GarnetIoT', {
-      vpc: garnet_common.vpc, 
-      dns_context_broker: garnet_broker_stack.dns_context_broker,
-      tenant: Parameters.garnet_bootstrap_tenant
-    })
-
     const garnet_api = new GarnetApi(this, 'GarnetApi', {
       vpc: garnet_common.vpc, 
       dns_context_broker: garnet_broker_stack.dns_context_broker,
@@ -193,10 +205,18 @@ export class GarnetFrameworkStack extends Stack {
       value: garnet_api.broker_api_endpoint,
       description: 'Garnet Unified API'
     })
-    new CfnOutput(this, 'GarnetPrivateSubEndpoint', {
-      value: garnet_privatesub.private_sub_endpoint,
-      description: 'Garnet Private Notification Endpoint for Secured Subscriptions. Only accessible within the Garnet VPC'
-    })
+    if (iot_core_mqtt_connector !== undefined) {
+      new CfnOutput(this, 'GarnetAwsIotCoreMqttConnectorEndpoint', {
+        value: iot_core_mqtt_connector.endpoint,
+        description:
+          'Optional private NGSI-LD Subscription to AWS IoT Core MQTT endpoint'
+      })
+      new CfnOutput(this, 'GarnetAwsIotCoreMqttConnectorApiKeyId', {
+        value: iot_core_mqtt_connector.api_key_id,
+        description:
+          'API key id for the optional AWS IoT Core MQTT connector'
+      })
+    }
     new CfnOutput(this, 'GarnetIngestionQueue', {
       value: garnet_ingestion_stack.sqs_garnet_ingestion.queueUrl,
       description: 'Garnet SQS Queue URL to ingest data from your Data Producers'
