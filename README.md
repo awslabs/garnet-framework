@@ -1,5 +1,7 @@
 ## Garnet Framework 
 
+> We are working on a new version of Garnet Framework with Garnet Broker. Coming soon.
+
 #### [Version 1.6.0](./CHANGELOG.md#160---2026-03-18)
 
 __Explore the [documentation website of Garnet Framework](https://garnet-framework.tech/docs) to get started.__ 
