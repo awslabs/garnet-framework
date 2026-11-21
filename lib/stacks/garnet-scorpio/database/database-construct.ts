@@ -39,7 +39,7 @@ export class GarnetScorpioDatabase extends Construct{
             securityGroupName: garnet_nomenclature.garnet_broker_sg_database
         })
 
-        const engine = DatabaseClusterEngine.auroraPostgres({ version: AuroraPostgresEngineVersion.VER_16_6 })
+        const engine = DatabaseClusterEngine.auroraPostgres({ version: AuroraPostgresEngineVersion.VER_16_8 })
 
         // Parameter Group
 
